@@ -1,0 +1,13 @@
+[package]
+name = "op-node-rs"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "1.25.0", features = ["full"] }
+eyre = "0.6.8"
+ethers = "1.0.2"
+hex = "0.4.3"
+libflate = "1.2.0"
