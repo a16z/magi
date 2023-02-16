@@ -7,8 +7,7 @@ use ethers::{
 use eyre::Result;
 
 use op_node_rs::{
-    batch_decoder::decode_batches,
-    batcher_transaction::BatcherTransaction,
+    batch_decoder::decode_batches, batcher_transaction::BatcherTransaction,
     channel_bank::ChannelBank,
 };
 
@@ -30,6 +29,7 @@ async fn main() -> Result<()> {
         .frames
         .into_iter()
         .for_each(|f| channel_bank.push_frame(f));
+
     let channel = channel_bank.next().unwrap();
 
     let batches = decode_batches(&channel)?;

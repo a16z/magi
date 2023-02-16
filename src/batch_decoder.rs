@@ -3,7 +3,7 @@ use std::io::Read;
 
 use ethers::{
     types::H256,
-    utils::rlp::{decode, Decodable, Rlp},
+    utils::rlp::{Decodable, Rlp},
 };
 use eyre::Result;
 use libflate::zlib::Decoder;
@@ -15,13 +15,26 @@ pub fn decode_batches(channel: &Channel) -> Result<Vec<Batch>> {
     let mut d = Decoder::new(channel.data.as_slice())?;
     d.read_to_end(&mut channel_data)?;
 
-    let channel_data: Vec<u8> = decode(&channel_data)?;
-    let batch_content: Vec<u8> = channel_data[1..].to_vec();
+    let mut batches = Vec::new();
+    let mut offset = 0;
 
-    // TODO: handle multiple batches in one channel
-    let batch: Batch = decode(&batch_content)?;
+    while offset < channel_data.len() {
+        let batch_rlp = Rlp::new(&channel_data[offset..]);
+        let batch_info = batch_rlp.payload_info()?;
 
-    Ok(vec![batch])
+        let batch_data: Vec<u8> = batch_rlp.as_val()?;
+
+        let batch_content = &batch_data[1..];
+        let rlp = Rlp::new(&batch_content);
+        let size = rlp.payload_info()?.total();
+
+        let batch: Batch = rlp.as_val()?;
+        batches.push(batch);
+
+        offset += size + batch_info.header_len + 1;
+    }
+
+    Ok(batches)
 }
 
 #[derive(Debug)]
