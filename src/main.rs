@@ -6,7 +6,7 @@ use ethers::{
 };
 use eyre::Result;
 
-use op_node_rs::{
+use magi::{
     batch_decoder::decode_batches, batcher_transaction::BatcherTransaction,
     channel_bank::ChannelBank,
 };

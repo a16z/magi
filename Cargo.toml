@@ -1,5 +1,5 @@
 [package]
-name = "op-node-rs"
+name = "magi"
 version = "0.1.0"
 edition = "2021"
 
