@@ -6,9 +6,8 @@ use ethers::{
 };
 use eyre::Result;
 
-use magi::{
-    batch_decoder::decode_batches, batcher_transaction::BatcherTransaction,
-    channel_bank::ChannelBank,
+use magi::stages::{
+    batcher_transactions::BatcherTransactions, batches::Batches, channels::Channels, Stage,
 };
 
 #[tokio::main]
@@ -22,19 +21,15 @@ async fn main() -> Result<()> {
     let tx = provider.get_transaction(tx_hash).await?.unwrap();
     let data = tx.input.to_vec();
 
-    let batch_tx = BatcherTransaction::from_data(&data)?;
+    let batchers_txs = BatcherTransactions::new();
+    let channels = Channels::new(batchers_txs.clone());
+    let batches = Batches::new(channels.clone());
 
-    let mut channel_bank = ChannelBank::new();
-    batch_tx
-        .frames
-        .into_iter()
-        .for_each(|f| channel_bank.push_frame(f));
+    batchers_txs.borrow_mut().push_data(data)?;
 
-    let channel = channel_bank.next().unwrap();
-
-    let batches = decode_batches(&channel)?;
-
-    println!("{:?}", batches);
+    while let Some(batch) = batches.borrow_mut().next()? {
+        println!("{:?}", batch);
+    }
 
     Ok(())
 }

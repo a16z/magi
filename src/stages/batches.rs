@@ -1,5 +1,5 @@
 use core::fmt::Debug;
-use std::io::Read;
+use std::{cell::RefCell, io::Read, rc::Rc};
 
 use ethers::{
     types::H256,
@@ -8,9 +8,44 @@ use ethers::{
 use eyre::Result;
 use libflate::zlib::Decoder;
 
-use crate::channel_bank::Channel;
+use super::{
+    channels::{Channel, Channels},
+    Stage,
+};
 
-pub fn decode_batches(channel: &Channel) -> Result<Vec<Batch>> {
+pub struct Batches {
+    batches: Vec<Batch>,
+    prev_stage: Rc<RefCell<Channels>>,
+}
+
+impl Stage for Batches {
+    type Output = Batch;
+
+    fn next(&mut self) -> Result<Option<Self::Output>> {
+        let channel = self.prev_stage.borrow_mut().next()?;
+        if let Some(channel) = channel {
+            let mut batches = decode_batches(&channel).unwrap();
+            self.batches.append(&mut batches);
+        }
+
+        Ok(if !self.batches.is_empty() {
+            Some(self.batches.remove(0))
+        } else {
+            None
+        })
+    }
+}
+
+impl Batches {
+    pub fn new(prev_stage: Rc<RefCell<Channels>>) -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self {
+            batches: Vec::new(),
+            prev_stage,
+        }))
+    }
+}
+
+fn decode_batches(channel: &Channel) -> Result<Vec<Batch>> {
     let mut channel_data = Vec::new();
     let mut d = Decoder::new(channel.data.as_slice())?;
     d.read_to_end(&mut channel_data)?;

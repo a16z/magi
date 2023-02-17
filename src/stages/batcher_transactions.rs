@@ -1,4 +1,37 @@
+use std::{cell::RefCell, rc::Rc};
+
 use eyre::Result;
+
+use super::Stage;
+
+pub struct BatcherTransactions {
+    txs: Vec<BatcherTransaction>,
+}
+
+impl Stage for BatcherTransactions {
+    type Output = BatcherTransaction;
+
+    fn next(&mut self) -> Result<Option<Self::Output>> {
+        if !self.txs.is_empty() {
+            Ok(Some(self.txs.remove(0)))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+impl BatcherTransactions {
+    pub fn new() -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self { txs: Vec::new() }))
+    }
+
+    pub fn push_data(&mut self, data: Vec<u8>) -> Result<()> {
+        let tx = BatcherTransaction::from_data(&data)?;
+        self.txs.push(tx);
+
+        Ok(())
+    }
+}
 
 #[derive(Debug)]
 pub struct BatcherTransaction {
@@ -7,7 +40,7 @@ pub struct BatcherTransaction {
 }
 
 impl BatcherTransaction {
-    pub fn from_data(data: &Vec<u8>) -> Result<Self> {
+    fn from_data(data: &Vec<u8>) -> Result<Self> {
         let version = data[0];
         let frame_data = &data[1..];
 
