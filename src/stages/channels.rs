@@ -16,21 +16,30 @@ impl Stage for Channels {
     type Output = Channel;
 
     fn next(&mut self) -> Result<Option<Self::Output>> {
-        let batcher_tx = self.prev_stage.borrow_mut().next()?;
-        batcher_tx.map(|b| self.push_batcher_tx(b));
+        // pull all batch transactions
+        loop {
+            let batcher_tx = self.prev_stage.borrow_mut().next()?;
+            if batcher_tx.map(|b| self.push_batcher_tx(b)).is_none() {
+                break;
+            }
+        }
 
+        // find the oldest complete channel
         let i = self
             .pending_channels
             .iter_mut()
             .position(|c| c.size == Some(c.frames.len() as u16));
 
+        // assemble the channel
         Ok(i.map(|i| {
             let c = self.pending_channels.get_mut(i).unwrap();
             c.frames.sort_by_key(|f| f.frame_number);
+
             let data = c
                 .frames
                 .iter()
                 .fold(Vec::new(), |a, b| [a, b.frame_data.clone()].concat());
+
             let id = c.channel_id.clone();
 
             self.pending_channels.remove(i);
@@ -53,16 +62,20 @@ impl Channels {
     }
 
     fn push_frame(&mut self, frame: Frame) {
+        // try to find the correct pending channel
         let pending = self
             .pending_channels
             .iter_mut()
             .find(|c| c.channel_id == frame.channel_id);
+
         if let Some(pending) = pending {
+            // insert frame if pending channel exists
             let seen_numbers = pending
                 .frames
                 .iter()
                 .map(|f| f.frame_number)
                 .collect::<Vec<_>>();
+
             if !seen_numbers.contains(&frame.frame_number) {
                 if frame.is_last {
                     pending.size = Some(frame.frame_number + 1);
@@ -70,6 +83,7 @@ impl Channels {
                 pending.frames.push(frame);
             }
         } else {
+            // create pending channel if it doesn't exist yet
             let size = if frame.is_last {
                 Some(frame.frame_number + 1)
             } else {

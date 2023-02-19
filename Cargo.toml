@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 tokio = { version = "1.25.0", features = ["full"] }
+futures = "0.3.26"
 eyre = "0.6.8"
 ethers = "1.0.2"
 hex = "0.4.3"

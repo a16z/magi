@@ -1367,6 +1367,7 @@ version = "0.1.0"
 dependencies = [
  "ethers",
  "eyre",
+ "futures",
  "hex",
  "libflate",
  "tokio",
