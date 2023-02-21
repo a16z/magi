@@ -1,15 +1,10 @@
-use std::{future::pending, str::FromStr};
-
-use ethers::{
-    providers::{Middleware, Provider},
-    types::H256,
-};
 use eyre::Result;
 
 use magi::{
     base_chain::chain_watcher,
     stages::{
-        batcher_transactions::BatcherTransactions, batches::Batches, channels::Channels, Stage,
+        attributes::Attributes, batcher_transactions::BatcherTransactions, batches::Batches,
+        channels::Channels, Stage,
     },
 };
 
@@ -17,15 +12,16 @@ use magi::{
 async fn main() -> Result<()> {
     let mut recv = chain_watcher(8494062);
 
-    let batchers_txs = BatcherTransactions::new();
-    let channels = Channels::new(batchers_txs.clone());
+    let batcher_txs = BatcherTransactions::new();
+    let channels = Channels::new(batcher_txs.clone());
     let batches = Batches::new(channels.clone());
+    let attributes = Attributes::new(batches.clone());
 
     while let Some(data) = recv.recv().await {
-        batchers_txs.borrow_mut().push_data(data)?;
+        batcher_txs.borrow_mut().push_data(data)?;
 
-        while let Some(batch) = batches.borrow_mut().next()? {
-            println!("{:?}", batch);
+        while let Some(payload_attributes) = attributes.borrow_mut().next()? {
+            println!("{:?}", payload_attributes);
         }
     }
 
