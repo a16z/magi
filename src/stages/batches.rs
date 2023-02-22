@@ -16,6 +16,7 @@ use super::{
 pub struct Batches {
     batches: Vec<Batch>,
     prev_stage: Rc<RefCell<Channels>>,
+    start_epoch: u64,
 }
 
 impl Stage for Batches {
@@ -24,7 +25,11 @@ impl Stage for Batches {
     fn next(&mut self) -> Result<Option<Self::Output>> {
         let channel = self.prev_stage.borrow_mut().next()?;
         if let Some(channel) = channel {
-            let mut batches = decode_batches(&channel).unwrap();
+            let mut batches = decode_batches(&channel)?
+                .into_iter()
+                .filter(|b| b.epoch_num >= self.start_epoch)
+                .collect();
+
             self.batches.append(&mut batches);
         }
 
@@ -37,10 +42,11 @@ impl Stage for Batches {
 }
 
 impl Batches {
-    pub fn new(prev_stage: Rc<RefCell<Channels>>) -> Rc<RefCell<Self>> {
+    pub fn new(prev_stage: Rc<RefCell<Channels>>, start_epoch: u64) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self {
             batches: Vec::new(),
             prev_stage,
+            start_epoch,
         }))
     }
 }
@@ -99,7 +105,7 @@ impl Decodable for Batch {
     }
 }
 
-pub struct RawTransaction(Vec<u8>);
+pub struct RawTransaction(pub Vec<u8>);
 
 impl Decodable for RawTransaction {
     fn decode(rlp: &Rlp) -> Result<Self, ethers::utils::rlp::DecoderError> {

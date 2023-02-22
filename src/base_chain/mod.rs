@@ -2,7 +2,7 @@ use std::{str::FromStr, time::Duration};
 
 use ethers::{
     providers::{Middleware, Provider},
-    types::Address,
+    types::{Address, Block, Transaction},
 };
 use tokio::{
     spawn,
@@ -12,8 +12,14 @@ use tokio::{
 
 type BatcherTransactionData = Vec<u8>;
 
-pub fn chain_watcher(start_block: u64) -> Receiver<BatcherTransactionData> {
-    let (sender, receiver) = channel(100);
+pub fn chain_watcher(
+    start_block: u64,
+) -> (
+    Receiver<BatcherTransactionData>,
+    Receiver<Block<Transaction>>,
+) {
+    let (batcher_tx_sender, batcher_tx_receiver) = channel(100);
+    let (block_sender, block_receiver) = channel(100);
 
     spawn(async move {
         let url = "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc";
@@ -30,12 +36,20 @@ pub fn chain_watcher(start_block: u64) -> Receiver<BatcherTransactionData> {
                 .await
                 .unwrap()
                 .unwrap();
-            let mut batcher_txs = block.transactions.into_iter().filter(|tx| {
+
+            let mut batcher_txs = block.transactions.clone().into_iter().filter(|tx| {
                 tx.from == batch_sender && tx.to.map(|to| to == batch_inbox).unwrap_or(false)
             });
 
+            // blocks must be sent first to prevent stage from executing on a
+            // batch that we do not have the block for yet
+            block_sender.send(block).await.unwrap();
+
             while let Some(batcher_tx) = batcher_txs.next() {
-                sender.send(batcher_tx.input.to_vec()).await.unwrap();
+                batcher_tx_sender
+                    .send(batcher_tx.input.to_vec())
+                    .await
+                    .unwrap();
             }
 
             block_num += 1;
@@ -44,5 +58,5 @@ pub fn chain_watcher(start_block: u64) -> Receiver<BatcherTransactionData> {
         }
     });
 
-    receiver
+    (batcher_tx_receiver, block_receiver)
 }
