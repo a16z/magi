@@ -40,7 +40,7 @@ pub struct BatcherTransaction {
 }
 
 impl BatcherTransaction {
-    fn from_data(data: &Vec<u8>) -> Result<Self> {
+    fn from_data(data: &[u8]) -> Result<Self> {
         let version = data[0];
         let frame_data = &data[1..];
 

@@ -38,7 +38,6 @@ pub async fn stages() -> Result<()> {
 
         while let Some(payload_attributes) = attributes.borrow_mut().next()? {
             println!("{:?}", payload_attributes);
-            break;
         }
     }
 

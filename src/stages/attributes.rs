@@ -21,12 +21,11 @@ impl Stage for Attributes {
     type Output = PayloadAttributes;
 
     fn next(&mut self) -> eyre::Result<Option<Self::Output>> {
-        Ok(if let Some(batch) = self.prev_stage.borrow_mut().next()? {
-            // TODO: handle seq number
-            Some(self.derive_attributes(batch))
-        } else {
-            None
-        })
+        Ok(self
+            .prev_stage
+            .borrow_mut()
+            .next()?
+            .map(|batch| self.derive_attributes(batch)))
     }
 }
 
@@ -156,17 +155,16 @@ impl AttributesDeposited {
     }
 
     fn encode(&self) -> Vec<u8> {
-        let mut tokens = Vec::new();
-        tokens.push(Token::Uint(self.number.into()));
-        tokens.push(Token::Uint(self.timestamp.into()));
-        tokens.push(Token::Uint(self.base_fee));
-        tokens.push(Token::FixedBytes(self.hash.as_fixed_bytes().to_vec()));
-        tokens.push(Token::Uint(self.sequence_number.into()));
-        tokens.push(Token::FixedBytes(
-            self.batcher_hash.as_fixed_bytes().to_vec(),
-        ));
-        tokens.push(Token::Uint(self.fee_overhead));
-        tokens.push(Token::Uint(self.fee_scalar));
+        let tokens = vec![
+            Token::Uint(self.number.into()),
+            Token::Uint(self.timestamp.into()),
+            Token::Uint(self.base_fee),
+            Token::FixedBytes(self.hash.as_fixed_bytes().to_vec()),
+            Token::Uint(self.sequence_number.into()),
+            Token::FixedBytes(self.batcher_hash.as_fixed_bytes().to_vec()),
+            Token::Uint(self.fee_overhead),
+            Token::Uint(self.fee_scalar),
+        ];
 
         let selector = hex::decode("015d8eb9").unwrap();
         let data = encode(&tokens);
