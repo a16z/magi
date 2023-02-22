@@ -40,7 +40,7 @@ impl Stage for Channels {
                 .iter()
                 .fold(Vec::new(), |a, b| [a, b.frame_data.clone()].concat());
 
-            let id = c.channel_id.clone();
+            let id = c.channel_id;
 
             self.pending_channels.remove(i);
 
@@ -70,13 +70,13 @@ impl Channels {
 
         if let Some(pending) = pending {
             // insert frame if pending channel exists
-            let seen_numbers = pending
+            let has_seen = pending
                 .frames
                 .iter()
                 .map(|f| f.frame_number)
-                .collect::<Vec<_>>();
+                .any(|n| n == frame.frame_number);
 
-            if !seen_numbers.contains(&frame.frame_number) {
+            if !has_seen {
                 if frame.is_last {
                     pending.size = Some(frame.frame_number + 1);
                 }

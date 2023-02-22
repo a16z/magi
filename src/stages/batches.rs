@@ -66,7 +66,7 @@ fn decode_batches(channel: &Channel) -> Result<Vec<Batch>> {
         let batch_data: Vec<u8> = batch_rlp.as_val()?;
 
         let batch_content = &batch_data[1..];
-        let rlp = Rlp::new(&batch_content);
+        let rlp = Rlp::new(batch_content);
         let size = rlp.payload_info()?.total();
 
         let batch: Batch = rlp.as_val()?;

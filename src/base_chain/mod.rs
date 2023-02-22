@@ -37,7 +37,7 @@ pub fn chain_watcher(
                 .unwrap()
                 .unwrap();
 
-            let mut batcher_txs = block.transactions.clone().into_iter().filter(|tx| {
+            let batcher_txs = block.transactions.clone().into_iter().filter(|tx| {
                 tx.from == batch_sender && tx.to.map(|to| to == batch_inbox).unwrap_or(false)
             });
 
@@ -45,7 +45,7 @@ pub fn chain_watcher(
             // batch that we do not have the block for yet
             block_sender.send(block).await.unwrap();
 
-            while let Some(batcher_tx) = batcher_txs.next() {
+            for batcher_tx in batcher_txs {
                 batcher_tx_sender
                     .send(batcher_tx.input.to_vec())
                     .await
