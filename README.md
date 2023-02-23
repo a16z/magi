@@ -2,19 +2,32 @@
 
 # magi • [![tests](https://github.com/a16z/magi/actions/workflows/test.yml/badge.svg?label=tests)](https://github.com/a16z/magi/actions/workflows/test.yml) ![license](https://img.shields.io/github/license/a16z/magi?label=license)
 
-`magi` is an Optimism full node implemented in pure Rust.
+`magi` (pronounced may-jai) is an Optimism full node implemented in pure Rust.
 
 
 ### Features
 
 - [ ] Base Chain Watcher
-    - [ ] ...
+    - [x] Transaction Watcher
+    - [x] Block Watcher
+    - [ ] Receipt Watcher
 - [ ] Derivation Pipeline
-    - [ ] ...
+    - [x] Batcher Transaction
+    - [x] Channels
+    - [ ] Batches
+        - [x] Basic Setup
+        - [ ] Pruning
+    - [ ] Paylaod Attributes
+        - [x] Basic Setup
+        - [ ] Attributes Deposited Transactions
+            - [x] Basic Setup
+            - [ ] Handle Sequence Numbers
+        - [ ] User Deposited Transactions
 - [ ] Geth Driver
-    - [ ] ...
+    - [ ] Engine API Bindings
+    - [ ] Driver Loop
 - [ ] Backend DB
-    - [ ] ...
+    - [ ] Progress Tracker
 
 ### Usage
 
