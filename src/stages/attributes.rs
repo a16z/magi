@@ -1,10 +1,11 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 
 use ethers::{
-    abi::{encode, Token},
-    types::{Address, Block, Transaction, H256, U256},
+    abi::{decode, encode, ParamType, Token},
+    types::{Address, Block, Log, Transaction, H256, U256},
     utils::{keccak256, rlp::Encodable},
 };
+use eyre::Result;
 
 use super::{
     batches::{Batch, Batches, RawTransaction},
@@ -14,6 +15,7 @@ use super::{
 pub struct Attributes {
     prev_stage: Rc<RefCell<Batches>>,
     blocks: Rc<RefCell<HashMap<H256, Block<Transaction>>>>,
+    deposits: Rc<RefCell<HashMap<u64, Vec<UserDeposited>>>>,
     sequence_number: u64,
     epoch: u64,
 }
@@ -33,10 +35,12 @@ impl Attributes {
     pub fn new(
         prev_stage: Rc<RefCell<Batches>>,
         blocks: Rc<RefCell<HashMap<H256, Block<Transaction>>>>,
+        deposits: Rc<RefCell<HashMap<u64, Vec<UserDeposited>>>>,
     ) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self {
             prev_stage,
             blocks,
+            deposits,
             sequence_number: 0,
             epoch: 0,
         }))
@@ -50,7 +54,7 @@ impl Attributes {
 
         let timestamp = batch.timestamp;
         let random = base_block.mix_hash.unwrap();
-        let transactions = self.get_transactions(batch, base_block);
+        let transactions = self.derive_transactions(batch, base_block);
 
         PayloadAttributes {
             timestamp,
@@ -62,21 +66,48 @@ impl Attributes {
         }
     }
 
-    fn get_transactions(
+    fn derive_transactions(
         &self,
         batch: Batch,
         base_block: &Block<Transaction>,
     ) -> Vec<RawTransaction> {
-        let seq = self.sequence_number;
-        let attributes_deposited = AttributesDeposited::from_block(base_block, seq);
-        let attributes_tx = DepositedTransaction::from(attributes_deposited);
-        let attributes_tx = RawTransaction(attributes_tx.rlp_bytes().to_vec());
+        let mut transactions = Vec::new();
 
-        let mut transactions = vec![attributes_tx];
+        let attributes_tx = self.derive_attributes_deposited(base_block);
+        transactions.push(attributes_tx);
+
+        if self.sequence_number == 0 {
+            let mut user_deposited_txs = self.derive_user_deposited();
+            transactions.append(&mut user_deposited_txs);
+        }
+
         let mut rest = batch.transactions;
         transactions.append(&mut rest);
 
         transactions
+    }
+
+    fn derive_attributes_deposited(&self, base_block: &Block<Transaction>) -> RawTransaction {
+        let seq = self.sequence_number;
+        let attributes_deposited = AttributesDeposited::from_block(base_block, seq);
+        let attributes_tx = DepositedTransaction::from(attributes_deposited);
+        RawTransaction(attributes_tx.rlp_bytes().to_vec())
+    }
+
+    fn derive_user_deposited(&self) -> Vec<RawTransaction> {
+        let deposits = self.deposits.borrow();
+        let deposits = deposits.get(&self.epoch);
+        deposits
+            .map(|deposits| {
+                deposits
+                    .iter()
+                    .map(|deposit| {
+                        let tx = DepositedTransaction::from(deposit.clone());
+                        RawTransaction(tx.rlp_bytes().to_vec())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     fn update_sequence_number(&mut self, batch_epoch: u64) {
@@ -131,6 +162,34 @@ impl From<AttributesDeposited> for DepositedTransaction {
             gas: 150_000_000,
             is_system_tx: true,
             data,
+        }
+    }
+}
+
+impl From<UserDeposited> for DepositedTransaction {
+    fn from(user_deposited: UserDeposited) -> Self {
+        let hash = user_deposited.base_block_hash.to_fixed_bytes();
+        let log_index = user_deposited.log_index.into();
+        let h = keccak256([hash, log_index].concat());
+
+        let domain = H256::from_low_u64_be(0).to_fixed_bytes();
+        let source_hash = H256::from_slice(&keccak256([domain, h].concat()));
+
+        let to = if user_deposited.is_creation {
+            Address::zero()
+        } else {
+            user_deposited.to
+        };
+
+        Self {
+            source_hash,
+            from: user_deposited.from,
+            to,
+            mint: user_deposited.mint,
+            value: user_deposited.value,
+            gas: user_deposited.gas,
+            is_system_tx: false,
+            data: user_deposited.data,
         }
     }
 }
@@ -195,5 +254,51 @@ impl AttributesDeposited {
         let data = encode(&tokens);
 
         [selector, data].concat()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct UserDeposited {
+    pub from: Address,
+    pub to: Address,
+    pub mint: U256,
+    pub value: U256,
+    pub gas: u64,
+    pub is_creation: bool,
+    pub data: Vec<u8>,
+    pub base_block_num: u64,
+    pub base_block_hash: H256,
+    pub log_index: U256,
+}
+
+impl UserDeposited {
+    pub fn from_log(log: Log, base_block_num: u64, base_block_hash: H256) -> Result<Self> {
+        let opaque_data = decode(&[ParamType::Bytes], &log.data)?[0]
+            .clone()
+            .into_bytes()
+            .unwrap();
+
+        let from = Address::try_from(log.topics[1])?;
+        let to = Address::try_from(log.topics[2])?;
+        let mint = U256::from_big_endian(&opaque_data[0..32]);
+        let value = U256::from_big_endian(&opaque_data[32..64]);
+        let gas = u64::from_be_bytes(opaque_data[64..72].try_into()?);
+        let is_creation = opaque_data[72] != 0;
+        let data = opaque_data[73..].to_vec();
+
+        let log_index = log.log_index.unwrap();
+
+        Ok(Self {
+            from,
+            to,
+            mint,
+            value,
+            gas,
+            is_creation,
+            data,
+            base_block_num,
+            base_block_hash,
+            log_index,
+        })
     }
 }
