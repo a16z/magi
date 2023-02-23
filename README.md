@@ -10,7 +10,8 @@
 - [ ] Base Chain Watcher
     - [x] Transaction Watcher
     - [x] Block Watcher
-    - [ ] Receipt Watcher
+    - [x] Deposit Watcher
+    - [ ] System Config Watcher
 - [ ] Derivation Pipeline
     - [x] Batcher Transaction
     - [x] Channels
