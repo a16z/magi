@@ -4,7 +4,7 @@ use ethers::types::{Block, Transaction, H256};
 use eyre::Result;
 
 use magi::{
-    base_chain::chain_watcher,
+    base_chain::ChainWatcher,
     stages::{
         attributes::{Attributes, UserDeposited},
         batcher_transactions::BatcherTransactions,
@@ -23,7 +23,7 @@ async fn main() -> Result<()> {
 
 pub async fn stages() -> Result<()> {
     let start_epoch = 8494058;
-    let (mut batcher_tx_recv, mut block_recv, mut deposit_recv) = chain_watcher(start_epoch);
+    let mut chain_watcher = ChainWatcher::new(start_epoch);
 
     let blocks = Rc::new(RefCell::new(HashMap::<H256, Block<Transaction>>::new()));
     let deposits = Rc::new(RefCell::new(HashMap::<u64, Vec<UserDeposited>>::new()));
@@ -33,12 +33,12 @@ pub async fn stages() -> Result<()> {
     let batches = Batches::new(channels.clone(), start_epoch);
     let attributes = Attributes::new(batches.clone(), blocks.clone(), deposits.clone());
 
-    while let Some(data) = batcher_tx_recv.recv().await {
-        while let Ok(block) = block_recv.try_recv() {
+    while let Some(data) = chain_watcher.tx_receiver.recv().await {
+        while let Ok(block) = chain_watcher.block_receiver.try_recv() {
             blocks.borrow_mut().insert(block.hash.unwrap(), block);
         }
 
-        while let Ok(deposit) = deposit_recv.try_recv() {
+        while let Ok(deposit) = chain_watcher.deposit_receiver.try_recv() {
             let mut deposits = deposits.borrow_mut();
             let deposits_for_block = deposits.get_mut(&deposit.base_block_num);
 
