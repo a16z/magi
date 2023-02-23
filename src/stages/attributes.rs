@@ -50,7 +50,7 @@ impl Attributes {
 
         let timestamp = batch.timestamp;
         let random = base_block.mix_hash.unwrap();
-        let transactions = self.get_transactions(batch, &base_block);
+        let transactions = self.get_transactions(batch, base_block);
 
         PayloadAttributes {
             timestamp,
