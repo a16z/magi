@@ -19,9 +19,9 @@
         - [ ] Pruning
     - [ ] Paylaod Attributes
         - [x] Basic Setup
-        - [ ] Attributes Deposited Transactions
+        - [x] Attributes Deposited Transactions
             - [x] Basic Setup
-            - [ ] Handle Sequence Numbers
+            - [x] Handle Sequence Numbers
         - [ ] User Deposited Transactions
 - [ ] Geth Driver
     - [ ] Engine API Bindings
