@@ -7,16 +7,41 @@ use ethers::{
 use tokio::{
     spawn,
     sync::mpsc::{channel, Receiver},
+    task::JoinHandle,
     time::sleep,
 };
 
 use crate::stages::attributes::UserDeposited;
 
-type BatcherTransactionData = Vec<u8>;
+pub struct ChainWatcher {
+    handle: JoinHandle<()>,
+    pub tx_receiver: Receiver<BatcherTransactionData>,
+    pub block_receiver: Receiver<Block<Transaction>>,
+    pub deposit_receiver: Receiver<UserDeposited>,
+}
 
-pub fn chain_watcher(
+impl Drop for ChainWatcher {
+    fn drop(&mut self) {
+        self.handle.abort();
+    }
+}
+
+impl ChainWatcher {
+    pub fn new(start_block: u64) -> Self {
+        let (handle, tx_receiver, block_receiver, deposit_receiver) = chain_watcher(start_block);
+        Self {
+            handle,
+            tx_receiver,
+            block_receiver,
+            deposit_receiver,
+        }
+    }
+}
+
+fn chain_watcher(
     start_block: u64,
 ) -> (
+    JoinHandle<()>,
     Receiver<BatcherTransactionData>,
     Receiver<Block<Transaction>>,
     Receiver<UserDeposited>,
@@ -25,7 +50,7 @@ pub fn chain_watcher(
     let (block_sender, block_receiver) = channel(1000);
     let (deposit_sender, deposit_receiver) = channel(1000);
 
-    spawn(async move {
+    let handle = spawn(async move {
         let url = "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc";
         let provider = Provider::try_from(url).unwrap();
 
@@ -45,6 +70,15 @@ pub fn chain_watcher(
         let mut block_num = start_block;
 
         loop {
+            let channel_full = batcher_tx_sender.capacity() == 0
+                || block_sender.capacity() == 0
+                || deposit_sender.capacity() == 0;
+
+            if channel_full {
+                sleep(Duration::from_millis(250)).await;
+                continue;
+            }
+
             let block = provider
                 .get_block_with_txs(block_num)
                 .await
@@ -81,10 +115,15 @@ pub fn chain_watcher(
             }
 
             block_num += 1;
-
-            sleep(Duration::from_millis(250)).await;
         }
     });
 
-    (batcher_tx_receiver, block_receiver, deposit_receiver)
+    (
+        handle,
+        batcher_tx_receiver,
+        block_receiver,
+        deposit_receiver,
+    )
 }
+
+type BatcherTransactionData = Vec<u8>;
