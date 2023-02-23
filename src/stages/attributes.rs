@@ -14,6 +14,7 @@ use super::{
 pub struct Attributes {
     prev_stage: Rc<RefCell<Batches>>,
     blocks: Rc<RefCell<HashMap<H256, Block<Transaction>>>>,
+    deposits: Rc<RefCell<HashMap<u64, Vec<UserDeposited>>>>,
     sequence_number: u64,
     epoch: u64,
 }
@@ -33,10 +34,12 @@ impl Attributes {
     pub fn new(
         prev_stage: Rc<RefCell<Batches>>,
         blocks: Rc<RefCell<HashMap<H256, Block<Transaction>>>>,
+        deposits: Rc<RefCell<HashMap<u64, Vec<UserDeposited>>>>,
     ) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self {
             prev_stage,
             blocks,
+            deposits,
             sequence_number: 0,
             epoch: 0,
         }))
@@ -73,6 +76,23 @@ impl Attributes {
         let attributes_tx = RawTransaction(attributes_tx.rlp_bytes().to_vec());
 
         let mut transactions = vec![attributes_tx];
+
+        if self.sequence_number == 0 {
+            let deposits = self.deposits.borrow();
+            let deposits = deposits.get(&self.epoch);
+            if let Some(deposits) = deposits {
+                let mut user_deposit_txs = deposits
+                    .iter()
+                    .map(|deposit| {
+                        let tx = DepositedTransaction::from(deposit.clone());
+                        RawTransaction(tx.rlp_bytes().to_vec())
+                    })
+                    .collect();
+
+                transactions.append(&mut user_deposit_txs);
+            }
+        }
+
         let mut rest = batch.transactions;
         transactions.append(&mut rest);
 
@@ -131,6 +151,34 @@ impl From<AttributesDeposited> for DepositedTransaction {
             gas: 150_000_000,
             is_system_tx: true,
             data,
+        }
+    }
+}
+
+impl From<UserDeposited> for DepositedTransaction {
+    fn from(user_deposited: UserDeposited) -> Self {
+        let hash = user_deposited.base_block_hash.to_fixed_bytes();
+        let log_index = user_deposited.log_index.into();
+        let h = keccak256([hash, log_index].concat());
+
+        let domain = H256::from_low_u64_be(0).to_fixed_bytes();
+        let source_hash = H256::from_slice(&keccak256([domain, h].concat()));
+
+        let to = if user_deposited.is_creation {
+            Address::zero()
+        } else {
+            user_deposited.to
+        };
+
+        Self {
+            source_hash,
+            from: user_deposited.from,
+            to,
+            mint: user_deposited.mint,
+            value: user_deposited.value,
+            gas: user_deposited.gas,
+            is_system_tx: false,
+            data: user_deposited.data,
         }
     }
 }
@@ -196,4 +244,18 @@ impl AttributesDeposited {
 
         [selector, data].concat()
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct UserDeposited {
+    pub from: Address,
+    pub to: Address,
+    pub mint: U256,
+    pub value: U256,
+    pub gas: u64,
+    pub is_creation: bool,
+    pub data: Vec<u8>,
+    pub base_block_num: u64,
+    pub base_block_hash: H256,
+    pub log_index: U256,
 }

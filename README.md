@@ -17,12 +17,12 @@
     - [ ] Batches
         - [x] Basic Setup
         - [ ] Pruning
-    - [ ] Paylaod Attributes
+    - [x] Paylaod Attributes
         - [x] Basic Setup
         - [x] Attributes Deposited Transactions
             - [x] Basic Setup
             - [x] Handle Sequence Numbers
-        - [ ] User Deposited Transactions
+        - [x] User Deposited Transactions
 - [ ] Geth Driver
     - [ ] Engine API Bindings
     - [ ] Driver Loop
