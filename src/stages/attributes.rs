@@ -15,17 +15,17 @@ pub struct Attributes {
     prev_stage: Rc<RefCell<Batches>>,
     blocks: Rc<RefCell<HashMap<H256, Block<Transaction>>>>,
     sequence_number: u64,
+    epoch: u64,
 }
 
 impl Stage for Attributes {
     type Output = PayloadAttributes;
 
     fn next(&mut self) -> eyre::Result<Option<Self::Output>> {
-        Ok(self
-            .prev_stage
-            .borrow_mut()
-            .next()?
-            .map(|batch| self.derive_attributes(batch)))
+        let batch = self.prev_stage.borrow_mut().next()?;
+        let payload_attributes = batch.map(|batch| self.derive_attributes(batch));
+
+        Ok(payload_attributes)
     }
 }
 
@@ -38,14 +38,37 @@ impl Attributes {
             prev_stage,
             blocks,
             sequence_number: 0,
+            epoch: 0,
         }))
     }
 
-    fn derive_attributes(&self, batch: Batch) -> PayloadAttributes {
+    fn derive_attributes(&mut self, batch: Batch) -> PayloadAttributes {
+        self.update_sequence_number(batch.epoch_num);
+
         let blocks = self.blocks.borrow();
         let base_block = blocks.get(&batch.epoch_hash).unwrap();
-        let attributes_deposited =
-            AttributesDeposited::from_block(base_block, self.sequence_number);
+
+        let timestamp = batch.timestamp;
+        let random = base_block.mix_hash.unwrap();
+        let transactions = self.get_transactions(batch, &base_block);
+
+        PayloadAttributes {
+            timestamp,
+            random,
+            suggested_fee_recipient: Address::default(),
+            transactions,
+            no_tx_pool: true,
+            gas_limit: 30_000_000,
+        }
+    }
+
+    fn get_transactions(
+        &self,
+        batch: Batch,
+        base_block: &Block<Transaction>,
+    ) -> Vec<RawTransaction> {
+        let seq = self.sequence_number;
+        let attributes_deposited = AttributesDeposited::from_block(base_block, seq);
         let attributes_tx = DepositedTransaction::from(attributes_deposited);
         let attributes_tx = RawTransaction(attributes_tx.rlp_bytes().to_vec());
 
@@ -53,13 +76,15 @@ impl Attributes {
         let mut rest = batch.transactions;
         transactions.append(&mut rest);
 
-        PayloadAttributes {
-            timestamp: batch.timestamp,
-            random: base_block.mix_hash.unwrap(),
-            suggested_fee_recipient: Address::default(),
-            transactions,
-            no_tx_pool: true,
-            gas_limit: 30_000_000,
+        transactions
+    }
+
+    fn update_sequence_number(&mut self, batch_epoch: u64) {
+        if self.epoch != batch_epoch {
+            self.sequence_number = 0;
+            self.epoch = batch_epoch;
+        } else {
+            self.sequence_number += 1;
         }
     }
 }
