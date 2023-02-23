@@ -1,10 +1,11 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 
 use ethers::{
-    abi::{encode, Token},
-    types::{Address, Block, Transaction, H256, U256},
+    abi::{decode, encode, ParamType, Token},
+    types::{Address, Block, Log, Transaction, H256, U256},
     utils::{keccak256, rlp::Encodable},
 };
+use eyre::Result;
 
 use super::{
     batches::{Batch, Batches, RawTransaction},
@@ -53,7 +54,7 @@ impl Attributes {
 
         let timestamp = batch.timestamp;
         let random = base_block.mix_hash.unwrap();
-        let transactions = self.get_transactions(batch, base_block);
+        let transactions = self.derive_transactions(batch, base_block);
 
         PayloadAttributes {
             timestamp,
@@ -65,38 +66,48 @@ impl Attributes {
         }
     }
 
-    fn get_transactions(
+    fn derive_transactions(
         &self,
         batch: Batch,
         base_block: &Block<Transaction>,
     ) -> Vec<RawTransaction> {
-        let seq = self.sequence_number;
-        let attributes_deposited = AttributesDeposited::from_block(base_block, seq);
-        let attributes_tx = DepositedTransaction::from(attributes_deposited);
-        let attributes_tx = RawTransaction(attributes_tx.rlp_bytes().to_vec());
+        let mut transactions = Vec::new();
 
-        let mut transactions = vec![attributes_tx];
+        let attributes_tx = self.derive_attributes_deposited(base_block);
+        transactions.push(attributes_tx);
 
         if self.sequence_number == 0 {
-            let deposits = self.deposits.borrow();
-            let deposits = deposits.get(&self.epoch);
-            if let Some(deposits) = deposits {
-                let mut user_deposit_txs = deposits
-                    .iter()
-                    .map(|deposit| {
-                        let tx = DepositedTransaction::from(deposit.clone());
-                        RawTransaction(tx.rlp_bytes().to_vec())
-                    })
-                    .collect();
-
-                transactions.append(&mut user_deposit_txs);
-            }
+            let mut user_deposited_txs = self.derive_user_deposited();
+            transactions.append(&mut user_deposited_txs);
         }
 
         let mut rest = batch.transactions;
         transactions.append(&mut rest);
 
         transactions
+    }
+
+    fn derive_attributes_deposited(&self, base_block: &Block<Transaction>) -> RawTransaction {
+        let seq = self.sequence_number;
+        let attributes_deposited = AttributesDeposited::from_block(base_block, seq);
+        let attributes_tx = DepositedTransaction::from(attributes_deposited);
+        RawTransaction(attributes_tx.rlp_bytes().to_vec())
+    }
+
+    fn derive_user_deposited(&self) -> Vec<RawTransaction> {
+        let deposits = self.deposits.borrow();
+        let deposits = deposits.get(&self.epoch);
+        deposits
+            .map(|deposits| {
+                deposits
+                    .iter()
+                    .map(|deposit| {
+                        let tx = DepositedTransaction::from(deposit.clone());
+                        RawTransaction(tx.rlp_bytes().to_vec())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     fn update_sequence_number(&mut self, batch_epoch: u64) {
@@ -258,4 +269,36 @@ pub struct UserDeposited {
     pub base_block_num: u64,
     pub base_block_hash: H256,
     pub log_index: U256,
+}
+
+impl UserDeposited {
+    pub fn from_log(log: Log, base_block_num: u64, base_block_hash: H256) -> Result<Self> {
+        let opaque_data = decode(&[ParamType::Bytes], &log.data)?[0]
+            .clone()
+            .into_bytes()
+            .unwrap();
+
+        let from = Address::try_from(log.topics[1])?;
+        let to = Address::try_from(log.topics[2])?;
+        let mint = U256::from_big_endian(&opaque_data[0..32]);
+        let value = U256::from_big_endian(&opaque_data[32..64]);
+        let gas = u64::from_be_bytes(opaque_data[64..72].try_into()?);
+        let is_creation = opaque_data[72] != 0;
+        let data = opaque_data[73..].to_vec();
+
+        let log_index = log.log_index.unwrap();
+
+        Ok(Self {
+            from,
+            to,
+            mint,
+            value,
+            gas,
+            is_creation,
+            data,
+            base_block_num,
+            base_block_hash,
+            log_index,
+        })
+    }
 }

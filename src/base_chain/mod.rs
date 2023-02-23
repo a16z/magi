@@ -1,9 +1,8 @@
 use std::{str::FromStr, time::Duration};
 
 use ethers::{
-    abi::{decode, ParamType},
     providers::{Middleware, Provider},
-    types::{Address, Block, Filter, Transaction, H256, U256},
+    types::{Address, Block, Filter, Transaction, H256},
 };
 use tokio::{
     spawn,
@@ -67,41 +66,10 @@ pub fn chain_watcher(
                 .from_block(block_num)
                 .to_block(block_num);
 
-            let logs = provider.get_logs(&filter).await.unwrap();
+            let deposit_logs = provider.get_logs(&filter).await.unwrap();
 
-            let deposits = logs.into_iter().map(|log| {
-                let opaque_data = decode(&[ParamType::Bytes], &log.data).unwrap()[0]
-                    .clone()
-                    .into_bytes()
-                    .unwrap();
-
-                let from = Address::try_from(log.topics[1]).unwrap();
-                let to = Address::try_from(log.topics[2]).unwrap();
-                let mint = U256::from_big_endian(&opaque_data[0..32]);
-                let value = U256::from_big_endian(&opaque_data[32..64]);
-                let gas = u64::from_be_bytes(opaque_data[64..72].try_into().unwrap());
-                let is_creation = opaque_data[72] != 0;
-                let data = opaque_data[73..].to_vec();
-
-                let base_block_num = block_num;
-                let base_block_hash = block_hash;
-                let log_index = log.log_index.unwrap();
-
-                UserDeposited {
-                    from,
-                    to,
-                    mint,
-                    value,
-                    gas,
-                    is_creation,
-                    data,
-                    base_block_num,
-                    base_block_hash,
-                    log_index,
-                }
-            });
-
-            for deposit in deposits {
+            for deposit_log in deposit_logs {
+                let deposit = UserDeposited::from_log(deposit_log, block_num, block_hash).unwrap();
                 deposit_sender.send(deposit).await.unwrap();
             }
 
