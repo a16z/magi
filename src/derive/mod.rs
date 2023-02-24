@@ -1,6 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use ethers::types::{Block, Transaction, H256};
+use ethers_core::types::{Block, Transaction, H256};
 use eyre::Result;
 
 use crate::base_chain::ChainWatcher;

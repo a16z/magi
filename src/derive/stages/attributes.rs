@@ -1,10 +1,9 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
 
-use ethers::{
-    abi::{decode, encode, ParamType, Token},
-    types::{Address, Block, Log, Transaction, H256, U256},
-    utils::{keccak256, rlp::Encodable},
-};
+use ethers_core::abi::{decode, encode, ParamType, Token};
+use ethers_core::types::{Address, Block, Log, Transaction, H256, U256};
+use ethers_core::utils::{keccak256, rlp::Encodable, rlp::RlpStream};
+
 use eyre::Result;
 
 use super::batches::{Batch, Batches, RawTransaction};
@@ -194,7 +193,7 @@ impl From<UserDeposited> for DepositedTransaction {
 }
 
 impl Encodable for DepositedTransaction {
-    fn rlp_append(&self, s: &mut ethers::utils::rlp::RlpStream) {
+    fn rlp_append(&self, s: &mut RlpStream) {
         s.append_raw(&[0x7E], 1);
         s.begin_list(8);
         s.append(&self.source_hash);
