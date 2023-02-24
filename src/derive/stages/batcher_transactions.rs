@@ -53,7 +53,7 @@ pub struct BatcherTransaction {
 impl BatcherTransaction {
     fn from_data(data: &[u8]) -> Result<Self> {
         let version = data[0];
-        let frame_data = &data[1..];
+        let frame_data = data.get(1..).ok_or(eyre::eyre!("No frame data"))?;
 
         let mut offset = 0;
         let mut frames = Vec::new();
