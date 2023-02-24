@@ -1,4 +1,6 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
+use std::iter;
+use std::sync::Arc;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use ethers_core::abi::{decode, encode, ParamType, Token};
 use ethers_core::types::{Address, Block, Log, Transaction, H256, U256};
@@ -6,10 +8,13 @@ use ethers_core::utils::{keccak256, rlp::Encodable, rlp::RlpStream};
 
 use eyre::Result;
 
+use crate::config::Config;
+
 use super::batches::{Batch, Batches, RawTransaction};
 
 pub struct Attributes {
     prev_stage: Rc<RefCell<Batches>>,
+    config: Arc<Config>,
     blocks: Rc<RefCell<HashMap<H256, Block<Transaction>>>>,
     deposits: Rc<RefCell<HashMap<u64, Vec<UserDeposited>>>>,
     sequence_number: u64,
@@ -30,11 +35,13 @@ impl Iterator for Attributes {
 impl Attributes {
     pub fn new(
         prev_stage: Rc<RefCell<Batches>>,
+        config: Arc<Config>,
         blocks: Rc<RefCell<HashMap<H256, Block<Transaction>>>>,
         deposits: Rc<RefCell<HashMap<u64, Vec<UserDeposited>>>>,
     ) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self {
             prev_stage,
+            config,
             blocks,
             deposits,
             sequence_number: 0,
@@ -52,12 +59,10 @@ impl Attributes {
         let random = base_block.mix_hash.unwrap();
         let transactions = self.derive_transactions(batch, base_block);
 
-        let fee_vault = Address::from_str("0x4200000000000000000000000000000000000011").unwrap();
-
         PayloadAttributes {
             timestamp,
             random,
-            suggested_fee_recipient: fee_vault,
+            suggested_fee_recipient: self.config.chain.fee_vault,
             transactions,
             no_tx_pool: true,
             gas_limit: 30_000_000,
@@ -87,8 +92,9 @@ impl Attributes {
 
     fn derive_attributes_deposited(&self, base_block: &Block<Transaction>) -> RawTransaction {
         let seq = self.sequence_number;
-        let attributes_deposited = AttributesDeposited::from_block(base_block, seq);
-        let attributes_tx = DepositedTransaction::from(attributes_deposited);
+        let attributes_deposited = AttributesDeposited::from_block(base_block, seq, &self.config);
+        let attributes_tx =
+            DepositedTransaction::from_attributes_deposited(attributes_deposited, &self.config);
         RawTransaction(attributes_tx.rlp_bytes().to_vec())
     }
 
@@ -100,7 +106,7 @@ impl Attributes {
                 deposits
                     .iter()
                     .map(|deposit| {
-                        let tx = DepositedTransaction::from(deposit.clone());
+                        let tx = DepositedTransaction::from_user_deposited(deposit.clone());
                         RawTransaction(tx.rlp_bytes().to_vec())
                     })
                     .collect()
@@ -140,8 +146,11 @@ struct DepositedTransaction {
     data: Vec<u8>,
 }
 
-impl From<AttributesDeposited> for DepositedTransaction {
-    fn from(attributes_deposited: AttributesDeposited) -> Self {
+impl DepositedTransaction {
+    fn from_attributes_deposited(
+        attributes_deposited: AttributesDeposited,
+        config: &Arc<Config>,
+    ) -> Self {
         let hash = attributes_deposited.hash.to_fixed_bytes();
         let seq = H256::from_low_u64_be(attributes_deposited.sequence_number).to_fixed_bytes();
         let h = keccak256([hash, seq].concat());
@@ -153,8 +162,8 @@ impl From<AttributesDeposited> for DepositedTransaction {
 
         Self {
             source_hash,
-            from: Address::from_str("0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001").unwrap(),
-            to: Address::from_str("0x4200000000000000000000000000000000000015").unwrap(),
+            from: config.chain.attributes_depositor,
+            to: config.chain.attributes_predeploy,
             mint: U256::zero(),
             value: U256::zero(),
             gas: 150_000_000,
@@ -162,10 +171,8 @@ impl From<AttributesDeposited> for DepositedTransaction {
             data,
         }
     }
-}
 
-impl From<UserDeposited> for DepositedTransaction {
-    fn from(user_deposited: UserDeposited) -> Self {
+    fn from_user_deposited(user_deposited: UserDeposited) -> Self {
         let hash = user_deposited.base_block_hash.to_fixed_bytes();
         let log_index = user_deposited.log_index.into();
         let h = keccak256([hash, log_index].concat());
@@ -220,17 +227,18 @@ struct AttributesDeposited {
 }
 
 impl AttributesDeposited {
-    fn from_block(block: &Block<Transaction>, seq: u64) -> Self {
+    fn from_block(block: &Block<Transaction>, seq: u64, config: &Arc<Config>) -> Self {
+        let padding = iter::repeat(0).take(12);
+        let mut batcher_hash = config.chain.batch_sender.as_bytes().to_vec();
+        batcher_hash.extend(padding);
+
         Self {
             number: block.number.unwrap().as_u64(),
             timestamp: block.timestamp.as_u64(),
             base_fee: block.base_fee_per_gas.unwrap(),
             hash: block.hash.unwrap(),
             sequence_number: seq,
-            batcher_hash: H256::from_str(
-                "0x0000000000000000000000007431310e026b69bfc676c0013e12a1a11411eec9",
-            )
-            .unwrap(),
+            batcher_hash: H256::from_slice(&batcher_hash),
             fee_overhead: U256::from(2100),
             fee_scalar: U256::from(1000000),
         }

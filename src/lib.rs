@@ -1,5 +1,11 @@
+/// Base chain tracking
 pub mod base_chain;
+
+/// Configuration management
+pub mod config;
+
+/// Chain derivation pipeline
 pub mod derive;
 
-/// A module for application telemetry
+/// Application telemetry and logging
 pub mod telemetry;

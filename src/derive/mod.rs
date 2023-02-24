@@ -1,9 +1,9 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 
 use ethers_core::types::{Block, Transaction, H256};
 use eyre::Result;
 
-use crate::base_chain::ChainWatcher;
+use crate::{base_chain::ChainWatcher, config::Config};
 
 use self::stages::{
     attributes::{Attributes, PayloadAttributes, UserDeposited},
@@ -32,8 +32,8 @@ impl Iterator for Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(start_epoch: u64) -> Self {
-        let mut chain_watcher = ChainWatcher::new(start_epoch);
+    pub fn new(start_epoch: u64, config: Arc<Config>) -> Self {
+        let mut chain_watcher = ChainWatcher::new(start_epoch, config.clone());
         let tx_recv = chain_watcher.take_tx_receiver().unwrap();
 
         let blocks = Rc::new(RefCell::new(HashMap::<H256, Block<Transaction>>::new()));
@@ -42,7 +42,7 @@ impl Pipeline {
         let batcher_transactions = BatcherTransactions::new(tx_recv);
         let channels = Channels::new(batcher_transactions);
         let batches = Batches::new(channels, start_epoch);
-        let attributes = Attributes::new(batches, blocks.clone(), deposits.clone());
+        let attributes = Attributes::new(batches, config, blocks.clone(), deposits.clone());
 
         Self {
             attributes,
