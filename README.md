@@ -26,6 +26,8 @@
         - [x] User Deposited Transactions
 - [ ] Geth Driver
     - [ ] Engine API Bindings
+        - [x] Engine API Trait
+        - [ ] Engine API Client Implementation
     - [ ] Driver Loop
 - [ ] Backend DB
     - [ ] Progress Tracker
@@ -36,6 +38,11 @@ _Prerequisites: Install rust and cargo with `curl https://sh.rustup.rs -sSf | sh
 
 Run the main binary with `cargo run --release`
 
+### Tests
+
+Tests are configured module-wise, with e2e tests located inside the [tests](./tests) directory.
+
+To run all tests, run `cargo test --all`.
 
 ### License
 
