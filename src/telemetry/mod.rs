@@ -19,7 +19,7 @@ pub use logging::*;
 
 /// Export a prelude to re-export common traits and types
 pub mod prelude {
+    pub use super::*;
     pub use tracing::{debug, error, info, span, trace, warn, Level};
     pub use tracing_subscriber::{fmt, prelude::*};
-    pub use super::*;
 }

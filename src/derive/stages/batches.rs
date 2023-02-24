@@ -1,10 +1,9 @@
 use core::fmt::Debug;
 use std::{cell::RefCell, io::Read, rc::Rc};
 
-use ethers::{
-    types::H256,
-    utils::rlp::{Decodable, Rlp},
-};
+use ethers_core::types::H256;
+use ethers_core::utils::rlp::{Decodable, DecoderError, Rlp};
+
 use eyre::Result;
 use libflate::zlib::Decoder;
 
@@ -89,7 +88,7 @@ pub struct Batch {
 }
 
 impl Decodable for Batch {
-    fn decode(rlp: &Rlp) -> Result<Self, ethers::utils::rlp::DecoderError> {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         let parent_hash = rlp.val_at(0)?;
         let epoch_num = rlp.val_at(1)?;
         let epoch_hash = rlp.val_at(2)?;
@@ -109,7 +108,7 @@ impl Decodable for Batch {
 pub struct RawTransaction(pub Vec<u8>);
 
 impl Decodable for RawTransaction {
-    fn decode(rlp: &Rlp) -> Result<Self, ethers::utils::rlp::DecoderError> {
+    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         let tx_bytes: Vec<u8> = rlp.as_val()?;
         Ok(Self(tx_bytes))
     }

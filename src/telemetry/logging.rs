@@ -1,3 +1,4 @@
+use eyre::Result;
 use tracing::subscriber::set_global_default;
 use tracing::{Level, Subscriber};
 use tracing_log::LogTracer;
@@ -7,7 +8,7 @@ use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 use ansi_term::Colour::{Blue, Cyan, Purple, Red, Yellow};
 
 /// Configure logging telemetry
-pub fn init(verbose: bool) -> eyre::Result<()> {
+pub fn init(verbose: bool) -> Result<()> {
     let subscriber = match verbose {
         true => get_subscriber("debug".into()),
         false => get_subscriber("info".into()),
@@ -27,7 +28,7 @@ pub fn get_subscriber(env_filter: String) -> impl Subscriber + Sync + Send {
 
 /// Globally registers a subscriber.
 /// This will error if a subscriber has already been registered.
-pub fn init_subscriber(subscriber: impl Subscriber + Send + Sync) -> eyre::Result<()> {
+pub fn init_subscriber(subscriber: impl Subscriber + Send + Sync) -> Result<()> {
     LogTracer::init().map_err(|_| eyre::eyre!("Failed to set logger"))?;
     set_global_default(subscriber).map_err(|_| eyre::eyre!("Failed to set subscriber"))
 }
@@ -122,5 +123,3 @@ where
         event.record(&mut visitor);
     }
 }
-
-

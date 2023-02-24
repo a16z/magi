@@ -1,9 +1,8 @@
 use std::{str::FromStr, time::Duration};
 
-use ethers::{
-    providers::{Middleware, Provider},
-    types::{Address, Block, Filter, Transaction, H256},
-};
+use ethers_core::types::{Address, Block, Filter, Transaction, H256};
+use ethers_providers::{Middleware, Provider};
+
 use tokio::{
     spawn,
     sync::mpsc::{channel, Receiver},
