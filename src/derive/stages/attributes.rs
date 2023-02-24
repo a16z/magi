@@ -53,10 +53,12 @@ impl Attributes {
         let random = base_block.mix_hash.unwrap();
         let transactions = self.derive_transactions(batch, base_block);
 
+        let fee_vault = Address::from_str("0x4200000000000000000000000000000000000011").unwrap();
+
         PayloadAttributes {
             timestamp,
             random,
-            suggested_fee_recipient: Address::default(),
+            suggested_fee_recipient: fee_vault,
             transactions,
             no_tx_pool: true,
             gas_limit: 30_000_000,
