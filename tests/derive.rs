@@ -1,8 +1,5 @@
-use ethers::{
-    providers::{Middleware, Provider},
-    types::H256,
-    utils::keccak256,
-};
+use ethers_core::{types::H256, utils::keccak256};
+use ethers_providers::{Middleware, Provider};
 
 use magi::derive::{stages::batches::RawTransaction, Pipeline};
 
