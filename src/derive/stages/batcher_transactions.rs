@@ -1,33 +1,44 @@
 use std::{cell::RefCell, rc::Rc};
 
 use eyre::Result;
-
-use super::Stage;
+use tokio::sync::mpsc::Receiver;
 
 pub struct BatcherTransactions {
     txs: Vec<BatcherTransaction>,
+    tx_recv: Receiver<Vec<u8>>,
 }
 
-impl Stage for BatcherTransactions {
-    type Output = BatcherTransaction;
+impl Iterator for BatcherTransactions {
+    type Item = Result<BatcherTransaction>;
 
-    fn next(&mut self) -> Result<Option<Self::Output>> {
-        if !self.txs.is_empty() {
-            Ok(Some(self.txs.remove(0)))
-        } else {
-            Ok(None)
-        }
+    fn next(&mut self) -> Option<Self::Item> {
+        self.try_next().transpose()
     }
 }
 
 impl BatcherTransactions {
-    pub fn new() -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self { txs: Vec::new() }))
+    pub fn new(tx_recv: Receiver<Vec<u8>>) -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self {
+            txs: Vec::new(),
+            tx_recv,
+        }))
     }
 
-    pub fn push_data(&mut self, data: Vec<u8>) -> Result<()> {
-        let tx = BatcherTransaction::from_data(&data)?;
-        self.txs.push(tx);
+    fn try_next(&mut self) -> Result<Option<BatcherTransaction>> {
+        self.pull_data()?;
+
+        Ok(if !self.txs.is_empty() {
+            Some(self.txs.remove(0))
+        } else {
+            None
+        })
+    }
+
+    fn pull_data(&mut self) -> Result<()> {
+        while let Ok(data) = self.tx_recv.try_recv() {
+            let tx = BatcherTransaction::from_data(&data)?;
+            self.txs.push(tx);
+        }
 
         Ok(())
     }

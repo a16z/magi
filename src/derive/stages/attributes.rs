@@ -7,10 +7,7 @@ use ethers::{
 };
 use eyre::Result;
 
-use super::{
-    batches::{Batch, Batches, RawTransaction},
-    Stage,
-};
+use super::batches::{Batch, Batches, RawTransaction};
 
 pub struct Attributes {
     prev_stage: Rc<RefCell<Batches>>,
@@ -20,14 +17,14 @@ pub struct Attributes {
     epoch: u64,
 }
 
-impl Stage for Attributes {
-    type Output = PayloadAttributes;
+impl Iterator for Attributes {
+    type Item = Result<PayloadAttributes>;
 
-    fn next(&mut self) -> eyre::Result<Option<Self::Output>> {
+    fn next(&mut self) -> Option<Self::Item> {
         let batch = self.prev_stage.borrow_mut().next()?;
         let payload_attributes = batch.map(|batch| self.derive_attributes(batch));
 
-        Ok(payload_attributes)
+        Some(payload_attributes)
     }
 }
 

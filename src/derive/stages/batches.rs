@@ -8,10 +8,7 @@ use ethers::{
 use eyre::Result;
 use libflate::zlib::Decoder;
 
-use super::{
-    channels::{Channel, Channels},
-    Stage,
-};
+use super::channels::{Channel, Channels};
 
 pub struct Batches {
     batches: Vec<Batch>,
@@ -19,13 +16,27 @@ pub struct Batches {
     start_epoch: u64,
 }
 
-impl Stage for Batches {
-    type Output = Batch;
+impl Iterator for Batches {
+    type Item = Result<Batch>;
 
-    fn next(&mut self) -> Result<Option<Self::Output>> {
-        let channel = self.prev_stage.borrow_mut().next()?;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.try_next().transpose()
+    }
+}
+
+impl Batches {
+    pub fn new(prev_stage: Rc<RefCell<Channels>>, start_epoch: u64) -> Rc<RefCell<Self>> {
+        Rc::new(RefCell::new(Self {
+            batches: Vec::new(),
+            prev_stage,
+            start_epoch,
+        }))
+    }
+
+    fn try_next(&mut self) -> Result<Option<Batch>> {
+        let channel = self.prev_stage.borrow_mut().next();
         if let Some(channel) = channel {
-            let mut batches = decode_batches(&channel)?
+            let mut batches = decode_batches(&channel?)?
                 .into_iter()
                 .filter(|b| b.epoch_num >= self.start_epoch)
                 .collect();
@@ -38,16 +49,6 @@ impl Stage for Batches {
         } else {
             None
         })
-    }
-}
-
-impl Batches {
-    pub fn new(prev_stage: Rc<RefCell<Channels>>, start_epoch: u64) -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {
-            batches: Vec::new(),
-            prev_stage,
-            start_epoch,
-        }))
     }
 }
 

@@ -11,11 +11,11 @@ use tokio::{
     time::sleep,
 };
 
-use crate::stages::attributes::UserDeposited;
+use crate::derive::stages::attributes::UserDeposited;
 
 pub struct ChainWatcher {
     handle: JoinHandle<()>,
-    pub tx_receiver: Receiver<BatcherTransactionData>,
+    pub tx_receiver: Option<Receiver<BatcherTransactionData>>,
     pub block_receiver: Receiver<Block<Transaction>>,
     pub deposit_receiver: Receiver<UserDeposited>,
 }
@@ -31,10 +31,14 @@ impl ChainWatcher {
         let (handle, tx_receiver, block_receiver, deposit_receiver) = chain_watcher(start_block);
         Self {
             handle,
-            tx_receiver,
+            tx_receiver: Some(tx_receiver),
             block_receiver,
             deposit_receiver,
         }
+    }
+
+    pub fn take_tx_receiver(&mut self) -> Option<Receiver<BatcherTransactionData>> {
+        self.tx_receiver.take()
     }
 }
 

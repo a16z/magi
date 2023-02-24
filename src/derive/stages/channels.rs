@@ -2,24 +2,21 @@ use std::{cell::RefCell, rc::Rc};
 
 use eyre::Result;
 
-use super::{
-    batcher_transactions::{BatcherTransaction, BatcherTransactions, Frame},
-    Stage,
-};
+use super::batcher_transactions::{BatcherTransaction, BatcherTransactions, Frame};
 
 pub struct Channels {
     pending_channels: Vec<PendingChannel>,
     prev_stage: Rc<RefCell<BatcherTransactions>>,
 }
 
-impl Stage for Channels {
-    type Output = Channel;
+impl Iterator for Channels {
+    type Item = Result<Channel>;
 
-    fn next(&mut self) -> Result<Option<Self::Output>> {
+    fn next(&mut self) -> Option<Self::Item> {
         // pull all batch transactions
         loop {
             let batcher_tx = self.prev_stage.borrow_mut().next()?;
-            if batcher_tx.map(|b| self.push_batcher_tx(b)).is_none() {
+            if batcher_tx.map(|b| self.push_batcher_tx(b)).is_ok() {
                 break;
             }
         }
@@ -31,7 +28,7 @@ impl Stage for Channels {
             .position(|c| c.size == Some(c.frames.len() as u16));
 
         // assemble the channel
-        Ok(i.map(|i| {
+        i.map(|i| {
             let c = self.pending_channels.get_mut(i).unwrap();
             c.frames.sort_by_key(|f| f.frame_number);
 
@@ -44,8 +41,8 @@ impl Stage for Channels {
 
             self.pending_channels.remove(i);
 
-            Channel { id, data }
-        }))
+            Ok(Channel { id, data })
+        })
     }
 }
 
