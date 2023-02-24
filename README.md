@@ -34,7 +34,7 @@
 
 _Prerequisites: Install rust and cargo with `curl https://sh.rustup.rs -sSf | sh`_
 
-Run the main binary with `cargo run --bin magi`
+Run the main binary with `cargo run --release`
 
 
 ### License
