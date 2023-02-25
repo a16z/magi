@@ -51,11 +51,15 @@ pub struct ConstructedBlock {
     /// The block number
     pub number: BlockNumber,
     /// The block timestamp
-    pub timestamp: u64,
+    pub timestamp: Timestamp,
     /// Transactions
     pub transactions: Vec<Transaction>,
     /// Transaction receipts
     pub receipts: Vec<TransactionReceipt>,
+    /// The L1 origin block hash
+    pub l1_origin_block_hash: Option<BlockHash>,
+    /// The L1 origin block number
+    pub l1_origin_block_number: Option<BlockNumber>,
 }
 
 impl From<sled::IVec> for ConstructedBlock {
@@ -76,8 +80,14 @@ impl From<ConstructedBlock> for sled::IVec {
     }
 }
 
+/// A transaction hash
+pub type TxHash = H256;
+
 /// A block hash
 pub type BlockHash = H256;
 
 /// A block number
 pub type BlockNumber = U64;
+
+/// The timestamp
+pub type Timestamp = u64;

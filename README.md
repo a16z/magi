@@ -30,13 +30,13 @@
         - [ ] Engine API Client Implementation
     - [ ] Driver Loop
 - [ ] Backend DB
-    - [x] Read Blocks By Hash
-    - [ ] Read Blocks By Number
+    - [ ] Modify `ConstructedBlock` type to match output of the Geth Driver
+    - [x] Read Blocks By Hash _or_ Number
     - [x] Write Blocks
-    - [ ] Fetch Block By Transaction
-    - [ ] Fetch Block By L1 Origin Hash
-    - [ ] Fetch Block By L1 Origin Number
-    - [ ] Fetch Block By Timestamp
+    - [x] Fetch Block With Transaction
+    - [x] Fetch Block By L1 Origin Hash
+    - [x] Fetch Block By L1 Origin Number
+    - [x] Fetch Block By Timestamp
 
 ### Usage
 

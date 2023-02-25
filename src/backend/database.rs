@@ -11,18 +11,45 @@ pub struct Database {
     blocks: HashMap<BlockHash, BlockNumber>,
     /// A map from block number to block hash.
     hashes: HashMap<BlockNumber, BlockHash>,
+    /// A map from transaction hash to the block (number) that contains it.
+    transactions: HashMap<TxHash, BlockNumber>,
+    /// Timestamp Mapping
+    timestamps: HashMap<Timestamp, Vec<BlockNumber>>,
+    /// L1 Origin Block Hash
+    l1_origin_block_hash: HashMap<BlockHash, Vec<BlockNumber>>,
+    /// L1 Origin Block Number
+    l1_origin_block_number: HashMap<BlockNumber, Vec<BlockNumber>>,
     /// Internal [seld](sled) db
     db: sled::Db,
+}
+
+impl Default for Database {
+    fn default() -> Self {
+        let loc = Self::fallback_location();
+        Self {
+            blocks: Default::default(),
+            hashes: Default::default(),
+            timestamps: Default::default(),
+            transactions: Default::default(),
+            l1_origin_block_hash: Default::default(),
+            l1_origin_block_number: Default::default(),
+            db: sled::open(loc).unwrap(),
+        }
+    }
 }
 
 impl Database {
     /// Creates a new database.
     pub fn new(loc: &str) -> Self {
         Self {
-            blocks: HashMap::new(),
-            hashes: HashMap::new(),
             db: Self::try_construct_db(loc),
+            ..Default::default()
         }
+    }
+
+    /// Gets a random location to use as a fallback
+    pub fn fallback_location() -> String {
+        format!("/tmp/magi/{}", Uuid::new_v4())
     }
 
     /// Clear wipes a database sled location.
@@ -45,7 +72,7 @@ impl Database {
             Ok(db) => db,
             Err(e) => {
                 tracing::error!("Failed to open database: {}", e);
-                let new_loc = format!("/tmp/magi/{}", Uuid::new_v4());
+                let new_loc = Self::fallback_location();
                 tracing::debug!("Optimistically creating new database at {}", new_loc);
                 sled::open(new_loc).unwrap()
             }
@@ -74,6 +101,46 @@ impl Database {
             self.hashes.insert(number, hash);
             self.blocks.insert(hash, number);
         }
+        match self.timestamps.get(&block.timestamp) {
+            Some(v) => {
+                let mut v = v.clone();
+                v.push(number);
+                self.timestamps.insert(block.timestamp, v);
+            }
+            None => {
+                self.timestamps.insert(block.timestamp, vec![number]);
+            }
+        }
+        if let Some(l1_origin_block_hash) = block.l1_origin_block_hash {
+            match self.l1_origin_block_hash.get(&l1_origin_block_hash) {
+                Some(v) => {
+                    let mut v = v.clone();
+                    v.push(number);
+                    self.l1_origin_block_hash.insert(l1_origin_block_hash, v);
+                }
+                None => {
+                    self.l1_origin_block_hash
+                        .insert(l1_origin_block_hash, vec![number]);
+                }
+            }
+        }
+        if let Some(l1_origin_block_number) = block.l1_origin_block_number {
+            match self.l1_origin_block_number.get(&l1_origin_block_number) {
+                Some(v) => {
+                    let mut v = v.clone();
+                    v.push(number);
+                    self.l1_origin_block_number
+                        .insert(l1_origin_block_number, v);
+                }
+                None => {
+                    self.l1_origin_block_number
+                        .insert(l1_origin_block_number, vec![number]);
+                }
+            }
+        }
+        for tx in &block.transactions {
+            self.transactions.insert(tx.hash, number);
+        }
         let dbid = DatabaseId::from(&block);
         let ivec: sled::IVec = block.into();
         let qid = dbid.as_bytes();
@@ -82,10 +149,55 @@ impl Database {
     }
 
     /// Reads a block from cache, or the database.
-    pub fn read_block(&mut self, id: impl Into<DatabaseId>) -> Result<ConstructedBlock> {
+    pub fn read_block(&self, id: impl Into<DatabaseId>) -> Result<ConstructedBlock> {
         let dbid = id.into();
         let qid = dbid.as_bytes();
         let block = self.db.get(qid)?;
         block.map(Into::into).ok_or(eyre::eyre!("Block not found"))
+    }
+
+    /// Fetches a block with a given transaction hash.
+    pub fn block_by_tx_hash(&self, hash: TxHash) -> Option<ConstructedBlock> {
+        let block_number = self.transactions.get(&hash).copied()?;
+        self.read_block(block_number).ok()
+    }
+
+    /// Fetches blocks with a given timestamp.
+    pub fn blocks_by_timestamp(&self, timestamp: Timestamp) -> Vec<ConstructedBlock> {
+        let block_numbers = self
+            .timestamps
+            .get(&timestamp)
+            .cloned()
+            .unwrap_or(Vec::new());
+        block_numbers
+            .iter()
+            .filter_map(|&n| self.read_block(n).ok())
+            .collect()
+    }
+
+    /// Fetches blocks with a given L1 Origin Block Hash.
+    pub fn blocks_by_origin_hash(&self, hash: BlockHash) -> Vec<ConstructedBlock> {
+        let block_numbers = self
+            .l1_origin_block_hash
+            .get(&hash)
+            .cloned()
+            .unwrap_or(Vec::new());
+        block_numbers
+            .iter()
+            .filter_map(|&n| self.read_block(n).ok())
+            .collect()
+    }
+
+    /// Fetches blocks with a given L1 Origin Block Number.
+    pub fn blocks_by_origin_number(&self, number: BlockNumber) -> Vec<ConstructedBlock> {
+        let block_numbers = self
+            .l1_origin_block_number
+            .get(&number)
+            .cloned()
+            .unwrap_or(Vec::new());
+        block_numbers
+            .iter()
+            .filter_map(|&n| self.read_block(n).ok())
+            .collect()
     }
 }
