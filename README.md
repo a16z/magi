@@ -30,7 +30,13 @@
         - [ ] Engine API Client Implementation
     - [ ] Driver Loop
 - [ ] Backend DB
-    - [ ] Progress Tracker
+    - [x] Read Blocks By Hash
+    - [ ] Read Blocks By Number
+    - [x] Write Blocks
+    - [ ] Fetch Block By Transaction
+    - [ ] Fetch Block By L1 Origin Hash
+    - [ ] Fetch Block By L1 Origin Number
+    - [ ] Fetch Block By Timestamp
 
 ### Usage
 
@@ -40,7 +46,7 @@ Run the main binary with `cargo run --release`
 
 ### Tests
 
-Tests are configured module-wise, with e2e tests located inside the [tests](./tests) directory.
+Tests are named wrt their modules, located inside the [tests](./tests) directory.
 
 To run all tests, run `cargo test --all`.
 
