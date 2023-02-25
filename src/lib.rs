@@ -12,3 +12,6 @@ pub mod engine;
 
 /// Application telemetry and logging
 pub mod telemetry;
+
+/// The backend module
+pub mod backend;
