@@ -31,10 +31,8 @@ pub struct ExecutionPayload {
     pub base_fee_per_gas: u64,
     /// The 32 byte block hash
     pub block_hash: H256,
-    /// An array of transaction objects where each object is a byte list (DATA)
-    /// representing TransactionType || TransactionPayload or LegacyTransaction
-    /// as defined in [EIP-2718](https://eips.ethereum.org/EIPS/eip-2718).
-    pub transactions: Vec<Transaction>,
+    /// An array of transaction objects where each object is a byte list
+    pub transactions: Vec<Vec<u8>>,
 }
 
 /// L1 PayloadAttributes
@@ -74,7 +72,7 @@ pub struct PayloadAttributes {
 }
 
 /// ## PayloadId
-pub type PayloadId = [u8; 8];
+pub type PayloadId = u64;
 
 /// ## PayloadStatus
 ///
