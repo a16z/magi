@@ -8,9 +8,9 @@ use super::types::*;
 #[derive(Debug, Clone)]
 pub struct Database {
     /// A map of block hash to the block object.
-    pub blocks: HashMap<BlockHash, ConstructedBlock>,
+    blocks: HashMap<BlockHash, BlockNumber>,
     /// A map from block number to block hash.
-    pub hashes: HashMap<BlockNumber, BlockHash>,
+    hashes: HashMap<BlockNumber, BlockHash>,
     /// Internal [seld](sled) db
     db: sled::Db,
 }
@@ -57,25 +57,35 @@ impl Database {
         &self.db
     }
 
+    /// Returns the block number for a given block hash.
+    pub fn block_number(&self, hash: &BlockHash) -> Option<BlockNumber> {
+        self.blocks.get(hash).copied()
+    }
+
+    /// Returns the block hash for a given block number.
+    pub fn block_hash(&self, number: &BlockNumber) -> Option<BlockHash> {
+        self.hashes.get(number).copied()
+    }
+
     /// Internal function to write a block to the database.
     pub fn write_block(&mut self, block: ConstructedBlock) -> Result<()> {
-        let hash = block.hash.ok_or(eyre::eyre!("Block hash not found"))?;
         let number = block.number;
-        let ivec: sled::IVec = block.clone().into();
-        self.blocks.insert(hash, block);
-        self.hashes.insert(number, hash);
-        self.db.insert(hash.as_bytes(), ivec)?;
+        if let Some(hash) = block.hash {
+            self.hashes.insert(number, hash);
+            self.blocks.insert(hash, number);
+        }
+        let dbid = DatabaseId::from(&block);
+        let ivec: sled::IVec = block.into();
+        let qid = dbid.as_bytes();
+        self.db.insert(qid, ivec)?;
         Ok(())
     }
 
     /// Reads a block from cache, or the database.
-    pub fn read_block(&mut self, hash: BlockHash) -> Result<ConstructedBlock> {
-        match self.blocks.get(&hash) {
-            Some(block) => Ok(block.clone()),
-            None => {
-                let block = self.db.get(hash.as_bytes())?;
-                block.map(Into::into).ok_or(eyre::eyre!("Block not found"))
-            }
-        }
+    pub fn read_block(&mut self, id: impl Into<DatabaseId>) -> Result<ConstructedBlock> {
+        let dbid = id.into();
+        let qid = dbid.as_bytes();
+        let block = self.db.get(qid)?;
+        block.map(Into::into).ok_or(eyre::eyre!("Block not found"))
     }
 }
