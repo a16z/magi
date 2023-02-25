@@ -1,27 +1,43 @@
 use ethers_core::types::{Transaction, H160, H256};
 use serde::{Deserialize, Serialize};
 
-/// ## ExecutionPayloadV1
+/// ## ExecutionPayload
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionPayload {
+    /// A 32 byte hash of the parent payload
     pub parent_hash: H256,
-    pub fee_recipient: H256,
+    /// A 20 byte hash (aka Address) for the feeRecipient field of the new payload
+    pub fee_recipient: H160,
+    /// A 32 byte state root hash
     pub state_root: H256,
+    /// A 32 byte receipt root hash
     pub receipts_root: H256,
+    /// A 32 byte logs bloom filter
     pub logs_bloom: Vec<u8>,
+    /// A 32 byte beacon chain randomness value
     pub prev_randao: H256,
+    /// A 64 bit number for the current block index
     pub block_number: u64,
+    /// A 64 bit value for the gas limit
     pub gas_limit: u64,
+    /// A 64 bit value for the gas used
     pub gas_used: u64,
+    /// A 64 bit value for the timestamp field of the new payload
     pub timestamp: u64,
+    /// 0 to 32 byte value for extra data
     pub extra_data: Vec<u8>,
+    /// 256 bits for the base fee per gas
     pub base_fee_per_gas: u64,
+    /// The 32 byte block hash
     pub block_hash: H256,
+    /// An array of transaction objects where each object is a byte list (DATA)
+    /// representing TransactionType || TransactionPayload or LegacyTransaction
+    /// as defined in [EIP-2718](https://eips.ethereum.org/EIPS/eip-2718).
     pub transactions: Vec<Transaction>,
 }
 
-/// L1 PayloadAttributesV1
+/// L1 PayloadAttributes
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct L1PayloadAttributes {
@@ -33,7 +49,7 @@ pub struct L1PayloadAttributes {
     pub suggested_fee_recipient: H160,
 }
 
-/// PayloadAttributesV1
+/// ## PayloadAttributes
 ///
 /// L2 extended payload attributes for Optimism.
 /// For more details, visit the [Optimism specs](https://github.com/ethereum-optimism/optimism/blob/develop/specs/exec-engine.md#extended-payloadattributesv1).
@@ -57,10 +73,10 @@ pub struct PayloadAttributes {
     pub gas_limit: u64,
 }
 
-/// ## PayloadIdV1
+/// ## PayloadId
 pub type PayloadId = [u8; 8];
 
-/// ## PayloadStatusV1
+/// ## PayloadStatus
 ///
 /// The status of a payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -74,6 +90,8 @@ pub struct PayloadStatus {
     pub validation_error: Option<String>,
 }
 
+/// ## Status
+///
 /// The status of the payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
