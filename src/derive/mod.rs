@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 use ethers_core::types::{Block, Transaction, H256};
 use eyre::Result;
 
-use crate::{base_chain::ChainWatcher, config::Config};
+use crate::{config::Config, l1::ChainWatcher};
 
 use self::stages::{
     attributes::{Attributes, PayloadAttributes, UserDeposited},
@@ -61,12 +61,12 @@ impl Pipeline {
     fn update_deposits(&mut self) {
         while let Ok(deposit) = self.chain_watcher.deposit_receiver.try_recv() {
             let mut deposits = self.deposits.borrow_mut();
-            let deposits_for_block = deposits.get_mut(&deposit.base_block_num);
+            let deposits_for_block = deposits.get_mut(&deposit.l1_block_num);
 
             if let Some(deposits_for_block) = deposits_for_block {
                 deposits_for_block.push(deposit);
             } else {
-                deposits.insert(deposit.base_block_num, vec![deposit]);
+                deposits.insert(deposit.l1_block_num, vec![deposit]);
             }
         }
     }

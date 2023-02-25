@@ -13,9 +13,10 @@ async fn main() -> Result<()> {
     telemetry::init(false)?;
 
     let start_epoch = 8494058;
+    let rpc = "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc";
+
     let config = Arc::new(Config {
-        base_chain_rpc: "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc"
-            .to_string(),
+        l1_rpc: rpc.to_string(),
         chain: ChainConfig::goerli(),
         max_channels: 100_000_000,
         max_timeout: 100,

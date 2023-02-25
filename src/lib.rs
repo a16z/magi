@@ -1,5 +1,5 @@
-/// The base chain module for ingesting L1 chain data
-pub mod base_chain;
+/// A module for ingesting L1 chain data
+pub mod l1;
 
 /// Configuration management
 pub mod config;
@@ -12,3 +12,6 @@ pub mod engine;
 
 /// Application telemetry and logging
 pub mod telemetry;
+
+/// The backend module
+pub mod backend;

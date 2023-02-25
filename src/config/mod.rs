@@ -6,7 +6,7 @@ use ethers_core::types::Address;
 #[derive(Debug, Clone)]
 pub struct Config {
     /// The base chain RPC URL
-    pub base_chain_rpc: String,
+    pub l1_rpc: String,
     /// The base chain config
     pub chain: ChainConfig,
     /// The maximum number of intermediate pending channels

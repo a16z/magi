@@ -11,12 +11,13 @@ use magi::{
 #[tokio::test(flavor = "multi_thread")]
 async fn test_attributes_match() {
     let start_epoch = 8494058;
+    let rpc = "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc";
+
     let start_block = 5503464;
     let num = 100;
 
     let config = Arc::new(Config {
-        base_chain_rpc: "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc"
-            .to_string(),
+        l1_rpc: rpc.to_string(),
         chain: ChainConfig::goerli(),
         max_channels: 100_000_000,
         max_timeout: 100,
