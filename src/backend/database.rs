@@ -164,11 +164,8 @@ impl Database {
 
     /// Fetches blocks with a given timestamp.
     pub fn blocks_by_timestamp(&self, timestamp: Timestamp) -> Vec<ConstructedBlock> {
-        let block_numbers = self
-            .timestamps
-            .get(&timestamp)
-            .cloned()
-            .unwrap_or(Vec::new());
+        let block_numbers = self.timestamps.get(&timestamp).cloned().unwrap_or_default();
+
         block_numbers
             .iter()
             .filter_map(|&n| self.read_block(n).ok())
@@ -181,7 +178,8 @@ impl Database {
             .l1_origin_block_hash
             .get(&hash)
             .cloned()
-            .unwrap_or(Vec::new());
+            .unwrap_or_default();
+
         block_numbers
             .iter()
             .filter_map(|&n| self.read_block(n).ok())
@@ -194,7 +192,8 @@ impl Database {
             .l1_origin_block_number
             .get(&number)
             .cloned()
-            .unwrap_or(Vec::new());
+            .unwrap_or_default();
+
         block_numbers
             .iter()
             .filter_map(|&n| self.read_block(n).ok())

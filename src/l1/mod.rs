@@ -59,7 +59,7 @@ fn chain_watcher(
     let (deposit_sender, deposit_receiver) = channel(1000);
 
     let handle = spawn(async move {
-        let rpc_url = config.base_chain_rpc.clone();
+        let rpc_url = config.l1_rpc.clone();
         let provider = Provider::try_from(rpc_url).unwrap();
 
         let batch_sender = config.chain.batch_sender;

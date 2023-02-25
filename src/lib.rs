@@ -1,5 +1,5 @@
-/// The base chain module for ingesting L1 chain data
-pub mod base_chain;
+/// A module for ingesting L1 chain data
+pub mod l1;
 
 /// Configuration management
 pub mod config;

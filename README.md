@@ -7,7 +7,7 @@
 
 ### Feature Set
 
-- [ ] Base Chain Watcher
+- [ ] L1 Chain Watcher
     - [x] Transaction Watcher
     - [x] Block Watcher
     - [x] Deposit Watcher
@@ -54,15 +54,15 @@ To run all tests, simply run `cargo test --all`.
 
 ### Specification
 
-#### Base Chain Watcher
+#### L1 Chain Watcher
 
-The base chain watcher is responsible for watching the base chain for new blocks and transactions.
+The L1 chain watcher is responsible for watching L1 for new blocks and transactions.
 
 It ...
 
 #### Derivation Pipeline
 
-The derivation pipeline is responsible for deriving the canonical L2 chain from the base chain.
+The derivation pipeline is responsible for deriving the canonical L2 chain from the L1 chain.
 
 It ...
 
