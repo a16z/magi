@@ -3,7 +3,7 @@ use std::str::FromStr;
 use ethers_core::types::Address;
 
 pub struct Config {
-    pub base_chain_rpc: String,
+    pub l1_rpc: String,
     pub chain: ChainConfig,
 }
 

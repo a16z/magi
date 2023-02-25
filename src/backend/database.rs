@@ -168,7 +168,8 @@ impl Database {
             .timestamps
             .get(&timestamp)
             .cloned()
-            .unwrap_or(Vec::new());
+            .unwrap_or_default();
+
         block_numbers
             .iter()
             .filter_map(|&n| self.read_block(n).ok())
@@ -181,7 +182,8 @@ impl Database {
             .l1_origin_block_hash
             .get(&hash)
             .cloned()
-            .unwrap_or(Vec::new());
+            .unwrap_or_default();
+
         block_numbers
             .iter()
             .filter_map(|&n| self.read_block(n).ok())
@@ -194,7 +196,8 @@ impl Database {
             .l1_origin_block_number
             .get(&number)
             .cloned()
-            .unwrap_or(Vec::new());
+            .unwrap_or_default();
+
         block_numbers
             .iter()
             .filter_map(|&n| self.read_block(n).ok())
