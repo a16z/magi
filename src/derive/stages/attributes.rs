@@ -1,4 +1,6 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc, str::FromStr};
+use std::iter;
+use std::sync::Arc;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use ethers_core::abi::{decode, encode, ParamType, Token};
 use ethers_core::types::{Address, Block, Log, Transaction, H256, U256};
@@ -6,10 +8,13 @@ use ethers_core::utils::{keccak256, rlp::Encodable, rlp::RlpStream};
 
 use eyre::Result;
 
+use crate::config::{Config, SystemAccounts};
+
 use super::batches::{Batch, Batches, RawTransaction};
 
 pub struct Attributes {
     prev_stage: Rc<RefCell<Batches>>,
+    config: Arc<Config>,
     blocks: Rc<RefCell<HashMap<H256, Block<Transaction>>>>,
     deposits: Rc<RefCell<HashMap<u64, Vec<UserDeposited>>>>,
     sequence_number: u64,
@@ -30,11 +35,13 @@ impl Iterator for Attributes {
 impl Attributes {
     pub fn new(
         prev_stage: Rc<RefCell<Batches>>,
+        config: Arc<Config>,
         blocks: Rc<RefCell<HashMap<H256, Block<Transaction>>>>,
         deposits: Rc<RefCell<HashMap<u64, Vec<UserDeposited>>>>,
     ) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self {
             prev_stage,
+            config,
             blocks,
             deposits,
             sequence_number: 0,
@@ -51,13 +58,12 @@ impl Attributes {
         let timestamp = batch.timestamp;
         let random = base_block.mix_hash.unwrap();
         let transactions = self.derive_transactions(batch, base_block);
-
-        let fee_vault = Address::from_str("0x4200000000000000000000000000000000000011").unwrap();
+        let suggested_fee_recipient = SystemAccounts::default().fee_vault;
 
         PayloadAttributes {
             timestamp,
             random,
-            suggested_fee_recipient: fee_vault,
+            suggested_fee_recipient,
             transactions,
             no_tx_pool: true,
             gas_limit: 30_000_000,
@@ -87,7 +93,8 @@ impl Attributes {
 
     fn derive_attributes_deposited(&self, base_block: &Block<Transaction>) -> RawTransaction {
         let seq = self.sequence_number;
-        let attributes_deposited = AttributesDeposited::from_block(base_block, seq);
+        let batch_sender = self.config.chain.batch_sender;
+        let attributes_deposited = AttributesDeposited::from_block(base_block, seq, &batch_sender);
         let attributes_tx = DepositedTransaction::from(attributes_deposited);
         RawTransaction(attributes_tx.rlp_bytes().to_vec())
     }
@@ -149,12 +156,16 @@ impl From<AttributesDeposited> for DepositedTransaction {
         let domain = H256::from_low_u64_be(1).to_fixed_bytes();
         let source_hash = H256::from_slice(&keccak256([domain, h].concat()));
 
+        let system_accounts = SystemAccounts::default();
+        let from = system_accounts.attributes_depositor;
+        let to = system_accounts.attributes_predeploy;
+
         let data = attributes_deposited.encode();
 
         Self {
             source_hash,
-            from: Address::from_str("0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001").unwrap(),
-            to: Address::from_str("0x4200000000000000000000000000000000000015").unwrap(),
+            from,
+            to,
             mint: U256::zero(),
             value: U256::zero(),
             gas: 150_000_000,
@@ -220,17 +231,18 @@ struct AttributesDeposited {
 }
 
 impl AttributesDeposited {
-    fn from_block(block: &Block<Transaction>, seq: u64) -> Self {
+    fn from_block(block: &Block<Transaction>, seq: u64, batch_sender: &Address) -> Self {
+        let mut batch_sender_bytes = batch_sender.as_bytes().to_vec();
+        let mut batcher_hash = iter::repeat(0).take(12).collect::<Vec<_>>();
+        batcher_hash.append(&mut batch_sender_bytes);
+
         Self {
             number: block.number.unwrap().as_u64(),
             timestamp: block.timestamp.as_u64(),
             base_fee: block.base_fee_per_gas.unwrap(),
             hash: block.hash.unwrap(),
             sequence_number: seq,
-            batcher_hash: H256::from_str(
-                "0x0000000000000000000000007431310e026b69bfc676c0013e12a1a11411eec9",
-            )
-            .unwrap(),
+            batcher_hash: H256::from_slice(&batcher_hash),
             fee_overhead: U256::from(2100),
             fee_scalar: U256::from(1000000),
         }

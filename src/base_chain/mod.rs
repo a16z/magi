@@ -1,6 +1,9 @@
-use std::{str::FromStr, time::Duration};
+use std::{sync::Arc, time::Duration};
 
-use ethers_core::types::{Address, Block, Filter, Transaction, H256};
+use ethers_core::{
+    types::{Block, Filter, Transaction, H256},
+    utils::keccak256,
+};
 use ethers_providers::{Middleware, Provider};
 
 use tokio::{
@@ -10,7 +13,7 @@ use tokio::{
     time::sleep,
 };
 
-use crate::derive::stages::attributes::UserDeposited;
+use crate::{config::Config, derive::stages::attributes::UserDeposited};
 
 pub struct ChainWatcher {
     handle: JoinHandle<()>,
@@ -26,8 +29,9 @@ impl Drop for ChainWatcher {
 }
 
 impl ChainWatcher {
-    pub fn new(start_block: u64) -> Self {
-        let (handle, tx_receiver, block_receiver, deposit_receiver) = chain_watcher(start_block);
+    pub fn new(start_block: u64, config: Arc<Config>) -> Self {
+        let (handle, tx_receiver, block_receiver, deposit_receiver) =
+            chain_watcher(start_block, config);
         Self {
             handle,
             tx_receiver: Some(tx_receiver),
@@ -43,6 +47,7 @@ impl ChainWatcher {
 
 fn chain_watcher(
     start_block: u64,
+    config: Arc<Config>,
 ) -> (
     JoinHandle<()>,
     Receiver<BatcherTransactionData>,
@@ -54,17 +59,15 @@ fn chain_watcher(
     let (deposit_sender, deposit_receiver) = channel(1000);
 
     let handle = spawn(async move {
-        let url = "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc";
-        let provider = Provider::try_from(url).unwrap();
+        let rpc_url = config.base_chain_rpc.clone();
+        let provider = Provider::try_from(rpc_url).unwrap();
 
-        let batch_sender = Address::from_str("0x7431310e026b69bfc676c0013e12a1a11411eec9").unwrap();
-        let batch_inbox = Address::from_str("0xff00000000000000000000000000000000000420").unwrap();
+        let batch_sender = config.chain.batch_sender;
+        let batch_inbox = config.chain.batch_inbox;
+        let deposit_contract = config.chain.deposit_contract;
 
-        let deposit_contract =
-            Address::from_str("0x5b47E1A08Ea6d985D6649300584e6722Ec4B1383").unwrap();
-        let deposit_topic =
-            H256::from_str("0xb3813568d9991fc951961fcb4c784893574240a28925604d09fc577c55bb7c32")
-                .unwrap();
+        let deposit_event = "TransactionDeposited(address,address,uint256,bytes)";
+        let deposit_topic = H256::from_slice(&keccak256(deposit_event));
 
         let deposit_filter = Filter::new()
             .address(deposit_contract)

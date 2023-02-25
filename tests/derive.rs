@@ -1,7 +1,12 @@
+use std::sync::Arc;
+
 use ethers_core::{types::H256, utils::keccak256};
 use ethers_providers::{Middleware, Provider};
 
-use magi::derive::{stages::batches::RawTransaction, Pipeline};
+use magi::{
+    config::{ChainConfig, Config},
+    derive::{stages::batches::RawTransaction, Pipeline},
+};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_attributes_match() {
@@ -9,7 +14,13 @@ async fn test_attributes_match() {
     let start_block = 5503464;
     let num = 100;
 
-    let mut pipeline = Pipeline::new(start_epoch);
+    let config = Arc::new(Config {
+        base_chain_rpc: "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc"
+            .to_string(),
+        chain: ChainConfig::goerli(),
+    });
+
+    let mut pipeline = Pipeline::new(start_epoch, config);
 
     let mut i = 0;
     while i < num {
