@@ -8,7 +8,7 @@ use ethers_core::utils::{keccak256, rlp::Encodable, rlp::RlpStream};
 
 use eyre::Result;
 
-use crate::config::Config;
+use crate::config::{Config, SystemAccounts};
 
 use super::batches::{Batch, Batches, RawTransaction};
 
@@ -58,11 +58,12 @@ impl Attributes {
         let timestamp = batch.timestamp;
         let random = base_block.mix_hash.unwrap();
         let transactions = self.derive_transactions(batch, base_block);
+        let suggested_fee_recipient = SystemAccounts::default().fee_vault;
 
         PayloadAttributes {
             timestamp,
             random,
-            suggested_fee_recipient: self.config.chain.fee_vault,
+            suggested_fee_recipient,
             transactions,
             no_tx_pool: true,
             gas_limit: 30_000_000,
@@ -92,9 +93,9 @@ impl Attributes {
 
     fn derive_attributes_deposited(&self, base_block: &Block<Transaction>) -> RawTransaction {
         let seq = self.sequence_number;
-        let attributes_deposited = AttributesDeposited::from_block(base_block, seq, &self.config);
-        let attributes_tx =
-            DepositedTransaction::from_attributes_deposited(attributes_deposited, &self.config);
+        let batch_sender = self.config.chain.batch_sender;
+        let attributes_deposited = AttributesDeposited::from_block(base_block, seq, &batch_sender);
+        let attributes_tx = DepositedTransaction::from(attributes_deposited);
         RawTransaction(attributes_tx.rlp_bytes().to_vec())
     }
 
@@ -106,7 +107,7 @@ impl Attributes {
                 deposits
                     .iter()
                     .map(|deposit| {
-                        let tx = DepositedTransaction::from_user_deposited(deposit.clone());
+                        let tx = DepositedTransaction::from(deposit.clone());
                         RawTransaction(tx.rlp_bytes().to_vec())
                     })
                     .collect()
@@ -146,11 +147,8 @@ struct DepositedTransaction {
     data: Vec<u8>,
 }
 
-impl DepositedTransaction {
-    fn from_attributes_deposited(
-        attributes_deposited: AttributesDeposited,
-        config: &Arc<Config>,
-    ) -> Self {
+impl From<AttributesDeposited> for DepositedTransaction {
+    fn from(attributes_deposited: AttributesDeposited) -> Self {
         let hash = attributes_deposited.hash.to_fixed_bytes();
         let seq = H256::from_low_u64_be(attributes_deposited.sequence_number).to_fixed_bytes();
         let h = keccak256([hash, seq].concat());
@@ -158,12 +156,16 @@ impl DepositedTransaction {
         let domain = H256::from_low_u64_be(1).to_fixed_bytes();
         let source_hash = H256::from_slice(&keccak256([domain, h].concat()));
 
+        let system_accounts = SystemAccounts::default();
+        let from = system_accounts.attributes_depositor;
+        let to = system_accounts.attributes_predeploy;
+
         let data = attributes_deposited.encode();
 
         Self {
             source_hash,
-            from: config.chain.attributes_depositor,
-            to: config.chain.attributes_predeploy,
+            from,
+            to,
             mint: U256::zero(),
             value: U256::zero(),
             gas: 150_000_000,
@@ -171,8 +173,10 @@ impl DepositedTransaction {
             data,
         }
     }
+}
 
-    fn from_user_deposited(user_deposited: UserDeposited) -> Self {
+impl From<UserDeposited> for DepositedTransaction {
+    fn from(user_deposited: UserDeposited) -> Self {
         let hash = user_deposited.base_block_hash.to_fixed_bytes();
         let log_index = user_deposited.log_index.into();
         let h = keccak256([hash, log_index].concat());
@@ -227,9 +231,9 @@ struct AttributesDeposited {
 }
 
 impl AttributesDeposited {
-    fn from_block(block: &Block<Transaction>, seq: u64, config: &Arc<Config>) -> Self {
+    fn from_block(block: &Block<Transaction>, seq: u64, batch_sender: &Address) -> Self {
         let padding = iter::repeat(0).take(12);
-        let mut batcher_hash = config.chain.batch_sender.as_bytes().to_vec();
+        let mut batcher_hash = batch_sender.as_bytes().to_vec();
         batcher_hash.extend(padding);
 
         Self {
