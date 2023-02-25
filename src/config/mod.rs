@@ -2,17 +2,32 @@ use std::str::FromStr;
 
 use ethers_core::types::Address;
 
+/// A system configuration
+#[derive(Debug, Clone)]
 pub struct Config {
+    /// The base chain RPC URL
     pub base_chain_rpc: String,
+    /// The base chain config
     pub chain: ChainConfig,
+    /// The maximum number of intermediate pending channels
+    pub max_channels: usize,
+    /// The max timeout for a channel (as measured by the frame L1 block number)
+    pub max_timeout: u64,
 }
 
+/// A Chain Configuration
+#[derive(Debug, Clone)]
 pub struct ChainConfig {
+    /// The batch sender address
     pub batch_sender: Address,
+    /// The batch inbox address
     pub batch_inbox: Address,
+    /// The deposit contract address
     pub deposit_contract: Address,
 }
 
+/// System accounts
+#[derive(Debug, Clone)]
 pub struct SystemAccounts {
     pub attributes_depositor: Address,
     pub attributes_predeploy: Address,

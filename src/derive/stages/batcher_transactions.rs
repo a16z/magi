@@ -44,7 +44,7 @@ impl BatcherTransactions {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BatcherTransaction {
     pub version: u8,
     pub frames: Vec<Frame>,
@@ -67,7 +67,7 @@ impl BatcherTransaction {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Frame {
     pub channel_id: u128,
     pub frame_number: u16,

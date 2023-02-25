@@ -35,7 +35,7 @@ impl Batches {
     fn try_next(&mut self) -> Result<Option<Batch>> {
         let channel = self.prev_stage.borrow_mut().next();
         if let Some(channel) = channel {
-            let mut batches = decode_batches(&channel?)?
+            let mut batches = decode_batches(&channel)?
                 .into_iter()
                 .filter(|b| b.epoch_num >= self.start_epoch)
                 .collect();
