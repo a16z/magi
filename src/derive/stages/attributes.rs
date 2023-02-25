@@ -232,9 +232,9 @@ struct AttributesDeposited {
 
 impl AttributesDeposited {
     fn from_block(block: &Block<Transaction>, seq: u64, batch_sender: &Address) -> Self {
-        let padding = iter::repeat(0).take(12);
-        let mut batcher_hash = batch_sender.as_bytes().to_vec();
-        batcher_hash.extend(padding);
+        let mut batch_sender_bytes = batch_sender.as_bytes().to_vec();
+        let mut batcher_hash = iter::repeat(0).take(12).collect::<Vec<_>>();
+        batcher_hash.append(&mut batch_sender_bytes);
 
         Self {
             number: block.number.unwrap().as_u64(),
