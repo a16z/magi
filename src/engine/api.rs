@@ -2,12 +2,13 @@ use std::collections::HashMap;
 
 use eyre::Result;
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 
 use crate::engine::ENGINE_GET_PAYLOAD_V1;
 
 use super::{
     ExecutionPayload, ForkChoiceUpdate, ForkchoiceState, L2EngineApi, PayloadAttributes, PayloadId,
-    PayloadStatus,
+    PayloadStatus, ENGINE_FORKCHOICE_UPDATED_V1, ENGINE_NEW_PAYLOAD_V1,
 };
 
 use super::{JSONRPC_VERSION, STATIC_ID};
@@ -81,31 +82,72 @@ impl EngineApi {
     }
 }
 
+/// Execution Payload Response
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExecutionPayloadResponse {
+    pub jsonrpc: String,
+    pub id: u64,
+    pub result: ExecutionPayload,
+}
+
+/// Payload Status Response
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PayloadStatusResponse {
+    pub jsonrpc: String,
+    pub id: u64,
+    pub result: PayloadStatus,
+}
+
+/// Fork Choice Update Response
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ForkChoiceUpdateResponse {
+    pub jsonrpc: String,
+    pub id: u64,
+    pub result: ForkChoiceUpdate,
+}
+
 #[async_trait::async_trait]
 impl L2EngineApi for EngineApi {
     async fn forkchoice_updated(
         &self,
-        _forkchoice_state: ForkchoiceState,
-        _payload_attributes: Option<PayloadAttributes>,
+        forkchoice_state: ForkchoiceState,
+        payload_attributes: Option<PayloadAttributes>,
     ) -> Result<ForkChoiceUpdate> {
-        Err(eyre::eyre!("Not implemented"))
+        let payload_attributes_param = match payload_attributes {
+            Some(payload_attributes) => serde_json::to_string(&payload_attributes)?,
+            None => "null".to_string(),
+        };
+        let forkchoice_state_param = serde_json::to_string(&forkchoice_state)?;
+        let mut body = HashMap::new();
+        let params =
+            serde_json::to_string(&vec![forkchoice_state_param, payload_attributes_param])?;
+        body.insert("params".to_string(), params);
+        let res = self.post(ENGINE_FORKCHOICE_UPDATED_V1, body).await?;
+        let res = res.json::<ForkChoiceUpdateResponse>().await?;
+        Ok(res.result)
     }
 
-    async fn new_payload(&self, _execution_payload: ExecutionPayload) -> Result<PayloadStatus> {
-        Err(eyre::eyre!("Not implemented"))
+    async fn new_payload(&self, execution_payload: ExecutionPayload) -> Result<PayloadStatus> {
+        let serialized = serde_json::to_string(&execution_payload)?;
+        let mut body = HashMap::new();
+        let params = serde_json::to_string(&vec![serialized])?;
+        body.insert("params".to_string(), params);
+        let res = self.post(ENGINE_NEW_PAYLOAD_V1, body).await?;
+        let res = res.json::<PayloadStatusResponse>().await?;
+        Ok(res.result)
     }
 
     async fn get_payload(&self, payload_id: PayloadId) -> Result<ExecutionPayload> {
         let encoded = format!("{:x}", payload_id);
-        // let pad = 8 - encoded.len();
         let padded = format!("0x{:0>16}", encoded);
-        println!("Padded payload id: {}", padded);
         let mut body = HashMap::new();
         let params = serde_json::to_string(&vec![padded])?;
         body.insert("params".to_string(), params);
         let res = self.post(ENGINE_GET_PAYLOAD_V1, body).await?;
-        println!("Response: {:?}", res);
-
-        Err(eyre::eyre!("Not implemented"))
+        let res = res.json::<ExecutionPayloadResponse>().await?;
+        Ok(res.result)
     }
 }
