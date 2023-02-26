@@ -6,7 +6,7 @@ use eyre::Result;
 use crate::{
     config::Config,
     derive::Pipeline,
-    engine::{ForkchoiceState, L2EngineApi, PayloadAttributes, Status},
+    engine::{ExecutionPayload, ForkchoiceState, L2EngineApi, PayloadAttributes, Status},
 };
 
 pub struct Driver<E: L2EngineApi> {
@@ -37,7 +37,7 @@ impl<E: L2EngineApi> Driver<E> {
         })
     }
 
-    pub async fn run(&mut self) {
+    pub async fn sync(&mut self) {
         loop {
             if let Some(next_attributes) = self.pipeline.next() {
                 if let Err(err) = self.advance_engine(next_attributes).await {
@@ -48,9 +48,18 @@ impl<E: L2EngineApi> Driver<E> {
     }
 
     async fn advance_engine(&mut self, attributes: PayloadAttributes) -> Result<()> {
+        let payload = self.build_payload(attributes).await?;
+        let new_hash = payload.block_hash;
+
+        self.push_payload(payload).await?;
+        self.update_forkchoice(new_hash).await?;
+
+        Ok(())
+    }
+
+    async fn build_payload(&self, attributes: PayloadAttributes) -> Result<ExecutionPayload> {
         let forkchoice = self.create_forkchoice_state();
 
-        // build payload
         let update = self
             .engine
             .forkchoice_updated(forkchoice, Some(attributes))
@@ -60,25 +69,26 @@ impl<E: L2EngineApi> Driver<E> {
             eyre::bail!("invalid payload attributes");
         }
 
-        // fetch new payload
         let id = update
             .payload_id
             .ok_or(eyre::eyre!("engine did not return payload id"))?;
 
-        let payload = self.engine.get_payload(id).await?;
-        let new_hash = payload.block_hash;
+        self.engine.get_payload(id).await
+    }
 
-        // push new payload
+    async fn push_payload(&self, payload: ExecutionPayload) -> Result<()> {
         let status = self.engine.new_payload(payload).await?;
         if status.status != Status::Accepted {
             eyre::bail!("invalid execution payload");
         }
 
-        // update internal hashes
+        Ok(())
+    }
+
+    async fn update_forkchoice(&mut self, new_hash: H256) -> Result<()> {
         self.head_block_hash = new_hash;
         self.safe_block_hash = new_hash;
 
-        // update forkchoice
         let forkchoice = self.create_forkchoice_state();
         let update = self.engine.forkchoice_updated(forkchoice, None).await?;
 
