@@ -167,6 +167,9 @@ impl Channels {
 
     /// Prunes channels to the max size
     fn prune(&mut self) {
+        // First, remove any timed out channels, then remove any beyond the max capacity
+        self.pending_channels
+            .retain(|c| !c.is_timed_out(self.max_timeout));
         while self.total_size() > self.max_channels {
             self.remove().expect("Should have removed a channel");
         }
