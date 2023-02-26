@@ -1,4 +1,4 @@
-use ethers_core::types::{Transaction, H160, H256};
+use ethers_core::types::{H160, H256};
 use serde::{Deserialize, Serialize};
 
 /// ## ExecutionPayload
@@ -61,7 +61,7 @@ pub struct PayloadAttributes {
     ///  20 bytes suggested value for the feeRecipient field of the new payload.
     pub suggested_fee_recipient: H160,
     /// Array of transactions to be included in the new payload.
-    pub transactions: Option<Vec<Transaction>>,
+    pub transactions: Option<Vec<Vec<u8>>>,
     /// Boolean value indicating whether or not the payload should be built without including transactions from the txpool.
     pub no_tx_pool: bool,
     /// 64 bit value for the gasLimit field of the new payload.

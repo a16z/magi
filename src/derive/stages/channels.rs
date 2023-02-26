@@ -4,7 +4,7 @@ use ethers_core::types::H256;
 use eyre::Result;
 
 use super::batcher_transactions::{BatcherTransactions, Frame};
-use crate::config::Config;
+use crate::{config::Config, common::BlockID};
 
 pub struct Channels {
     pending_channels: Vec<PendingChannel>,
@@ -165,14 +165,6 @@ impl Channels {
             self.remove().expect("Should have removed a channel");
         }
     }
-}
-
-/// A Block Identifier
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub struct BlockID {
-    pub hash: H256,
-    pub number: u64,
-    pub parent_hash: H256,
 }
 
 /// An intermediate pending channel

@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use eyre::Result;
 
 mod payload;
@@ -11,7 +12,7 @@ pub use fork::*;
 /// A set of methods that allow a consensus client to interact with an execution engine.
 /// This is a modified version of the [Ethereum Execution API Specs](https://github.com/ethereum/execution-apis),
 /// as defined in the [Optimism Exec Engine Specs](https://github.com/ethereum-optimism/optimism/blob/develop/specs/exec-engine.md).
-#[allow(non_snake_case)]
+#[async_trait]
 pub trait L2EngineApi {
     /// ## forkchoice_updated
     ///
@@ -34,9 +35,10 @@ pub trait L2EngineApi {
     /// ### Reference
     ///
     /// See more details in the [Optimism Specs](https://github.com/ethereum-optimism/optimism/blob/develop/specs/exec-engine.md#engine_forkchoiceupdatedv1).
-    fn forkchoice_updated(
-        forkchoiceState: ForkchoiceState,
-        payloadAttributes: Option<PayloadAttributes>,
+    async fn forkchoice_updated(
+        &self,
+        forkchoice_state: ForkchoiceState,
+        payload_attributes: Option<PayloadAttributes>,
     ) -> Result<ForkChoiceUpdate>;
 
     /// ## new_payload
@@ -58,7 +60,7 @@ pub trait L2EngineApi {
     /// ### Reference
     ///
     /// See more details in the [Optimism Specs](https://github.com/ethereum-optimism/optimism/blob/develop/specs/exec-engine.md#engine_newPayloadv1).
-    fn new_payload(executionPayload: ExecutionPayload) -> Result<PayloadStatus>;
+    async fn new_payload(&self, execution_payload: ExecutionPayload) -> Result<PayloadStatus>;
 
     /// ## get_payload
     ///
@@ -80,5 +82,5 @@ pub trait L2EngineApi {
     /// ### Reference
     ///
     /// See more details in the [Optimism Specs](https://github.com/ethereum-optimism/optimism/blob/develop/specs/exec-engine.md#engine_getPayloadv1).
-    fn get_payload(payloadId: PayloadId) -> Result<ExecutionPayload>;
+    async fn get_payload(&self, payload_id: PayloadId) -> Result<ExecutionPayload>;
 }
