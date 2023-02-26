@@ -26,13 +26,9 @@ impl Iterator for Channels {
             if self.ready_channel.is_some() {
                 return self.ready_channel.take();
             }
-            if let Err(e) = self.process_frame() {
-                tracing::error!(
-                    "Failed to process frame in the channels stage! Err: {:?}",
-                    e
-                );
-                return None;
-            }
+
+            // TODO: return None once all batcher txs are consumed
+            self.process_frame();
         }
     }
 }
@@ -108,11 +104,13 @@ impl Channels {
         if !self.frame_bank.is_empty() {
             return Err(eyre::eyre!("Trying to fill bank when it's not empty!"));
         }
+
         let next_batcher_tx = self
             .prev_stage
             .borrow_mut()
             .next()
-            .ok_or(eyre::eyre!("No batcher tx"))??;
+            .ok_or(eyre::eyre!("No batcher tx"))?;
+
         self.frame_bank = next_batcher_tx.frames.to_vec();
         Ok(())
     }
@@ -130,11 +128,11 @@ impl Channels {
     }
 
     /// Processes the next frame in the [BatcherTransactions] stage
-    fn process_frame(&mut self) -> Result<()> {
+    fn process_frame(&mut self) {
         // If there's no frame in the bank, fill it with the next batcher tx
         if self.frame_bank.is_empty() && self.fill_bank().is_err() {
-            tracing::debug!("Failed to pull batcher tx in the channels stage!");
-            return Ok(());
+            tracing::trace!("Failed to pull batcher tx in the channels stage!");
+            return;
         }
 
         // Append the frame to the channel
@@ -143,8 +141,6 @@ impl Channels {
         self.push_frame(frame);
         self.load_ready_channel(frame_channel_id);
         self.prune();
-
-        Ok(())
     }
 
     /// Removes a pending channel from the bank

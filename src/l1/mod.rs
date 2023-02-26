@@ -76,6 +76,8 @@ fn chain_watcher(
         let mut block_num = start_block;
 
         loop {
+            tracing::debug!("fetching l1 data for block {}", block_num);
+
             let channel_full = batcher_tx_sender.capacity() == 0
                 || block_sender.capacity() == 0
                 || deposit_sender.capacity() == 0;

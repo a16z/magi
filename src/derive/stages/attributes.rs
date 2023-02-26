@@ -22,11 +22,11 @@ pub struct Attributes {
 }
 
 impl Iterator for Attributes {
-    type Item = Result<PayloadAttributes>;
+    type Item = PayloadAttributes;
 
     fn next(&mut self) -> Option<Self::Item> {
         let batch = self.prev_stage.borrow_mut().next()?;
-        let payload_attributes = batch.map(|batch| self.derive_attributes(batch));
+        let payload_attributes = self.derive_attributes(batch);
 
         Some(payload_attributes)
     }
@@ -50,6 +50,8 @@ impl Attributes {
     }
 
     fn derive_attributes(&mut self, batch: Batch) -> PayloadAttributes {
+        tracing::debug!("attributes derived from block {}", batch.epoch_num);
+
         self.update_sequence_number(batch.epoch_num);
 
         let blocks = self.blocks.borrow();
