@@ -1,7 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 
 use ethers_core::types::{Block, Transaction, H256};
-use eyre::Result;
 
 use crate::{config::Config, l1::ChainWatcher};
 
@@ -22,7 +21,7 @@ pub struct Pipeline {
 }
 
 impl Iterator for Pipeline {
-    type Item = Result<PayloadAttributes>;
+    type Item = PayloadAttributes;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.update_blocks();

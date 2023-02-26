@@ -6,10 +6,13 @@ use ethers_providers::{Middleware, Provider};
 use magi::{
     config::{ChainConfig, Config},
     derive::{stages::batches::RawTransaction, Pipeline},
+    telemetry,
 };
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_attributes_match() {
+    telemetry::init(true).unwrap();
+
     let start_epoch = 8494058;
     let rpc = "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc";
 
@@ -28,7 +31,8 @@ async fn test_attributes_match() {
     let mut i = 0;
     while i < num {
         if let Some(payload) = pipeline.next() {
-            let hashes = get_tx_hashes(&payload.unwrap().transactions);
+            println!("{}", i);
+            let hashes = get_tx_hashes(&payload.transactions);
             let expected_hashes = get_expected_hashes(start_block + i).await;
 
             assert_eq!(hashes, expected_hashes);

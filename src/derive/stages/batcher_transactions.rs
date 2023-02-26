@@ -9,10 +9,16 @@ pub struct BatcherTransactions {
 }
 
 impl Iterator for BatcherTransactions {
-    type Item = Result<BatcherTransaction>;
+    type Item = BatcherTransaction;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.try_next().transpose()
+        self.pull_data();
+
+        if !self.txs.is_empty() {
+            Some(self.txs.remove(0))
+        } else {
+            None
+        }
     }
 }
 
@@ -24,23 +30,16 @@ impl BatcherTransactions {
         }))
     }
 
-    fn try_next(&mut self) -> Result<Option<BatcherTransaction>> {
-        self.pull_data()?;
-
-        Ok(if !self.txs.is_empty() {
-            Some(self.txs.remove(0))
-        } else {
-            None
-        })
-    }
-
-    fn pull_data(&mut self) -> Result<()> {
+    fn pull_data(&mut self) {
         while let Ok(data) = self.tx_recv.try_recv() {
-            let tx = BatcherTransaction::from_data(&data)?;
-            self.txs.push(tx);
-        }
+            let res = BatcherTransaction::from_data(&data).map(|tx| {
+                self.txs.push(tx);
+            });
 
-        Ok(())
+            if res.is_err() {
+                tracing::debug!("Failed to decode batcher transaction");
+            }
+        }
     }
 }
 

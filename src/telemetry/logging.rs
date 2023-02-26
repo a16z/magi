@@ -10,8 +10,8 @@ use ansi_term::Colour::{Blue, Cyan, Purple, Red, Yellow};
 /// Configure logging telemetry
 pub fn init(verbose: bool) -> Result<()> {
     let subscriber = match verbose {
-        true => get_subscriber("debug".into()),
-        false => get_subscriber("info".into()),
+        true => get_subscriber("magi=debug".into()),
+        false => get_subscriber("magi=info".into()),
     };
     init_subscriber(subscriber)
 }

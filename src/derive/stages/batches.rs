@@ -16,10 +16,13 @@ pub struct Batches {
 }
 
 impl Iterator for Batches {
-    type Item = Result<Batch>;
+    type Item = Batch;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.try_next().transpose()
+        self.try_next().unwrap_or_else(|_| {
+            tracing::debug!("Failed to decode batch");
+            None
+        })
     }
 }
 
