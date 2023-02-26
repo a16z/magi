@@ -12,12 +12,12 @@
     - [x] Block Watcher
     - [x] Deposit Watcher
     - [ ] System Config Watcher
-- [ ] Derivation Pipeline
+- [x] Derivation Pipeline
     - [x] Batcher Transaction
     - [x] Channels
-    - [ ] Batches
+    - [x] Batches
         - [x] Basic Setup
-        - [ ] Pruning
+        - [x] Pruning
     - [x] Paylaod Attributes
         - [x] Basic Setup
         - [x] Attributes Deposited Transactions

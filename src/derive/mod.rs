@@ -40,7 +40,7 @@ impl Pipeline {
         let deposits = Rc::new(RefCell::new(HashMap::<u64, Vec<UserDeposited>>::new()));
 
         let batcher_transactions = BatcherTransactions::new(tx_recv);
-        let channels = Channels::new(batcher_transactions);
+        let channels = Channels::new(batcher_transactions, Arc::clone(&config));
         let batches = Batches::new(channels, start_epoch);
         let attributes = Attributes::new(batches, config, blocks.clone(), deposits.clone());
 
