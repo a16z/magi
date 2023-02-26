@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 use ethers_core::types::{Block, Transaction, H256};
 use eyre::Result;
 
-use crate::{config::Config, l1::ChainWatcher, engine::PayloadAttributes};
+use crate::{config::Config, engine::PayloadAttributes, l1::ChainWatcher};
 
 use self::stages::{
     attributes::{Attributes, UserDeposited},

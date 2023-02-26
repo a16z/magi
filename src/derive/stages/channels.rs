@@ -4,7 +4,7 @@ use ethers_core::types::H256;
 use eyre::Result;
 
 use super::batcher_transactions::{BatcherTransactions, Frame};
-use crate::{config::Config, common::BlockID};
+use crate::{common::BlockID, config::Config};
 
 pub struct Channels {
     pending_channels: Vec<PendingChannel>,

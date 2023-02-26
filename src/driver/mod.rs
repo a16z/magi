@@ -2,7 +2,11 @@ use std::sync::Arc;
 
 use ethers_core::types::H256;
 
-use crate::{config::Config, derive::Pipeline, engine::{PayloadAttributes, L2EngineApi, ForkchoiceState}};
+use crate::{
+    config::Config,
+    derive::Pipeline,
+    engine::{ForkchoiceState, L2EngineApi, PayloadAttributes},
+};
 
 pub struct Driver<E: L2EngineApi> {
     pipeline: Pipeline,
@@ -23,7 +27,13 @@ impl<E: L2EngineApi> Driver<E> {
 
         let pipeline = Pipeline::new(epoch_start, config);
 
-        Self { pipeline, engine, head_block_hash, safe_block_hash, finalized_hash }
+        Self {
+            pipeline,
+            engine,
+            head_block_hash,
+            safe_block_hash,
+            finalized_hash,
+        }
     }
 
     pub async fn run(&mut self) {
@@ -38,7 +48,11 @@ impl<E: L2EngineApi> Driver<E> {
         let forkchoice = self.create_forkchoice_state();
 
         // build payload
-        let update = self.engine.forkchoice_updated(forkchoice, Some(attributes)).await.unwrap();
+        let update = self
+            .engine
+            .forkchoice_updated(forkchoice, Some(attributes))
+            .await
+            .unwrap();
         let id = update.payload_id.unwrap();
 
         // fetch new payload
@@ -55,7 +69,11 @@ impl<E: L2EngineApi> Driver<E> {
 
         // update forkchoice
         let forkchoice = self.create_forkchoice_state();
-        let _update = self.engine.forkchoice_updated(forkchoice, None).await.unwrap();
+        let _update = self
+            .engine
+            .forkchoice_updated(forkchoice, None)
+            .await
+            .unwrap();
     }
 
     fn create_forkchoice_state(&self) -> ForkchoiceState {
