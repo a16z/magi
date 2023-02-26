@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use ethers_core::types::H256;
+use eyre::Result;
 
 use crate::{
     config::Config,
@@ -17,7 +18,7 @@ pub struct Driver<E: L2EngineApi> {
 }
 
 impl<E: L2EngineApi> Driver<E> {
-    pub fn new(engine: E, config: Config) -> Self {
+    pub fn new(engine: E, config: Config) -> Result<Self> {
         let head_block_hash = config.chain.l2_genesis.hash;
         let safe_block_hash = config.chain.l2_genesis.hash;
         let finalized_hash = config.chain.l2_genesis.hash;
@@ -25,15 +26,15 @@ impl<E: L2EngineApi> Driver<E> {
         let config = Arc::new(config);
         let epoch_start = config.chain.l1_start_epoch.number;
 
-        let pipeline = Pipeline::new(epoch_start, config);
+        let pipeline = Pipeline::new(epoch_start, config)?;
 
-        Self {
+        Ok(Self {
             pipeline,
             engine,
             head_block_hash,
             safe_block_hash,
             finalized_hash,
-        }
+        })
     }
 
     pub async fn run(&mut self) {
