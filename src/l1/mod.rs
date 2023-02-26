@@ -16,10 +16,18 @@ use tokio::{
 
 use crate::{config::Config, derive::stages::attributes::UserDeposited};
 
+/// Handles watching the L1 chain and monitoring for new blocks, deposits,
+/// and batcher transactions. The monitoring loop is spawned in a seperate
+/// task and communication happens via the internal channels. When ChainWatcher
+/// is dropped, the monitoring task is automatically aborted.
 pub struct ChainWatcher {
+    /// Task handle for the monitoring loop
     handle: JoinHandle<()>,
+    /// Channel for receiving batcher transactions
     pub tx_receiver: Option<Receiver<BatcherTransactionData>>,
+    /// Channel for receiving new blocks
     pub block_receiver: Receiver<Block<Transaction>>,
+    /// Channel for receiving new user deposits
     pub deposit_receiver: Receiver<UserDeposited>,
 }
 
@@ -38,6 +46,8 @@ impl Drop for ChainWatcher {
 }
 
 impl ChainWatcher {
+    /// Creates a new ChainWatcher and begins the monitoring task.
+    /// Errors if the rpc url in the config is invalid.
     pub fn new(start_block: u64, config: Arc<Config>) -> Result<Self> {
         let (handle, receivers) = start_watcher(start_block, config)?;
 
@@ -49,6 +59,8 @@ impl ChainWatcher {
         })
     }
 
+    /// Takes ownership of the batcher transaction receiver. Returns None
+    /// if the receiver has already been taken.
     pub fn take_tx_receiver(&mut self) -> Option<Receiver<BatcherTransactionData>> {
         self.tx_receiver.take()
     }
