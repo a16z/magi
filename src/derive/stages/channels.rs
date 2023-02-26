@@ -11,7 +11,7 @@ pub struct Channels {
     prev_stage: Rc<RefCell<BatcherTransactions>>,
     ready_channel: Option<Channel>,
     /// A bank of frames and their version numbers pulled from a [BatcherTransaction]
-    frame_bank: Vec<(u8, Frame)>,
+    frame_bank: Vec<Frame>,
     /// The maximum number of pending channels to hold in the bank
     max_channels: usize,
     /// The max timeout for a channel (as measured by the frame L1 block number)
@@ -113,12 +113,7 @@ impl Channels {
             .borrow_mut()
             .next()
             .ok_or(eyre::eyre!("No batcher tx"))??;
-        self.frame_bank = next_batcher_tx
-            .clone()
-            .frames
-            .into_iter()
-            .map(|f| (next_batcher_tx.version, f))
-            .collect();
+        self.frame_bank = next_batcher_tx.frames.to_vec();
         Ok(())
     }
 
@@ -143,7 +138,7 @@ impl Channels {
         }
 
         // Append the frame to the channel
-        let (_, frame) = self.frame_bank.remove(0);
+        let frame = self.frame_bank.remove(0);
         let frame_channel_id = frame.channel_id;
         self.push_frame(frame);
         self.load_ready_channel(frame_channel_id);
