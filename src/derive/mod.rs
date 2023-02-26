@@ -34,7 +34,9 @@ impl Iterator for Pipeline {
 impl Pipeline {
     pub fn new(start_epoch: u64, config: Arc<Config>) -> Result<Self> {
         let mut chain_watcher = ChainWatcher::new(start_epoch, config.clone())?;
-        let tx_recv = chain_watcher.take_tx_receiver().unwrap();
+        let tx_recv = chain_watcher
+            .take_tx_receiver()
+            .ok_or(eyre::eyre!("tx receiver already taken"))?;
 
         let blocks = Rc::new(RefCell::new(HashMap::<H256, Block<Transaction>>::new()));
         let deposits = Rc::new(RefCell::new(HashMap::<u64, Vec<UserDeposited>>::new()));
