@@ -1131,6 +1131,7 @@ name = "magi"
 version = "0.1.0"
 dependencies = [
  "ansi_term",
+ "async-trait",
  "bytes",
  "chrono",
  "ethers-core",

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-const STATIC_ID: u32 = 1;
+pub const STATIC_ID: u32 = 1;
 pub const JSONRPC_VERSION: &str = "2.0";
 
 pub const ETH_SYNCING: &str = "eth_syncing";
