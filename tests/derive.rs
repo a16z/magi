@@ -26,7 +26,7 @@ async fn test_attributes_match() {
         max_timeout: 100,
     });
 
-    let mut pipeline = Pipeline::new(start_epoch, config);
+    let mut pipeline = Pipeline::new(start_epoch, config).unwrap();
 
     let mut i = 0;
     while i < num {

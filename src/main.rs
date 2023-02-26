@@ -22,7 +22,7 @@ async fn main() -> Result<()> {
         max_timeout: 100,
     });
 
-    let mut pipeline = Pipeline::new(start_epoch, config);
+    let mut pipeline = Pipeline::new(start_epoch, config)?;
 
     loop {
         let attributes = pipeline.next();
