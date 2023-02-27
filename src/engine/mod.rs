@@ -7,6 +7,9 @@ pub use payload::*;
 mod fork;
 pub use fork::*;
 
+mod mock_engine;
+pub use mock_engine::*;
+
 /// ## L2 Engine API
 ///
 /// A set of methods that allow a consensus client to interact with an execution engine.
