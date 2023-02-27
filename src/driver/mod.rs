@@ -1,32 +1,24 @@
-use std::sync::Arc;
-
 use ethers_core::types::H256;
 use eyre::Result;
 
 use crate::{
     config::Config,
-    derive::Pipeline,
     engine::{ExecutionPayload, ForkchoiceState, L2EngineApi, PayloadAttributes, Status},
 };
 
-pub struct Driver<E: L2EngineApi> {
-    pipeline: Pipeline,
+pub struct Driver<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> {
+    pipeline: P,
     engine: E,
     head_block_hash: H256,
     safe_block_hash: H256,
     finalized_hash: H256,
 }
 
-impl<E: L2EngineApi> Driver<E> {
-    pub fn new(engine: E, config: Config) -> Result<Self> {
+impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
+    pub fn new(engine: E, pipeline: P, config: Config) -> Result<Self> {
         let head_block_hash = config.chain.l2_genesis.hash;
         let safe_block_hash = config.chain.l2_genesis.hash;
         let finalized_hash = H256::zero();
-
-        let config = Arc::new(config);
-        let epoch_start = config.chain.l1_start_epoch.number;
-
-        let pipeline = Pipeline::new(epoch_start, config)?;
 
         Ok(Self {
             pipeline,
@@ -37,14 +29,12 @@ impl<E: L2EngineApi> Driver<E> {
         })
     }
 
-    pub async fn sync(&mut self) {
-        loop {
-            if let Some(next_attributes) = self.pipeline.next() {
-                if let Err(err) = self.advance_engine(next_attributes).await {
-                    tracing::warn!("driver error: {}", err);
-                }
-            }
+    pub async fn advance(&mut self) -> Result<()> {
+        if let Some(next_attributes) = self.pipeline.next() {
+            self.advance_engine(next_attributes).await?;
         }
+
+        Ok(())
     }
 
     async fn advance_engine(&mut self, attributes: PayloadAttributes) -> Result<()> {
