@@ -14,11 +14,11 @@ pub struct Driver<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> {
     /// The L2 execution engine
     engine: E,
     /// Most recent block hash. Not necessarily derived from L1 data
-    head_block_hash: H256,
+    pub head_block_hash: H256,
     /// Most recent block hash that can be derived from L1 data
-    safe_block_hash: H256,
+    pub safe_block_hash: H256,
     /// Most recent block hash that can be derived from finalized L1 data
-    finalized_hash: H256,
+    pub finalized_hash: H256,
 }
 
 impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
@@ -102,3 +102,4 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
         }
     }
 }
+

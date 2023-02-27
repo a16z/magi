@@ -28,7 +28,9 @@
     - [ ] Engine API Bindings
         - [x] Engine API Trait
         - [ ] Engine API Client Implementation
-    - [ ] Driver Loop
+    - [ ] Engine Driver
+        - [x] Basic Driver
+        - [ ] Write to DB
 - [ ] Backend DB
     - [ ] Modify `ConstructedBlock` type to match output of the Geth Driver
     - [x] Read Blocks By Hash _or_ Number
@@ -48,7 +50,7 @@ Run the main binary with `cargo run --release`
 
 **Tests**
 
-Tests are named wrt their modules, located inside the [tests](./tests) directory.
+Tests are named wrt their modules, located inside the [tests](./tests) directory. There may be additional unit tests written inline with some modules.
 
 To run all tests, simply run `cargo test --all`.
 

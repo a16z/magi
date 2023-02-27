@@ -2,7 +2,7 @@ use ethers_core::types::{H160, H256};
 use serde::{Deserialize, Serialize};
 
 /// ## ExecutionPayload
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionPayload {
     /// A 32 byte hash of the parent payload
@@ -51,7 +51,7 @@ pub struct L1PayloadAttributes {
 ///
 /// L2 extended payload attributes for Optimism.
 /// For more details, visit the [Optimism specs](https://github.com/ethereum-optimism/optimism/blob/develop/specs/exec-engine.md#extended-payloadattributesv1).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PayloadAttributes {
     /// 64 bit value for the timestamp field of the new payload.
