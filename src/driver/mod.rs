@@ -6,43 +6,48 @@ use crate::{
     engine::{ExecutionPayload, ForkchoiceState, L2EngineApi, PayloadAttributes, Status},
 };
 
+/// Driver is responsible for advancing the execution node by feeding
+/// the derived chain into the engine API
 pub struct Driver<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> {
+    /// The derivation pipeline
     pipeline: P,
+    /// The L2 execution engine
     engine: E,
+    /// Most recent block hash. Not necessarily derived from L1 data
     head_block_hash: H256,
+    /// Most recent block hash that can be derived from L1 data
     safe_block_hash: H256,
+    /// Most recent block hash that can be derived from finalized L1 data
     finalized_hash: H256,
 }
 
 impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
-    pub fn new(engine: E, pipeline: P, config: Config) -> Result<Self> {
+    /// Creates a new Driver instance
+    pub fn new(engine: E, pipeline: P, config: Config) -> Self {
         let head_block_hash = config.chain.l2_genesis.hash;
         let safe_block_hash = config.chain.l2_genesis.hash;
         let finalized_hash = H256::zero();
 
-        Ok(Self {
+        Self {
             pipeline,
             engine,
             head_block_hash,
             safe_block_hash,
             finalized_hash,
-        })
+        }
     }
 
+    /// Attempts to advance the execution node forward one block using derived
+    /// L1 data. Errors if the most recent PayloadAttributes from the pipeline
+    /// does not successfully advance the node
     pub async fn advance(&mut self) -> Result<()> {
         if let Some(next_attributes) = self.pipeline.next() {
-            self.advance_engine(next_attributes).await?;
+            let payload = self.build_payload(next_attributes).await?;
+            let new_hash = payload.block_hash;
+
+            self.push_payload(payload).await?;
+            self.update_forkchoice(new_hash).await?;
         }
-
-        Ok(())
-    }
-
-    async fn advance_engine(&mut self, attributes: PayloadAttributes) -> Result<()> {
-        let payload = self.build_payload(attributes).await?;
-        let new_hash = payload.block_hash;
-
-        self.push_payload(payload).await?;
-        self.update_forkchoice(new_hash).await?;
 
         Ok(())
     }
