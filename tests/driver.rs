@@ -2,8 +2,8 @@ use std::vec::IntoIter;
 
 use ethers_core::types::H256;
 use magi::{
-    driver::Driver,
     config::{ChainConfig, Config},
+    driver::Driver,
     engine::{
         ExecutionPayload, ForkChoiceUpdate, MockEngine, PayloadAttributes, PayloadStatus, Status,
     },

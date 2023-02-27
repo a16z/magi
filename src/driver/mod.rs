@@ -102,4 +102,3 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
         }
     }
 }
-
