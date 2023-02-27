@@ -9,6 +9,7 @@ use ethers_core::utils::{keccak256, rlp::Encodable, rlp::RlpStream};
 use eyre::Result;
 
 use crate::config::{Config, SystemAccounts};
+use crate::engine::PayloadAttributes;
 
 use super::batches::{Batch, Batches, RawTransaction};
 
@@ -58,13 +59,14 @@ impl Attributes {
         let l1_block = blocks.get(&batch.epoch_hash).unwrap();
 
         let timestamp = batch.timestamp;
-        let random = l1_block.mix_hash.unwrap();
+        let prev_randao = l1_block.mix_hash.unwrap();
         let transactions = self.derive_transactions(batch, l1_block);
+        let transactions = Some(transactions.into_iter().map(|tx| tx.0).collect());
         let suggested_fee_recipient = SystemAccounts::default().fee_vault;
 
         PayloadAttributes {
             timestamp,
-            random,
+            prev_randao,
             suggested_fee_recipient,
             transactions,
             no_tx_pool: true,
@@ -125,16 +127,6 @@ impl Attributes {
             self.sequence_number += 1;
         }
     }
-}
-
-#[derive(Debug)]
-pub struct PayloadAttributes {
-    pub timestamp: u64,
-    pub random: H256,
-    pub suggested_fee_recipient: Address,
-    pub transactions: Vec<RawTransaction>,
-    pub no_tx_pool: bool,
-    pub gas_limit: u64,
 }
 
 #[derive(Debug)]

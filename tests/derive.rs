@@ -5,7 +5,7 @@ use ethers_providers::{Middleware, Provider};
 
 use magi::{
     config::{ChainConfig, Config},
-    derive::{stages::batches::RawTransaction, Pipeline},
+    derive::Pipeline,
     telemetry,
 };
 
@@ -26,13 +26,12 @@ async fn test_attributes_match() {
         max_timeout: 100,
     });
 
-    let mut pipeline = Pipeline::new(start_epoch, config);
+    let mut pipeline = Pipeline::new(start_epoch, config).unwrap();
 
     let mut i = 0;
     while i < num {
         if let Some(payload) = pipeline.next() {
-            println!("{}", i);
-            let hashes = get_tx_hashes(&payload.transactions);
+            let hashes = get_tx_hashes(&payload.transactions.unwrap());
             let expected_hashes = get_expected_hashes(start_block + i).await;
 
             assert_eq!(hashes, expected_hashes);
@@ -55,8 +54,8 @@ async fn get_expected_hashes(block_num: u64) -> Vec<H256> {
         .transactions
 }
 
-fn get_tx_hashes(txs: &[RawTransaction]) -> Vec<H256> {
+fn get_tx_hashes(txs: &[Vec<u8>]) -> Vec<H256> {
     txs.iter()
-        .map(|tx| H256::from_slice(&keccak256(&tx.0)))
+        .map(|tx| H256::from_slice(&keccak256(&tx)))
         .collect()
 }

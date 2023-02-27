@@ -1,3 +1,6 @@
+#![warn(unreachable_pub)]
+#![deny(missing_docs, missing_debug_implementations)]
+
 /// Payload Types
 mod payload;
 pub use payload::*;
@@ -17,3 +20,7 @@ pub use types::*;
 /// Core Trait
 mod traits;
 pub use traits::*;
+
+/// Mock Engine
+mod mock_engine;
+pub use mock_engine::*;

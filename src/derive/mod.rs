@@ -1,11 +1,12 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 
 use ethers_core::types::{Block, Transaction, H256};
+use eyre::Result;
 
-use crate::{config::Config, l1::ChainWatcher};
+use crate::{config::Config, engine::PayloadAttributes, l1::ChainWatcher};
 
 use self::stages::{
-    attributes::{Attributes, PayloadAttributes, UserDeposited},
+    attributes::{Attributes, UserDeposited},
     batcher_transactions::BatcherTransactions,
     batches::Batches,
     channels::Channels,
@@ -31,9 +32,11 @@ impl Iterator for Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(start_epoch: u64, config: Arc<Config>) -> Self {
-        let mut chain_watcher = ChainWatcher::new(start_epoch, config.clone());
-        let tx_recv = chain_watcher.take_tx_receiver().unwrap();
+    pub fn new(start_epoch: u64, config: Arc<Config>) -> Result<Self> {
+        let mut chain_watcher = ChainWatcher::new(start_epoch, config.clone())?;
+        let tx_recv = chain_watcher
+            .take_tx_receiver()
+            .ok_or(eyre::eyre!("tx receiver already taken"))?;
 
         let blocks = Rc::new(RefCell::new(HashMap::<H256, Block<Transaction>>::new()));
         let deposits = Rc::new(RefCell::new(HashMap::<u64, Vec<UserDeposited>>::new()));
@@ -43,12 +46,12 @@ impl Pipeline {
         let batches = Batches::new(channels, start_epoch);
         let attributes = Attributes::new(batches, config, blocks.clone(), deposits.clone());
 
-        Self {
+        Ok(Self {
             attributes,
             chain_watcher,
             blocks,
             deposits,
-        }
+        })
     }
 
     fn update_blocks(&mut self) {

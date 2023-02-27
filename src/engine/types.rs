@@ -1,22 +1,28 @@
 use std::time::Duration;
 
+/// The ID of the static payload
 pub const STATIC_ID: u32 = 1;
+
+/// The json rpc version string
 pub const JSONRPC_VERSION: &str = "2.0";
 
-pub const ETH_SYNCING: &str = "eth_syncing";
-pub const ETH_SYNCING_TIMEOUT: Duration = Duration::from_secs(1);
-
+/// The new payload method string
 pub const ENGINE_NEW_PAYLOAD_V1: &str = "engine_newPayloadV1";
-pub const ENGINE_NEW_PAYLOAD_V2: &str = "engine_newPayloadV2";
+// pub const ENGINE_NEW_PAYLOAD_V2: &str = "engine_newPayloadV2";
+
+/// The new payload timeout
 pub const ENGINE_NEW_PAYLOAD_TIMEOUT: Duration = Duration::from_secs(8);
 
+/// The get payload method string
 pub const ENGINE_GET_PAYLOAD_V1: &str = "engine_getPayloadV1";
-pub const ENGINE_GET_PAYLOAD_V2: &str = "engine_getPayloadV2";
+// pub const ENGINE_GET_PAYLOAD_V2: &str = "engine_getPayloadV2";
+
+/// The get payload timeout
 pub const ENGINE_GET_PAYLOAD_TIMEOUT: Duration = Duration::from_secs(2);
 
-pub const ENGINE_GET_BLOBS_BUNDLE_V1: &str = "engine_getBlobsBundleV1";
-pub const ENGINE_GET_BLOBS_BUNDLE_TIMEOUT: Duration = Duration::from_secs(2);
-
+/// The forkchoice updated method string
 pub const ENGINE_FORKCHOICE_UPDATED_V1: &str = "engine_forkchoiceUpdatedV1";
-pub const ENGINE_FORKCHOICE_UPDATED_V2: &str = "engine_forkchoiceUpdatedV2";
+// pub const ENGINE_FORKCHOICE_UPDATED_V2: &str = "engine_forkchoiceUpdatedV2";
+
+/// The forkchoice updated timeout
 pub const ENGINE_FORKCHOICE_UPDATED_TIMEOUT: Duration = Duration::from_secs(8);

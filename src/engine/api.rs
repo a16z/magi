@@ -86,8 +86,11 @@ impl EngineApi {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionPayloadResponse {
+    /// JSON RPC version
     pub jsonrpc: String,
+    /// Request ID
     pub id: u64,
+    /// Execution payload
     pub result: ExecutionPayload,
 }
 
@@ -95,8 +98,11 @@ pub struct ExecutionPayloadResponse {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PayloadStatusResponse {
+    /// JSON RPC version
     pub jsonrpc: String,
+    /// Request ID
     pub id: u64,
+    /// Payload status response
     pub result: PayloadStatus,
 }
 
@@ -104,8 +110,11 @@ pub struct PayloadStatusResponse {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ForkChoiceUpdateResponse {
+    /// JSON RPC version
     pub jsonrpc: String,
+    /// Request ID
     pub id: u64,
+    /// Fork choice update
     pub result: ForkChoiceUpdate,
 }
 

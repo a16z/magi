@@ -1,8 +1,8 @@
-use ethers_core::types::{Transaction, H160, H256};
+use ethers_core::types::{H160, H256};
 use serde::{Deserialize, Serialize};
 
 /// ## ExecutionPayload
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionPayload {
     /// A 32 byte hash of the parent payload
@@ -51,7 +51,7 @@ pub struct L1PayloadAttributes {
 ///
 /// L2 extended payload attributes for Optimism.
 /// For more details, visit the [Optimism specs](https://github.com/ethereum-optimism/optimism/blob/develop/specs/exec-engine.md#extended-payloadattributesv1).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PayloadAttributes {
     /// 64 bit value for the timestamp field of the new payload.
@@ -61,7 +61,7 @@ pub struct PayloadAttributes {
     ///  20 bytes suggested value for the feeRecipient field of the new payload.
     pub suggested_fee_recipient: H160,
     /// Array of transactions to be included in the new payload.
-    pub transactions: Option<Vec<Transaction>>,
+    pub transactions: Option<Vec<Vec<u8>>>,
     /// Boolean value indicating whether or not the payload should be built without including transactions from the txpool.
     pub no_tx_pool: bool,
     /// 64 bit value for the gasLimit field of the new payload.
@@ -94,9 +94,14 @@ pub struct PayloadStatus {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Status {
+    /// Valid Payload
     Valid,
+    /// Invalid Payload
     Invalid,
+    /// Currently syncing
     Syncing,
+    /// Payload is accepted
     Accepted,
+    /// Payload contains an invalid block hash
     InvalidBlockHash,
 }
