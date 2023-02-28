@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 use ethers_core::types::{Block, Transaction, H256};
 use eyre::Result;
 
-use crate::{config::Config, engine::PayloadAttributes, l1::ChainWatcher};
+use crate::{config::Config, engine::PayloadAttributes, l1::{ChainWatcher, L1Info}};
 
 use self::stages::{
     attributes::{Attributes, UserDeposited},
@@ -17,8 +17,7 @@ pub mod stages;
 pub struct Pipeline {
     attributes: Rc<RefCell<Attributes>>,
     chain_watcher: ChainWatcher,
-    blocks: Rc<RefCell<HashMap<H256, Block<Transaction>>>>,
-    deposits: Rc<RefCell<HashMap<u64, Vec<UserDeposited>>>>,
+    l1_info: Rc<RefCell<HashMap<H256, L1Info>>>,
 }
 
 impl Iterator for Pipeline {
@@ -38,8 +37,7 @@ impl Pipeline {
             .take_tx_receiver()
             .ok_or(eyre::eyre!("tx receiver already taken"))?;
 
-        let blocks = Rc::new(RefCell::new(HashMap::<H256, Block<Transaction>>::new()));
-        let deposits = Rc::new(RefCell::new(HashMap::<u64, Vec<UserDeposited>>::new()));
+        let l1_info = Rc::new(RefCell::new(HashMap::<H256, L1Info>::new()));
 
         let batcher_transactions = BatcherTransactions::new(tx_recv);
         let channels = Channels::new(batcher_transactions, Arc::clone(&config));
@@ -49,8 +47,7 @@ impl Pipeline {
         Ok(Self {
             attributes,
             chain_watcher,
-            blocks,
-            deposits,
+            l1_info,
         })
     }
 
@@ -67,7 +64,6 @@ impl Pipeline {
         }
     }
 
-    fn update_deposits(&mut self) {
         while let Ok(deposit) = self.chain_watcher.deposit_receiver.try_recv() {
             let mut deposits = self.deposits.borrow_mut();
             let deposits_for_block = deposits.get_mut(&deposit.l1_block_num);
