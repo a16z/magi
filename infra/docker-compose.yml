@@ -12,18 +12,17 @@ services:
     image: ethereumoptimism/op-geth:v1.10.26-166f27c
     restart: unless-stopped
     stop_grace_period: 3m
-    entrypoint: /scripts/op-geth-start.sh
+    entrypoint: /scripts/start-op-geth.sh
     env_file:
       - ./op-geth.env
       - .env
     ports:
-      - ${PORT__OP_GETH_HTTP:-9993}:8545
-      - ${PORT__OP_GETH_WS:-9994}:8546
+      - 8551:8551
+      - 8545:8545
+      - 8546:8546
     volumes:
       - ./:/scripts
-      - shared:/shared
-      - op_geth:/geth
     <<: *logging
 
 volumes:
-  geth:
+  scripts:
