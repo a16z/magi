@@ -1,0 +1,28 @@
+---
+version: "3.4"
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: 10m
+      max-file: "3"
+
+services:
+  op-geth:
+    image: ethereumoptimism/op-geth:v1.10.26-166f27c
+    restart: unless-stopped
+    stop_grace_period: 3m
+    entrypoint: /scripts/start-op-geth.sh
+    env_file:
+      - ./op-geth.env
+      - .env
+    ports:
+      - 8551:8551
+      - 8545:8545
+      - 8546:8546
+    volumes:
+      - ./:/scripts
+    <<: *logging
+
+volumes:
+  scripts:
