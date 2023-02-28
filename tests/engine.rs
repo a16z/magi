@@ -9,8 +9,15 @@ async fn test_engine_api() {
         assert_eq!(base_body.get("jsonrpc").unwrap(), "2.0");
         assert_eq!(base_body.get("id").unwrap(), "1");
 
-        let res = engine_api.get_payload(10).await;
-        println!("Response: {:?}", res);
+        match engine_api.get_payload(10).await {
+            Ok(res) => {
+                println!("Response: {:?}", res);
+                // TODO: assert expected response payload
+            }
+            Err(e) => {
+                println!("Error: {:?}", e);
+            }
+        }
     } else {
         println!(
             "Skipping test_engine_api because either ENGINE_API_URL or JWT_SECRET are not set..."

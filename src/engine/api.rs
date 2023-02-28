@@ -72,6 +72,7 @@ impl EngineApi {
                 This should be the same as set in the `--auth.secret` flag when executing go-ethereum."
             )
         });
+        let base_url = EngineApi::auth_url_from_addr(&base_url);
         Self::new(base_url, Some(secret_key))
     }
 
@@ -200,8 +201,9 @@ impl L2EngineApi for EngineApi {
         let params = serde_json::to_string(&vec![padded])?;
         body.insert("params".to_string(), params);
         let res = self.post(ENGINE_GET_PAYLOAD_V1, body).await?;
-        let res = res.json::<ExecutionPayloadResponse>().await?;
-        Ok(res.result)
+        let res = res.json::<serde_json::Value>().await?;
+        let ep = serde_json::from_value::<ExecutionPayloadResponse>(res["result"].clone())?;
+        Ok(ep.result)
     }
 }
 
