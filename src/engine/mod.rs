@@ -13,6 +13,10 @@ pub use fork::*;
 mod api;
 pub use api::*;
 
+/// Auth module
+mod auth;
+pub use auth::*;
+
 /// Common Types
 mod types;
 pub use types::*;

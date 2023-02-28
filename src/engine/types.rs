@@ -1,5 +1,8 @@
 use std::time::Duration;
 
+/// The default engine api authentication port.
+pub const DEFAULT_AUTH_PORT: u32 = 8551;
+
 /// The ID of the static payload
 pub const STATIC_ID: u32 = 1;
 

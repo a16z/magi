@@ -1,14 +1,16 @@
 use std::collections::HashMap;
+use std::time::SystemTime;
 
 use eyre::Result;
-use reqwest::Client;
+use reqwest::{header, Client};
 use serde::{Deserialize, Serialize};
 
+use crate::engine::DEFAULT_AUTH_PORT;
 use crate::engine::ENGINE_GET_PAYLOAD_V1;
 
 use super::{
-    ExecutionPayload, ForkChoiceUpdate, ForkchoiceState, L2EngineApi, PayloadAttributes, PayloadId,
-    PayloadStatus, ENGINE_FORKCHOICE_UPDATED_V1, ENGINE_NEW_PAYLOAD_V1,
+    ExecutionPayload, ForkChoiceUpdate, ForkchoiceState, JwtSecret, L2EngineApi, PayloadAttributes,
+    PayloadId, PayloadStatus, ENGINE_FORKCHOICE_UPDATED_V1, ENGINE_NEW_PAYLOAD_V1,
 };
 
 use super::{JSONRPC_VERSION, STATIC_ID};
@@ -20,15 +22,39 @@ pub struct EngineApi {
     pub base_url: String,
     /// HTTP Client
     pub client: Option<Client>,
+    /// A [crate::engine::JwtSecret] used to authenticate with the engine api
+    secret: JwtSecret,
 }
 
 impl EngineApi {
-    /// Creates a new external api client
-    pub fn new(base_url: String) -> Self {
+    /// Creates a new [`EngineApi`] with a base url and secret.
+    /// If the secret is not provided, a random secret will be generated.
+    pub fn new(base_url: String, secret_str: Option<String>) -> Self {
+        let secret = match secret_str {
+            Some(secret_str) => JwtSecret::from_hex(secret_str).unwrap(),
+            None => {
+                tracing::warn!(
+                    "No JWT secret provided to the engine api. Generating a random secret..."
+                );
+                JwtSecret::random()
+            }
+        };
         Self {
             base_url,
             client: Some(reqwest::Client::new()),
+            secret,
         }
+    }
+
+    /// Constructs the base engine api url for the given address
+    pub fn auth_url_from_addr(addr: &str) -> String {
+        let stripped = addr.strip_prefix("http://").unwrap_or(addr);
+        format!("http://{stripped}:{DEFAULT_AUTH_PORT}")
+    }
+
+    /// Returns if the provided secret matches the secret used to authenticate with the engine api.
+    pub fn check_secret(&self, secret: &str) -> bool {
+        self.secret.equal(secret)
     }
 
     /// Creates an engine api from environment variables
@@ -39,7 +65,14 @@ impl EngineApi {
                 Please set this to the base url of the engine api"
             )
         });
-        Self::new(base_url)
+        let secret_key = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
+            panic!(
+                "JWT_SECRET environment variable not set. \
+                Please set this to the 256 bit hex-encoded secret key used to authenticate with the engine api. \
+                This should be the same as set in the `--auth.secret` flag when executing go-ethereum."
+            )
+        });
+        Self::new(base_url, Some(secret_key))
     }
 
     // TODO: Abstract the body wrapping the inner hashmap in a struct and exposing convenience methods
@@ -73,8 +106,19 @@ impl EngineApi {
             .client
             .as_ref()
             .ok_or(eyre::eyre!("Driver missing http client"))?;
+
+        // Construct the JWT Authorization Token
+        let claims = self.secret.generate_claims(Some(SystemTime::now()));
+        let jwt = self
+            .secret
+            .encode(&claims)
+            .map_err(|_| eyre::eyre!("EngineApi failed to encode jwt with claims!"))?;
+
+        // Send the request
         client
             .post(&self.base_url)
+            .header(header::CONTENT_TYPE, "application/json")
+            .header(header::AUTHORIZATION, format!("Bearer {}", jwt))
             .json(&body)
             .send()
             .await
@@ -158,5 +202,59 @@ impl L2EngineApi for EngineApi {
         let res = self.post(ENGINE_GET_PAYLOAD_V1, body).await?;
         let res = res.json::<ExecutionPayloadResponse>().await?;
         Ok(res.result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::SystemTime;
+
+    // use std::str::FromStr;
+    // use ethers_core::types::H256;
+
+    use super::*;
+
+    const AUTH_ADDR: &str = "0.0.0.0";
+    const SECRET: &str = "f79ae8046bc11c9927afe911db7143c51a806c4a537cc08e0d37140b0192f430";
+
+    #[tokio::test]
+    async fn test_engine_get_payload() {
+        // Construct the engine api client
+        let base_url = EngineApi::auth_url_from_addr(AUTH_ADDR);
+        let _engine_api = EngineApi::new(base_url, Some(SECRET.to_string()));
+
+        // Construct mock server params
+        let secret = JwtSecret::from_hex(SECRET).unwrap();
+        let claims = secret.generate_claims(Some(SystemTime::UNIX_EPOCH));
+        let jwt = secret.encode(&claims).unwrap();
+        assert_eq!(jwt, String::from("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpYXQiOjAsImV4cCI6NjB9.rJv_krfkQefjWnZxrpnDimR1NN1UEUffK3hQzD1KInA"));
+        // let bearer = format!("Bearer {jwt}");
+        // let expected_body = r#"{"jsonrpc": "2.0", "method": "engine_getPayloadV1", "params": [""], "id": 1}"#;
+        // let mock_response = ExecutionPayloadResponse {
+        //     jsonrpc: "2.0".to_string(),
+        //     id: 1,
+        //     result: ExecutionPayload {
+        //         parent_hash: H256::from(
+        //     }
+        // };
+
+        // Create the mock server
+        // let server = ServerBuilder::default()
+        //     .set_id_provider(RandomStringIdProvider::new(16))
+        //     .set_middleware(middleware)
+        //     .build(addr.parse::<SocketAddr>().unwrap())
+        //     .await
+        //     .unwrap();
+
+        // Query the engine api client
+        // let execution_payload = engine_api.get_payload(PayloadId::default()).await.unwrap();
+        // let expected_block_hash =
+        //     H256::from_str("0xdc0818cf78f21a8e70579cb46a43643f78291264dda342ae31049421c82d21ae")
+        //         .unwrap();
+        // assert_eq!(expected_block_hash, execution_payload.block_hash);
+
+        // Stop the server
+        // server.stop().unwrap();
+        // server.stopped().await;
     }
 }
