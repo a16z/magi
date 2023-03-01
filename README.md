@@ -34,7 +34,14 @@ At this point, `magi` has successfully advanced the L2 chain forward by one bloc
 
 #### Engine API
 
-// TODO:
+The [EngineApi](./src/engine/mod.rs) exposes an interface for interacting with an external [execution client](https://ethereum.org/en/developers/docs/nodes-and-clients/#execution-clients), in our case [op-geth](https://github.com/ethereum-optimism/op-geth) or [op-reth](https://github.com/rkrasiuk/op-reth) (soon™). Notice, we cannot use [go-ethereum](https://github.com/ethereum/go-ethereum) as the execution client because Optimism's [execution client](https://github.com/ethereum-optimism/op-geth) requires a [minimal diff](https://op-geth.optimism.io/) to the [Engine API](https://github.com/ethereum/execution-apis/tree/main/src/engine).
+
+To construct an [EngineApi](./src/engine/mod.rs) as done in the `magi` [main binary](./src/main.rs), we must provide it with a base url (port is optional, and by default `8551`) as well as a 256 bit, hex-encoded secret string that is used to authenticate requests to the node. This secret is configured on the execution node's side using the `--authrpc.jwtsecret` flag. See [start-op-geth.sh](./scripts/start-op-geth.sh) for an example of how to configure and run an [op-geth](https://github.com/ethereum-optimism/op-geth) instance.
+
+As mentioned in [Driver](#driver) section, the [Driver](./src/driver/mod.rs) uses the [EngineApi](./src/engine/mod.rs) to send constructed [ExecutionPayload](./src/engine/payload.rs) to the execution client using the [new_payload](./src/engine/api.rs) method. It also updates the [ForkChoiceState](./src/engine/fork.rs) using the [forkchoice_updated](./src/engine/api.rs) method.
+
+Additionally, the [EngineApi](./src/engine/mod.rs) exposes a [get_payload](./src/engine/api.rs) method to fetch the [ExecutionPayload](./src/engine/payload.rs) for a given block hash.
+
 
 #### Derivation Pipeline
 
@@ -91,6 +98,7 @@ Importantly, if the `ConstructedBlock` does not have it's `hash` set, the block 
 - [ ] In the [Driver](./src/driver/mod.rs), we should be writing to the [Backend DB](./src/backend/mod.rs) as we process blocks. This allows for persisting L2 chain state on disk and optionally allows for restarting the node without having to re-process all of the blocks.
 - [ ] In the [Backend DB](./src/backend/mod.rs), the `ConstructedBlock` type should match, or at least implement coercions to/from, the [Driver](./src/driver/mod.rs) output type.
 - [ ] Subscribe to P2P Gossip on the configured L2 P2P Network. This will allow us to receive new blocks from other nodes on the network.
+- [ ] Gracefully handle missing or present port in the EngineApi `base_url` passed into the constructor.
 
 ### License
 
