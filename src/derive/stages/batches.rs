@@ -7,6 +7,8 @@ use ethers_core::utils::rlp::{Decodable, DecoderError, Rlp};
 use eyre::Result;
 use libflate::zlib::Decoder;
 
+use crate::common::RawTransaction;
+
 use super::channels::{Channel, Channels};
 
 pub struct Batches {
@@ -105,20 +107,5 @@ impl Decodable for Batch {
             timestamp,
             transactions,
         })
-    }
-}
-
-pub struct RawTransaction(pub Vec<u8>);
-
-impl Decodable for RawTransaction {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        let tx_bytes: Vec<u8> = rlp.as_val()?;
-        Ok(Self(tx_bytes))
-    }
-}
-
-impl Debug for RawTransaction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "0x{}", hex::encode(&self.0))
     }
 }

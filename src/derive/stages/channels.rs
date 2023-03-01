@@ -22,13 +22,11 @@ impl Iterator for Channels {
     type Item = Channel;
 
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            if self.ready_channel.is_some() {
-                return self.ready_channel.take();
-            }
-
-            // TODO: return None once all batcher txs are consumed
+        if self.ready_channel.is_some() {
+            self.ready_channel.take()
+        } else {
             self.process_frame();
+            self.ready_channel.take()
         }
     }
 }

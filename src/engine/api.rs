@@ -4,6 +4,7 @@ use std::time::SystemTime;
 use eyre::Result;
 use reqwest::{header, Client};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::engine::DEFAULT_AUTH_PORT;
 use crate::engine::ENGINE_GET_PAYLOAD_V1;
@@ -76,28 +77,23 @@ impl EngineApi {
         Self::new(base_url, Some(secret_key))
     }
 
-    // TODO: Abstract the body wrapping the inner hashmap in a struct and exposing convenience methods
-
     /// Construct base body
-    pub fn base_body(&self) -> HashMap<String, String> {
+    pub fn base_body(&self) -> HashMap<String, Value> {
         let mut map = HashMap::new();
-        map.insert("jsonrpc".to_string(), JSONRPC_VERSION.to_string());
-        map.insert("id".to_string(), STATIC_ID.to_string());
+        map.insert(
+            "jsonrpc".to_string(),
+            Value::String(JSONRPC_VERSION.to_string()),
+        );
+        map.insert("id".to_string(), Value::Number(STATIC_ID.into()));
         map
     }
 
     /// Helper to construct a post request through the client
-    pub async fn post(
-        &self,
-        endpoint: &str,
-        mut body: HashMap<String, String>,
-    ) -> Result<reqwest::Response> {
+    pub async fn post(&self, method: &str, params: Vec<Value>) -> Result<reqwest::Response> {
         // Construct the request params
-        let base_body = self.base_body();
-        body.insert("method".to_string(), endpoint.to_string());
-        let _ = base_body
-            .into_iter()
-            .map(|(k, v)| body.insert(k, v).ok_or(eyre::eyre!("Failed to insert key")));
+        let mut body = self.base_body();
+        body.insert("method".to_string(), Value::String(method.to_string()));
+        body.insert("params".to_string(), Value::Array(params));
 
         tracing::debug!("Sending request to url: {:?}", self.base_url);
         tracing::debug!("Sending request: {:?}", serde_json::to_string(&body));
@@ -171,25 +167,19 @@ impl L2EngineApi for EngineApi {
         payload_attributes: Option<PayloadAttributes>,
     ) -> Result<ForkChoiceUpdate> {
         let payload_attributes_param = match payload_attributes {
-            Some(payload_attributes) => serde_json::to_string(&payload_attributes)?,
-            None => "null".to_string(),
+            Some(payload_attributes) => serde_json::to_value(payload_attributes)?,
+            None => Value::Null,
         };
-        let forkchoice_state_param = serde_json::to_string(&forkchoice_state)?;
-        let mut body = HashMap::new();
-        let params =
-            serde_json::to_string(&vec![forkchoice_state_param, payload_attributes_param])?;
-        body.insert("params".to_string(), params);
-        let res = self.post(ENGINE_FORKCHOICE_UPDATED_V1, body).await?;
+        let forkchoice_state_param = serde_json::to_value(&forkchoice_state)?;
+        let params = vec![forkchoice_state_param, payload_attributes_param];
+        let res = self.post(ENGINE_FORKCHOICE_UPDATED_V1, params).await?;
         let res = res.json::<ForkChoiceUpdateResponse>().await?;
         Ok(res.result)
     }
 
     async fn new_payload(&self, execution_payload: ExecutionPayload) -> Result<PayloadStatus> {
-        let serialized = serde_json::to_string(&execution_payload)?;
-        let mut body = HashMap::new();
-        let params = serde_json::to_string(&vec![serialized])?;
-        body.insert("params".to_string(), params);
-        let res = self.post(ENGINE_NEW_PAYLOAD_V1, body).await?;
+        let params = vec![serde_json::to_value(execution_payload)?];
+        let res = self.post(ENGINE_NEW_PAYLOAD_V1, params).await?;
         let res = res.json::<PayloadStatusResponse>().await?;
         Ok(res.result)
     }
@@ -197,13 +187,10 @@ impl L2EngineApi for EngineApi {
     async fn get_payload(&self, payload_id: PayloadId) -> Result<ExecutionPayload> {
         let encoded = format!("{:x}", payload_id);
         let padded = format!("0x{:0>16}", encoded);
-        let mut body = HashMap::new();
-        let params = serde_json::to_string(&vec![padded])?;
-        body.insert("params".to_string(), params);
-        let res = self.post(ENGINE_GET_PAYLOAD_V1, body).await?;
-        let res = res.json::<serde_json::Value>().await?;
-        let ep = serde_json::from_value::<ExecutionPayloadResponse>(res["result"].clone())?;
-        Ok(ep.result)
+        let params = vec![Value::String(padded)];
+        let res = self.post(ENGINE_GET_PAYLOAD_V1, params).await?;
+        let res: ExecutionPayloadResponse = res.json::<ExecutionPayloadResponse>().await?;
+        Ok(res.result)
     }
 }
 

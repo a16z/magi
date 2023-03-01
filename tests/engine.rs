@@ -1,3 +1,4 @@
+use ethers_core::types::U64;
 use magi::engine::{EngineApi, L2EngineApi};
 
 #[tokio::test]
@@ -9,7 +10,7 @@ async fn test_engine_api() {
         assert_eq!(base_body.get("jsonrpc").unwrap(), "2.0");
         assert_eq!(base_body.get("id").unwrap(), "1");
 
-        match engine_api.get_payload(10).await {
+        match engine_api.get_payload(U64([10])).await {
             Ok(res) => {
                 println!("Response: {:?}", res);
                 // TODO: assert expected response payload

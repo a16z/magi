@@ -1,6 +1,6 @@
-use std::vec::IntoIter;
+use std::{sync::Arc, vec::IntoIter};
 
-use ethers_core::types::H256;
+use ethers_core::types::{H256, U64};
 use magi::{
     config::{ChainConfig, Config},
     driver::Driver,
@@ -13,7 +13,7 @@ use magi::{
 async fn test_advance() {
     let next_block_hash = H256::random();
 
-    let config = creat_config();
+    let config = Arc::new(creat_config());
     let engine = create_engine(next_block_hash, &config);
     let pipeline = create_pipeline();
 
@@ -47,14 +47,14 @@ fn create_engine(next_block_hash: H256, config: &Config) -> MockEngine {
                 latest_valid_hash: Some(config.chain.l2_genesis.hash),
                 validation_error: None,
             },
-            payload_id: Some(5),
+            payload_id: Some(U64([5])),
         },
         get_payload_res: ExecutionPayload {
             block_hash: next_block_hash,
             ..Default::default()
         },
         new_payload_res: PayloadStatus {
-            status: Status::Accepted,
+            status: Status::Valid,
             latest_valid_hash: Some(config.chain.l2_genesis.hash),
             validation_error: None,
         },

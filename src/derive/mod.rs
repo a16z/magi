@@ -56,7 +56,14 @@ impl Pipeline {
 
     fn update_blocks(&mut self) {
         while let Ok(block) = self.chain_watcher.block_receiver.try_recv() {
-            self.blocks.borrow_mut().insert(block.hash.unwrap(), block);
+            match block.hash {
+                Some(hash) => {
+                    self.blocks.borrow_mut().insert(hash, block);
+                }
+                None => {
+                    tracing::warn!("chain watcher found block #{:?} without hash", block.number)
+                }
+            }
         }
     }
 
