@@ -41,20 +41,31 @@ pub struct L1Info {
     pub user_deposits: Vec<UserDeposited>,
 }
 
+/// L1 block info
 #[derive(Debug)]
 pub struct BlockInfo {
+    /// L1 block number
     pub number: u64,
+    /// L1 block hash
     pub hash: H256,
+    /// L1 block timestamp
     pub timestamp: u64,
+    /// L1 base fee per gas
     pub base_fee: U256,
+    /// L1 mix hash (prevrandao)
     pub mix_hash: H256,
 }
 
 #[derive(Debug)]
+/// Optimism system config contract values
 pub struct SystemConfig {
+    /// Batch sender address
     pub batch_sender: Address,
+    /// L2 gas limit
     pub gas_limit: U256,
+    /// Fee overhead
     pub l1_fee_overhead: U256,
+    /// Fee scalar
     pub l1_fee_scalar: U256,
 }
 
@@ -240,6 +251,7 @@ fn start_watcher(start_block: u64, config: Arc<Config>) -> Result<(JoinHandle<()
 }
 
 impl SystemConfig {
+    /// Encoded batch sender as a H256
     pub fn batcher_hash(&self) -> H256 {
         let mut batch_sender_bytes = self.batch_sender.as_bytes().to_vec();
         let mut batcher_hash = iter::repeat(0).take(12).collect::<Vec<_>>();
