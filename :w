@@ -1,3 +1,4 @@
+use std::iter;
 use std::sync::Arc;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
@@ -10,12 +11,13 @@ use eyre::Result;
 use crate::common::RawTransaction;
 use crate::config::{Config, SystemAccounts};
 use crate::engine::PayloadAttributes;
-use crate::l1::L1Info;
+use crate::l1::{BlockInfo, L1Info};
 
 use super::batches::{Batch, Batches};
 
 pub struct Attributes {
     prev_stage: Rc<RefCell<Batches>>,
+    config: Arc<Config>,
     l1_info: Rc<RefCell<HashMap<H256, L1Info>>>,
     sequence_number: u64,
     epoch_hash: H256,
@@ -43,6 +45,7 @@ impl Attributes {
             l1_info,
             sequence_number: 0,
             epoch_hash: config.chain.l1_start_epoch.hash,
+            config,
         }))
     }
 
@@ -53,11 +56,11 @@ impl Attributes {
         self.update_sequence_number(batch.epoch_hash);
 
         let l1_info = self.l1_info.borrow();
-        let l1_info = l1_info.get(&batch.epoch_hash).unwrap();
+        let l1_block_info = &l1_info.get(&batch.epoch_hash).unwrap().block_info;
 
         let timestamp = U64([batch.timestamp]);
-        let prev_randao = l1_info.block_info.mix_hash;
-        let transactions = Some(self.derive_transactions(batch, l1_info));
+        let prev_randao = l1_block_info.mix_hash;
+        let transactions = Some(self.derive_transactions(batch, l1_block_info));
         let suggested_fee_recipient = SystemAccounts::default().fee_vault;
 
         PayloadAttributes {
@@ -66,7 +69,7 @@ impl Attributes {
             suggested_fee_recipient,
             transactions,
             no_tx_pool: true,
-            gas_limit: U64([l1_info.system_config.gas_limit.as_u64()]),
+            gas_limit: U64([25_000_000]),
         }
     }
 
@@ -89,6 +92,7 @@ impl Attributes {
 
     fn derive_attributes_deposited(&self, l1_info: &L1Info) -> RawTransaction {
         let seq = self.sequence_number;
+        let batch_sender = self.config.chain.batch_sender;
         let attributes_deposited = AttributesDeposited::from_block_info(l1_info, seq);
         let attributes_tx = DepositedTransaction::from(attributes_deposited);
         RawTransaction(attributes_tx.rlp_bytes().to_vec())

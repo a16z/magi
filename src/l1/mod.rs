@@ -1,4 +1,4 @@
-use std::{str::FromStr, sync::Arc, time::Duration};
+use std::{iter, str::FromStr, sync::Arc, time::Duration};
 
 use ethers_core::{
     abi::Address,
@@ -161,7 +161,7 @@ impl InnerWatcher {
 
         let system_config = SystemConfig {
             batch_sender: self.config.chain.batch_sender,
-            gas_limit: U256::from(30_000_000),
+            gas_limit: U256::from(25_000_000),
             l1_fee_overhead: U256::from(2100),
             l1_fee_scalar: U256::from(1000000),
         };
@@ -237,4 +237,13 @@ fn start_watcher(start_block: u64, config: Arc<Config>) -> Result<(JoinHandle<()
         l1_info_receiver,
     };
     Ok((handle, receivers))
+}
+
+impl SystemConfig {
+    pub fn batcher_hash(&self) -> H256 {
+        let mut batch_sender_bytes = self.batch_sender.as_bytes().to_vec();
+        let mut batcher_hash = iter::repeat(0).take(12).collect::<Vec<_>>();
+        batcher_hash.append(&mut batch_sender_bytes);
+        H256::from_slice(&batcher_hash)
+    }
 }
