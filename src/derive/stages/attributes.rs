@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use ethers_core::abi::{decode, encode, ParamType, Token};
-use ethers_core::types::{Address, Block, Log, Transaction, H256, U256, U64};
+use ethers_core::types::{Address, Log, H256, U256, U64};
 use ethers_core::utils::{keccak256, rlp::Encodable, rlp::RlpStream};
 
 use eyre::Result;
@@ -11,16 +11,16 @@ use eyre::Result;
 use crate::common::RawTransaction;
 use crate::config::{Config, SystemAccounts};
 use crate::engine::PayloadAttributes;
+use crate::l1::{L1Info, BlockInfo};
 
 use super::batches::{Batch, Batches};
 
 pub struct Attributes {
     prev_stage: Rc<RefCell<Batches>>,
     config: Arc<Config>,
-    blocks: Rc<RefCell<HashMap<H256, Block<Transaction>>>>,
-    deposits: Rc<RefCell<HashMap<u64, Vec<UserDeposited>>>>,
+    l1_info: Rc<RefCell<HashMap<H256, L1Info>>>,
     sequence_number: u64,
-    epoch: u64,
+    epoch_hash: H256,
 }
 
 impl Iterator for Attributes {
@@ -38,15 +38,13 @@ impl Attributes {
     pub fn new(
         prev_stage: Rc<RefCell<Batches>>,
         config: Arc<Config>,
-        blocks: Rc<RefCell<HashMap<H256, Block<Transaction>>>>,
-        deposits: Rc<RefCell<HashMap<u64, Vec<UserDeposited>>>>,
+        l1_info: Rc<RefCell<HashMap<H256, L1Info>>>,
     ) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self {
             prev_stage,
-            blocks,
-            deposits,
+            l1_info,
             sequence_number: 0,
-            epoch: config.chain.l1_start_epoch.number,
+            epoch_hash: config.chain.l1_start_epoch.hash,
             config,
         }))
     }
@@ -55,14 +53,14 @@ impl Attributes {
         tracing::debug!("attributes derived from block {}", batch.epoch_num);
         tracing::debug!("batch epoch hash {:?}", batch.epoch_hash);
 
-        self.update_sequence_number(batch.epoch_num);
+        self.update_sequence_number(batch.epoch_hash);
 
-        let blocks = self.blocks.borrow();
-        let l1_block = blocks.get(&batch.epoch_hash).unwrap();
+        let l1_info = self.l1_info.borrow();
+        let l1_block_info = &l1_info.get(&batch.epoch_hash).unwrap().block_info;
 
         let timestamp = U64([batch.timestamp]);
-        let prev_randao = l1_block.mix_hash.unwrap();
-        let transactions = Some(self.derive_transactions(batch, l1_block));
+        let prev_randao = l1_block_info.mix_hash;
+        let transactions = Some(self.derive_transactions(batch, l1_block_info));
         let suggested_fee_recipient = SystemAccounts::default().fee_vault;
 
         PayloadAttributes {
@@ -78,11 +76,11 @@ impl Attributes {
     fn derive_transactions(
         &self,
         batch: Batch,
-        l1_block: &Block<Transaction>,
+        l1_block_info: &BlockInfo,
     ) -> Vec<RawTransaction> {
         let mut transactions = Vec::new();
 
-        let attributes_tx = self.derive_attributes_deposited(l1_block);
+        let attributes_tx = self.derive_attributes_deposited(l1_block_info);
         transactions.push(attributes_tx);
 
         if self.sequence_number == 0 {
@@ -96,18 +94,19 @@ impl Attributes {
         transactions
     }
 
-    fn derive_attributes_deposited(&self, l1_block: &Block<Transaction>) -> RawTransaction {
+    fn derive_attributes_deposited(&self, l1_block_info: &BlockInfo) -> RawTransaction {
         let seq = self.sequence_number;
         let batch_sender = self.config.chain.batch_sender;
-        let attributes_deposited = AttributesDeposited::from_block(l1_block, seq, &batch_sender);
+        let attributes_deposited = AttributesDeposited::from_block_info(l1_block_info, seq, &batch_sender);
         let attributes_tx = DepositedTransaction::from(attributes_deposited);
         RawTransaction(attributes_tx.rlp_bytes().to_vec())
     }
 
     fn derive_user_deposited(&self) -> Vec<RawTransaction> {
-        let deposits = self.deposits.borrow();
-        let deposits = deposits.get(&self.epoch);
-        deposits
+        let l1_info = self.l1_info.borrow();
+        l1_info
+            .get(&self.epoch_hash)
+            .map(|info| &info.user_deposits)
             .map(|deposits| {
                 deposits
                     .iter()
@@ -120,14 +119,14 @@ impl Attributes {
             .unwrap_or_default()
     }
 
-    fn update_sequence_number(&mut self, batch_epoch: u64) {
-        if self.epoch != batch_epoch {
+    fn update_sequence_number(&mut self, batch_epoch_hash: H256) {
+        if self.epoch_hash != batch_epoch_hash {
             self.sequence_number = 0;
         } else {
             self.sequence_number += 1;
         }
 
-        self.epoch = batch_epoch;
+        self.epoch_hash = batch_epoch_hash;
     }
 }
 
@@ -227,16 +226,16 @@ struct AttributesDeposited {
 }
 
 impl AttributesDeposited {
-    fn from_block(block: &Block<Transaction>, seq: u64, batch_sender: &Address) -> Self {
+    fn from_block_info(block_info: &BlockInfo, seq: u64, batch_sender: &Address) -> Self {
         let mut batch_sender_bytes = batch_sender.as_bytes().to_vec();
         let mut batcher_hash = iter::repeat(0).take(12).collect::<Vec<_>>();
         batcher_hash.append(&mut batch_sender_bytes);
 
         Self {
-            number: block.number.unwrap().as_u64(),
-            timestamp: block.timestamp.as_u64(),
-            base_fee: block.base_fee_per_gas.unwrap(),
-            hash: block.hash.unwrap(),
+            number: block_info.number,
+            timestamp: block_info.timestamp,
+            base_fee: block_info.base_fee,
+            hash: block_info.hash,
             sequence_number: seq,
             batcher_hash: H256::from_slice(&batcher_hash),
             fee_overhead: U256::from(2100),

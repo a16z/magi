@@ -33,7 +33,7 @@ pub struct ChainWatcher {
 #[derive(Debug)]
 pub struct L1Info {
     /// L1 block data
-    pub l1_block_info: L1BlockInfo,
+    pub block_info: BlockInfo,
     /// The system config at the block
     pub system_config: SystemConfig,
     /// User deposits from that block
@@ -42,11 +42,12 @@ pub struct L1Info {
 }
 
 #[derive(Debug)]
-pub struct L1BlockInfo {
+pub struct BlockInfo {
     pub number: u64,
     pub hash: H256,
     pub timestamp: u64,
     pub base_fee: U256,
+    pub mix_hash: H256,
 }
 
 #[derive(Debug)]
@@ -145,11 +146,12 @@ impl InnerWatcher {
         let block_number = block.number.ok_or(eyre::eyre!("block not included"))?.as_u64();
         let block_hash = block.hash.ok_or(eyre::eyre!("block not included"))?;
 
-        let l1_block_info = L1BlockInfo {
+        let block_info = BlockInfo {
             number: block_number,
             hash: block_hash,
             timestamp: block.timestamp.as_u64(),
             base_fee: block.base_fee_per_gas.ok_or(eyre::eyre!("block is pre london"))?,
+            mix_hash: block.mix_hash.ok_or(eyre::eyre!("block not included"))?,
         };
 
         let system_config = SystemConfig {
@@ -161,7 +163,7 @@ impl InnerWatcher {
 
         let user_deposits = self.get_deposits(block_number, block_hash).await?;
 
-        Ok(L1Info { l1_block_info, system_config, user_deposits })
+        Ok(L1Info { block_info, system_config, user_deposits })
     }
 
     fn get_batcher_transactions(&self, block: &Block<Transaction>) -> Vec<BatcherTransactionData> {

@@ -1,12 +1,12 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 
-use ethers_core::types::{Block, Transaction, H256};
+use ethers_core::types::H256;
 use eyre::Result;
 
 use crate::{config::Config, engine::PayloadAttributes, l1::{ChainWatcher, L1Info}};
 
 use self::stages::{
-    attributes::{Attributes, UserDeposited},
+    attributes::Attributes,
     batcher_transactions::BatcherTransactions,
     batches::Batches,
     channels::Channels,
@@ -24,8 +24,7 @@ impl Iterator for Pipeline {
     type Item = PayloadAttributes;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.update_blocks();
-        self.update_deposits();
+        self.update_l1_info();
         self.attributes.borrow_mut().next()
     }
 }
@@ -42,7 +41,7 @@ impl Pipeline {
         let batcher_transactions = BatcherTransactions::new(tx_recv);
         let channels = Channels::new(batcher_transactions, Arc::clone(&config));
         let batches = Batches::new(channels, start_epoch);
-        let attributes = Attributes::new(batches, config, blocks.clone(), deposits.clone());
+        let attributes = Attributes::new(batches, config, l1_info.clone());
 
         Ok(Self {
             attributes,
@@ -51,28 +50,9 @@ impl Pipeline {
         })
     }
 
-    fn update_blocks(&mut self) {
-        while let Ok(block) = self.chain_watcher.block_receiver.try_recv() {
-            match block.hash {
-                Some(hash) => {
-                    self.blocks.borrow_mut().insert(hash, block);
-                }
-                None => {
-                    tracing::warn!("chain watcher found block #{:?} without hash", block.number)
-                }
-            }
-        }
-    }
-
-        while let Ok(deposit) = self.chain_watcher.deposit_receiver.try_recv() {
-            let mut deposits = self.deposits.borrow_mut();
-            let deposits_for_block = deposits.get_mut(&deposit.l1_block_num);
-
-            if let Some(deposits_for_block) = deposits_for_block {
-                deposits_for_block.push(deposit);
-            } else {
-                deposits.insert(deposit.l1_block_num, vec![deposit]);
-            }
+    fn update_l1_info(&mut self) {
+        while let Ok(l1_info) = self.chain_watcher.l1_info_receiver.try_recv() {
+            self.l1_info.borrow_mut().insert(l1_info.block_info.hash, l1_info);
         }
     }
 }
