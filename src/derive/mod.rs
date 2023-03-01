@@ -59,8 +59,10 @@ impl Pipeline {
             match block.hash {
                 Some(hash) => {
                     self.blocks.borrow_mut().insert(hash, block);
-                },
-                None => tracing::warn!("chain watcher found block #{:?} without hash", block.number),
+                }
+                None => {
+                    tracing::warn!("chain watcher found block #{:?} without hash", block.number)
+                }
             }
         }
     }

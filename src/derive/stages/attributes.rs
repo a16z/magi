@@ -125,8 +125,9 @@ impl Attributes {
             self.sequence_number = 0;
         } else {
             self.sequence_number += 1;
-            self.epoch = batch_epoch;
         }
+
+        self.epoch = batch_epoch;
     }
 }
 
