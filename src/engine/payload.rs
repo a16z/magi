@@ -94,9 +94,14 @@ pub struct PayloadStatus {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum Status {
+    /// Valid Payload
     Valid,
+    /// Invalid Payload
     Invalid,
+    /// Currently syncing
     Syncing,
+    /// Payload is accepted
     Accepted,
+    /// Payload contains an invalid block hash
     InvalidBlockHash,
 }

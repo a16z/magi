@@ -7,6 +7,7 @@ use super::{
 };
 
 /// Mock L2 Engine API that returns preset responses
+#[derive(Debug, Clone)]
 pub struct MockEngine {
     /// Forkchoice updated call response when payload is Some
     pub forkchoice_updated_payloads_res: ForkChoiceUpdate,
