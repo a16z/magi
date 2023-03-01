@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use ethers_core::types::H256;
 use eyre::Result;
 
@@ -23,7 +25,7 @@ pub struct Driver<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> {
 
 impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
     /// Creates a new Driver instance
-    pub fn new(engine: E, pipeline: P, config: Config) -> Self {
+    pub fn new(engine: E, pipeline: P, config: Arc<Config>) -> Self {
         let head_block_hash = config.chain.l2_genesis.hash;
         let safe_block_hash = config.chain.l2_genesis.hash;
         let finalized_hash = H256::zero();
@@ -41,13 +43,17 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
     /// L1 data. Errors if the most recent PayloadAttributes from the pipeline
     /// does not successfully advance the node
     pub async fn advance(&mut self) -> Result<()> {
-        if let Some(next_attributes) = self.pipeline.next() {
-            let payload = self.build_payload(next_attributes).await?;
-            let new_hash = payload.block_hash;
+        let next_attributes = loop {
+            if let Some(next_attributes) = self.pipeline.next() {
+                break next_attributes;
+            }
+        };
 
-            self.push_payload(payload).await?;
-            self.update_forkchoice(new_hash).await?;
-        }
+        let payload = self.build_payload(next_attributes).await?;
+        let new_hash = payload.block_hash;
+
+        self.push_payload(payload).await?;
+        self.update_forkchoice(new_hash).await?;
 
         Ok(())
     }
@@ -73,7 +79,7 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
 
     async fn push_payload(&self, payload: ExecutionPayload) -> Result<()> {
         let status = self.engine.new_payload(payload).await?;
-        if status.status != Status::Accepted {
+        if status.status != Status::Valid {
             eyre::bail!("invalid execution payload");
         }
 
@@ -81,8 +87,11 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
     }
 
     async fn update_forkchoice(&mut self, new_hash: H256) -> Result<()> {
-        self.head_block_hash = new_hash;
-        self.safe_block_hash = new_hash;
+        if self.head_block_hash != new_hash {
+            tracing::info!("chain head updated: {:?}", new_hash);
+            self.head_block_hash = new_hash;
+            self.safe_block_hash = new_hash;
+        }
 
         let forkchoice = self.create_forkchoice_state();
         let update = self.engine.forkchoice_updated(forkchoice, None).await?;
