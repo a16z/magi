@@ -11,7 +11,7 @@ use eyre::Result;
 use crate::common::RawTransaction;
 use crate::config::{Config, SystemAccounts};
 use crate::engine::PayloadAttributes;
-use crate::l1::{L1Info, BlockInfo};
+use crate::l1::{BlockInfo, L1Info};
 
 use super::batches::{Batch, Batches};
 
@@ -73,11 +73,7 @@ impl Attributes {
         }
     }
 
-    fn derive_transactions(
-        &self,
-        batch: Batch,
-        l1_block_info: &BlockInfo,
-    ) -> Vec<RawTransaction> {
+    fn derive_transactions(&self, batch: Batch, l1_block_info: &BlockInfo) -> Vec<RawTransaction> {
         let mut transactions = Vec::new();
 
         let attributes_tx = self.derive_attributes_deposited(l1_block_info);
@@ -97,7 +93,8 @@ impl Attributes {
     fn derive_attributes_deposited(&self, l1_block_info: &BlockInfo) -> RawTransaction {
         let seq = self.sequence_number;
         let batch_sender = self.config.chain.batch_sender;
-        let attributes_deposited = AttributesDeposited::from_block_info(l1_block_info, seq, &batch_sender);
+        let attributes_deposited =
+            AttributesDeposited::from_block_info(l1_block_info, seq, &batch_sender);
         let attributes_tx = DepositedTransaction::from(attributes_deposited);
         RawTransaction(attributes_tx.rlp_bytes().to_vec())
     }

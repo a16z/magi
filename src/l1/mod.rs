@@ -1,8 +1,9 @@
 use std::{str::FromStr, sync::Arc, time::Duration};
 
 use ethers_core::{
+    abi::Address,
     types::{Block, Filter, Transaction, H256, U256},
-    utils::keccak256, abi::Address,
+    utils::keccak256,
 };
 use ethers_providers::{Http, HttpRateLimitRetryPolicy, Middleware, Provider, RetryClient};
 
@@ -38,7 +39,6 @@ pub struct L1Info {
     pub system_config: SystemConfig,
     /// User deposits from that block
     pub user_deposits: Vec<UserDeposited>,
-
 }
 
 #[derive(Debug)]
@@ -143,14 +143,19 @@ impl InnerWatcher {
     }
 
     async fn get_l1_info(&self, block: &Block<Transaction>) -> Result<L1Info> {
-        let block_number = block.number.ok_or(eyre::eyre!("block not included"))?.as_u64();
+        let block_number = block
+            .number
+            .ok_or(eyre::eyre!("block not included"))?
+            .as_u64();
         let block_hash = block.hash.ok_or(eyre::eyre!("block not included"))?;
 
         let block_info = BlockInfo {
             number: block_number,
             hash: block_hash,
             timestamp: block.timestamp.as_u64(),
-            base_fee: block.base_fee_per_gas.ok_or(eyre::eyre!("block is pre london"))?,
+            base_fee: block
+                .base_fee_per_gas
+                .ok_or(eyre::eyre!("block is pre london"))?,
             mix_hash: block.mix_hash.ok_or(eyre::eyre!("block not included"))?,
         };
 
@@ -163,7 +168,11 @@ impl InnerWatcher {
 
         let user_deposits = self.get_deposits(block_number, block_hash).await?;
 
-        Ok(L1Info { block_info, system_config, user_deposits })
+        Ok(L1Info {
+            block_info,
+            system_config,
+            user_deposits,
+        })
     }
 
     fn get_batcher_transactions(&self, block: &Block<Transaction>) -> Vec<BatcherTransactionData> {
@@ -223,7 +232,9 @@ fn start_watcher(start_block: u64, config: Arc<Config>) -> Result<(JoinHandle<()
         }
     });
 
-    let receivers = Receivers { tx_receiver, l1_info_receiver };
+    let receivers = Receivers {
+        tx_receiver,
+        l1_info_receiver,
+    };
     Ok((handle, receivers))
 }
-

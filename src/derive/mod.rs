@@ -3,12 +3,14 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
 use ethers_core::types::H256;
 use eyre::Result;
 
-use crate::{config::Config, engine::PayloadAttributes, l1::{ChainWatcher, L1Info}};
+use crate::{
+    config::Config,
+    engine::PayloadAttributes,
+    l1::{ChainWatcher, L1Info},
+};
 
 use self::stages::{
-    attributes::Attributes,
-    batcher_transactions::BatcherTransactions,
-    batches::Batches,
+    attributes::Attributes, batcher_transactions::BatcherTransactions, batches::Batches,
     channels::Channels,
 };
 
@@ -52,7 +54,9 @@ impl Pipeline {
 
     fn update_l1_info(&mut self) {
         while let Ok(l1_info) = self.chain_watcher.l1_info_receiver.try_recv() {
-            self.l1_info.borrow_mut().insert(l1_info.block_info.hash, l1_info);
+            self.l1_info
+                .borrow_mut()
+                .insert(l1_info.block_info.hash, l1_info);
         }
     }
 }
