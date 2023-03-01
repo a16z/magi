@@ -25,9 +25,9 @@
             - [x] Handle Sequence Numbers
         - [x] User Deposited Transactions
 - [ ] Geth Driver
-    - [ ] Engine API Bindings
+    - [x] Engine API Bindings
         - [x] Engine API Trait
-        - [ ] Engine API Client Implementation
+        - [x] Engine API Client Implementation
     - [ ] Engine Driver
         - [x] Basic Driver
         - [ ] Write to DB
@@ -39,6 +39,8 @@
     - [x] Fetch Block By L1 Origin Hash
     - [x] Fetch Block By L1 Origin Number
     - [x] Fetch Block By Timestamp
+- [ ] P2P Gossip
+    - [ ] Subscribe on the configured L2 P2P Network
 
 ### Usage
 
