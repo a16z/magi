@@ -3,15 +3,16 @@ use std::sync::Arc;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use ethers_core::abi::{decode, encode, ParamType, Token};
-use ethers_core::types::{Address, Block, Log, Transaction, H256, U256};
+use ethers_core::types::{Address, Block, Log, Transaction, H256, U256, U64};
 use ethers_core::utils::{keccak256, rlp::Encodable, rlp::RlpStream};
 
 use eyre::Result;
 
+use crate::common::RawTransaction;
 use crate::config::{Config, SystemAccounts};
 use crate::engine::PayloadAttributes;
 
-use super::batches::{Batch, Batches, RawTransaction};
+use super::batches::{Batch, Batches};
 
 pub struct Attributes {
     prev_stage: Rc<RefCell<Batches>>,
@@ -52,16 +53,16 @@ impl Attributes {
 
     fn derive_attributes(&mut self, batch: Batch) -> PayloadAttributes {
         tracing::debug!("attributes derived from block {}", batch.epoch_num);
+        tracing::debug!("batch epoch hash {:?}", batch.epoch_hash);
 
         self.update_sequence_number(batch.epoch_num);
 
         let blocks = self.blocks.borrow();
         let l1_block = blocks.get(&batch.epoch_hash).unwrap();
 
-        let timestamp = batch.timestamp;
+        let timestamp = U64([batch.timestamp]);
         let prev_randao = l1_block.mix_hash.unwrap();
-        let transactions = self.derive_transactions(batch, l1_block);
-        let transactions = Some(transactions.into_iter().map(|tx| tx.0).collect());
+        let transactions = Some(self.derive_transactions(batch, l1_block));
         let suggested_fee_recipient = SystemAccounts::default().fee_vault;
 
         PayloadAttributes {
@@ -70,7 +71,7 @@ impl Attributes {
             suggested_fee_recipient,
             transactions,
             no_tx_pool: true,
-            gas_limit: 30_000_000,
+            gas_limit: U64([25_000_000]),
         }
     }
 
@@ -120,12 +121,13 @@ impl Attributes {
     }
 
     fn update_sequence_number(&mut self, batch_epoch: u64) {
-        if self.epoch != batch_epoch {
+        if self.epoch != batch_epoch && self.epoch != 0 {
             self.sequence_number = 0;
-            self.epoch = batch_epoch;
         } else {
             self.sequence_number += 1;
         }
+
+        self.epoch = batch_epoch;
     }
 }
 

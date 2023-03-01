@@ -5,6 +5,8 @@ use eyre::Result;
 use magi::{
     config::{ChainConfig, Config},
     derive::Pipeline,
+    driver::Driver,
+    engine::EngineApi,
     telemetry,
 };
 
@@ -12,7 +14,6 @@ use magi::{
 async fn main() -> Result<()> {
     telemetry::init(false)?;
 
-    let start_epoch = 8494058;
     let rpc = "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc";
 
     let config = Arc::new(Config {
@@ -22,12 +23,18 @@ async fn main() -> Result<()> {
         max_timeout: 100,
     });
 
-    let mut pipeline = Pipeline::new(start_epoch, config)?;
+    let pipeline = Pipeline::new(config.chain.l1_start_epoch.number, config.clone())?;
 
-    loop {
-        let attributes = pipeline.next();
-        if let Some(attributes) = attributes {
-            println!("{:?}", attributes);
-        }
-    }
+    let engine_url = "http://127.0.0.1:8551".to_string();
+    let jwt_secret = "bf549f5188556ce0951048ef467ec93067bc4ea21acebe46ef675cd4e8e015ff".to_string();
+    let engine = EngineApi::new(engine_url, Some(jwt_secret));
+
+    let mut driver = Driver::new(engine, pipeline, config);
+    driver.advance().await?;
+    driver.advance().await?;
+    driver.advance().await?;
+    driver.advance().await?;
+    driver.advance().await?;
+
+    Ok(())
 }

@@ -1,4 +1,4 @@
-use std::vec::IntoIter;
+use std::{sync::Arc, vec::IntoIter};
 
 use ethers_core::types::H256;
 use magi::{
@@ -13,7 +13,7 @@ use magi::{
 async fn test_advance() {
     let next_block_hash = H256::random();
 
-    let config = creat_config();
+    let config = Arc::new(creat_config());
     let engine = create_engine(next_block_hash, &config);
     let pipeline = create_pipeline();
 

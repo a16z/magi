@@ -1,5 +1,7 @@
-use ethers_core::types::{H160, H256};
+use ethers_core::types::{Bytes, H160, H256, U64};
 use serde::{Deserialize, Serialize};
+
+use crate::common::RawTransaction;
 
 /// ## ExecutionPayload
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -14,25 +16,25 @@ pub struct ExecutionPayload {
     /// A 32 byte receipt root hash
     pub receipts_root: H256,
     /// A 32 byte logs bloom filter
-    pub logs_bloom: Vec<u8>,
+    pub logs_bloom: Bytes,
     /// A 32 byte beacon chain randomness value
     pub prev_randao: H256,
     /// A 64 bit number for the current block index
-    pub block_number: u64,
+    pub block_number: U64,
     /// A 64 bit value for the gas limit
-    pub gas_limit: u64,
+    pub gas_limit: U64,
     /// A 64 bit value for the gas used
-    pub gas_used: u64,
+    pub gas_used: U64,
     /// A 64 bit value for the timestamp field of the new payload
-    pub timestamp: u64,
+    pub timestamp: U64,
     /// 0 to 32 byte value for extra data
-    pub extra_data: Vec<u8>,
+    pub extra_data: Bytes,
     /// 256 bits for the base fee per gas
-    pub base_fee_per_gas: u64,
+    pub base_fee_per_gas: U64,
     /// The 32 byte block hash
     pub block_hash: H256,
     /// An array of transaction objects where each object is a byte list
-    pub transactions: Vec<Vec<u8>>,
+    pub transactions: Vec<RawTransaction>,
 }
 
 /// L1 PayloadAttributes
@@ -40,7 +42,7 @@ pub struct ExecutionPayload {
 #[serde(rename_all = "camelCase")]
 pub struct L1PayloadAttributes {
     /// 64 bit value for the timestamp field of the new payload
-    pub timestamp: u64,
+    pub timestamp: U64,
     /// 32 byte value for the prevRandao field of the new payload
     pub prev_randao: H256,
     ///  20 bytes suggested value for the feeRecipient field of the new payload
@@ -55,24 +57,24 @@ pub struct L1PayloadAttributes {
 #[serde(rename_all = "camelCase")]
 pub struct PayloadAttributes {
     /// 64 bit value for the timestamp field of the new payload.
-    pub timestamp: u64,
+    pub timestamp: U64,
     /// 32 byte value for the prevRandao field of the new payload.
     pub prev_randao: H256,
     ///  20 bytes suggested value for the feeRecipient field of the new payload.
     pub suggested_fee_recipient: H160,
     /// Array of transactions to be included in the new payload.
-    pub transactions: Option<Vec<Vec<u8>>>,
+    pub transactions: Option<Vec<RawTransaction>>,
     /// Boolean value indicating whether or not the payload should be built without including transactions from the txpool.
     pub no_tx_pool: bool,
     /// 64 bit value for the gasLimit field of the new payload.
     /// The gasLimit is optional w.r.t. compatibility with L1, but required when used as rollup.
     /// This field overrides the gas limit used during block-building.
     /// If not specified as rollup, a STATUS_INVALID is returned.
-    pub gas_limit: u64,
+    pub gas_limit: U64,
 }
 
 /// ## PayloadId
-pub type PayloadId = u64;
+pub type PayloadId = U64;
 
 /// ## PayloadStatus
 ///
@@ -85,6 +87,7 @@ pub struct PayloadStatus {
     /// 32 Bytes - the hash of the most recent valid block in the branch defined by payload and its ancestors
     pub latest_valid_hash: Option<H256>,
     /// A message providing additional details on the validation error if the payload is classified as INVALID or INVALID_BLOCK_HASH.
+    #[serde(default)]
     pub validation_error: Option<String>,
 }
 

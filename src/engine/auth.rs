@@ -57,7 +57,7 @@ impl JwtSecret {
     ///
     /// This function will panic if the system time is before the UNIX_EPOCH.
     pub(crate) fn generate_claims(&self, time: Option<SystemTime>) -> Claims {
-        let now = time.unwrap_or(SystemTime::now());
+        let now = time.unwrap_or_else(SystemTime::now);
         let now_secs = now.duration_since(UNIX_EPOCH).unwrap().as_secs();
         Claims {
             iat: now_secs,
