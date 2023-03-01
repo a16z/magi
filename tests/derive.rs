@@ -4,6 +4,7 @@ use ethers_core::{types::H256, utils::keccak256};
 use ethers_providers::{Middleware, Provider};
 
 use magi::{
+    common::RawTransaction,
     config::{ChainConfig, Config},
     derive::Pipeline,
     telemetry,
@@ -54,8 +55,8 @@ async fn get_expected_hashes(block_num: u64) -> Vec<H256> {
         .transactions
 }
 
-fn get_tx_hashes(txs: &[Vec<u8>]) -> Vec<H256> {
+fn get_tx_hashes(txs: &[RawTransaction]) -> Vec<H256> {
     txs.iter()
-        .map(|tx| H256::from_slice(&keccak256(&tx)))
+        .map(|tx| H256::from_slice(&keccak256(&tx.0)))
         .collect()
 }

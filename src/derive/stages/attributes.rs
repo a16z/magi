@@ -43,11 +43,11 @@ impl Attributes {
     ) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self {
             prev_stage,
-            config,
             blocks,
             deposits,
             sequence_number: 0,
-            epoch: 0,
+            epoch: config.chain.l1_start_epoch.number,
+            config,
         }))
     }
 
@@ -121,13 +121,12 @@ impl Attributes {
     }
 
     fn update_sequence_number(&mut self, batch_epoch: u64) {
-        if self.epoch != batch_epoch && self.epoch != 0 {
+        if self.epoch != batch_epoch {
             self.sequence_number = 0;
         } else {
             self.sequence_number += 1;
+            self.epoch = batch_epoch;
         }
-
-        self.epoch = batch_epoch;
     }
 }
 
