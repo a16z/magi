@@ -20,6 +20,28 @@ To run `magi`'s test suite, you can run `cargo test --all`. Tests are named with
 
 ### Specifications
 
+#### Driver
+
+The [Driver](./src/driver/mod.rs) is the highest-level component in `magi`. It is responsible for driving the L2 chain forward by processing L1 blocks and deriving the L2 chain from them.
+
+On instantiation, the [Driver](./src/driver/mod.rs) is provided with an instance of the [Engine API](#engine-api), [Pipeline](#derivation-pipeline), and [Config](#config).
+
+Advancing the driver forward one block is then as simple as calling the [Driver::advance](./src/driver/mod.rs#45) method as done in `magi`'s [main](./src/main.rs) binary.
+
+Advancing the driver involves a few steps. First, the [Driver](./src/driver/mod.rs) will increment the [Pipeline](#derivation-pipeline) (as an iterator) to derive [PayloadAttributes](./src/engine/payload.rs). Then, the [Driver](./src/driver/mod.rs) will construct an [ExecutionPayload](./src/engine/payload.rs) that it can send through the [Engine API](#engine-api) as a `engine_newPayloadV1` request. Finally, the [ForkChoiceState](./src/engine/fork.rs) is updated by the driver, sending an `engine_forkchoiceUpdatedV1` request to the [Engine API](#engine-api).
+
+At this point, `magi` has successfully advanced the L2 chain forward by one block, and the [Driver](./src/driver/mod.rs) should store the L2 Block in the [Backend DB](#backend-db).
+
+#### Engine API
+
+// TODO:
+
+#### Derivation Pipeline
+
+The derivation pipeline is responsible for deriving the canonical L2 chain from the L1 chain.
+
+It ...
+
 #### L1 Chain Watcher
 
 The L1 chain watcher is responsible for watching L1 for new blocks with deposits and batcher transactions. `magi` spawns the L1 [`ChainWatcher`](./src/l1/mod.rs) in a separate thread and uses channels to communicate with the upstream consumers.
@@ -33,16 +55,6 @@ When constructed in the [`Pipeline`](./src/derive/mod.rs), the [`ChainWatcher`](
 - [Batch Inbox Address](./src/config/mod.rs#L30)
 
 Note, when the `ChainWatcher` object is dropped, it will abort tasks associated with its handlers using [`tokio::task::JoinHandle::abort`](https://docs.rs/tokio/1.13.0/tokio/task/struct.JoinHandle.html#method.abort).
-
-#### Derivation Pipeline
-
-The derivation pipeline is responsible for deriving the canonical L2 chain from the L1 chain.
-
-It ...
-
-#### Geth Driver
-
-The geth driver is responsible for serving the Engine API to `magi`.
 
 #### Backend DB
 
@@ -67,6 +79,11 @@ db.clear().unwrap();
 Notice, we can use the `Database::new` method to create a new database at a given path. If the path is `None`, then the database will be created in a temporary location. We can also use the `Database::clear` method to clear the database.
 
 Importantly, if the `ConstructedBlock` does not have it's `hash` set, the block `number` will be used as it's unique identifier.
+
+
+#### Config
+
+// TODO: detail the [Config](./src/config/mod.rs).
 
 ### Feature Requests
 
