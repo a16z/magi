@@ -126,9 +126,22 @@ Importantly, if the `ConstructedBlock` does not have it's `hash` set, the block 
 
 ### Config
 
+The [Config](./src/config/mod.rs) object contains the system configuration for the `magi` node.
 
+**Config**
+- `l1_rpc`: The L1 RPC endpoint to use for the L1 chain watcher.
+- `max_channels`: The maximum number of channels to use in the [Pipeline](./src/derive/mod.rs).
+- `max_timeout`: The maximum timeout for a channel, measured by the frame's corresponding L1 block number.
+- `chain`: A `ChainConfig` object detailed below.
 
-// TODO: detail the [Config](./src/config/mod.rs).
+**ChainConfig**
+- `l1_start_epoch`: The L1 block number to start the L1 chain watcher at.
+- `l2_genesis`: The L2 genesis block.
+- `batch_sender`: The L1 address of the batch sender.
+- `batch_inbox`: The batch inbox address.
+- `deposit_contract`: The L1 address of the deposit contract.
+
+The [ChainConfig](./src/config/mod.rs) contains default implementations for certain chains. For example, a `goerli` [ChainConfig](./src/config/mod.rs) instance can be created by calling `ChainConfig::goerli()`.
 
 ## Feature Requests
 
