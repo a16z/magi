@@ -1,26 +1,105 @@
-use std::str::FromStr;
+use std::{collections::HashMap, path::PathBuf, process::exit, str::FromStr};
 
 use ethers_core::types::{Address, H256};
+use figment::{
+    providers::{Format, Serialized, Toml},
+    value::Value,
+    Figment,
+};
+use serde::Deserialize;
 
 use crate::common::BlockID;
 
-/// A system configuration
+/// Sync Mode Specifies how `magi` should sync the L2 chain
 #[derive(Debug, Clone)]
+pub enum SyncMode {
+    /// Fast sync mode
+    Fast,
+    /// Challenge sync mode
+    ///
+    /// This mode will pull **finalized** blocks from the L2 RPC and then derive safe blocks.
+    Challenge,
+    /// Full sync mode
+    Full,
+}
+
+/// A system configuration
+#[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     /// The base chain RPC URL
-    pub l1_rpc: String,
+    pub l1_rpc_url: String,
     /// An External L2 RPC URL that can be used for fast syncing
-    pub l2_rpc: Option<String>,
+    pub l2_rpc_url: Option<String>,
     /// The base chain config
     pub chain: ChainConfig,
     /// The maximum number of intermediate pending channels
     pub max_channels: usize,
     /// The max timeout for a channel (as measured by the frame L1 block number)
     pub max_timeout: u64,
+    /// Engine API URL
+    pub engine_api_url: Option<String>,
+    /// Engine API JWT Secret
+    /// This is used to authenticate with the engine API
+    pub jwt_secret: Option<String>,
+}
+
+impl Config {
+    pub fn get_engine_api_url(&self) -> String {
+        self.engine_api_url
+            .clone()
+            .unwrap_or("http://localhost:8551".to_string())
+    }
+}
+
+impl Config {
+    pub fn from_file(config_path: &PathBuf, cli_config: &Config) -> Self {
+        let toml_provider = Toml::file(config_path).nested();
+        let cli_provider = cli_config.as_provider();
+        let config_res = Figment::new()
+            .merge(toml_provider)
+            .merge(cli_provider)
+            .extract();
+        match config_res {
+            Ok(config) => config,
+            Err(err) => {
+                match err.kind {
+                    figment::error::Kind::MissingField(field) => {
+                        let field = field.replace('_', "-");
+                        println!("\x1b[91merror\x1b[0m: missing configuration field: {field}");
+                        println!("\n\ttry supplying the propoper command line argument: --{field}");
+                        println!("\talternatively, you can add the field to your helios.toml file or as an environment variable");
+                        println!("\nfor more information, check the github README");
+                    }
+                    _ => println!("cannot parse configuration: {err}"),
+                }
+                exit(1);
+            }
+        }
+    }
+
+    pub fn as_provider(&self) -> Serialized<HashMap<&str, Value>> {
+        let mut user_dict = HashMap::new();
+        user_dict.insert("l1_rpc_url", Value::from(self.l1_rpc_url.clone()));
+        if let Some(l2_rpc) = &self.l2_rpc_url {
+            user_dict.insert("l2_rpc_url", Value::from(l2_rpc.clone()));
+        }
+        user_dict.insert("max_channels", Value::from(self.max_channels));
+        user_dict.insert("max_timeout", Value::from(self.max_timeout));
+        if let Some(engine_api_url) = &self.engine_api_url {
+            user_dict.insert("engine_api_url", Value::from(engine_api_url.clone()));
+        }
+        if let Some(jwt_secret) = &self.jwt_secret {
+            user_dict.insert("jwt_secret", Value::from(jwt_secret.clone()));
+        }
+
+        // TODO: serialize chain config
+
+        Serialized::from(user_dict, "default".to_string())
+    }
 }
 
 /// A Chain Configuration
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ChainConfig {
     /// The L1 block referenced by the L2 chain
     pub l1_start_epoch: BlockID,

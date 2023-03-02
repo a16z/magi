@@ -28,10 +28,12 @@ async fn test_advance() {
 fn creat_config() -> Config {
     Config {
         chain: ChainConfig::goerli(),
-        l2_rpc: None,
-        l1_rpc: String::new(),
+        l2_rpc_url: None,
+        l1_rpc_url: String::new(),
         max_channels: 100_000_000,
         max_timeout: 100,
+        engine_api_url: None,
+        jwt_secret: None,
     }
 }
 

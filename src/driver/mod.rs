@@ -39,6 +39,19 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
         }
     }
 
+    /// Runs the Driver
+    pub async fn start(&mut self) -> Result<()> {
+        loop {
+            self.advance().await?;
+        }
+    }
+
+    /// Shuts down the driver
+    pub async fn shutdown(&self) -> Result<()> {
+        // TODO: flush the database
+        Ok(())
+    }
+
     /// Attempts to advance the execution node forward one block using derived
     /// L1 data. Errors if the most recent PayloadAttributes from the pipeline
     /// does not successfully advance the node

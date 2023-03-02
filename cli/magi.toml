@@ -1,0 +1,8 @@
+
+[default]
+L1_RPC_URL="https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc"
+L2_RPC_URL="https://opt-mainnet.g.alchemy.com/v2/Q9K5rbJD5gOf0LcJfLBq3Vt-yWeONBrh"
+MAX_CHANNELS=100_000_000
+MAX_TIMEOUT=100
+ENGINE_API_URL="http://127.0.0.1:8551"
+JWT_SECRET="bf549f5188556ce0951048ef467ec93067bc4ea21acebe46ef675cd4e8e015ff"
