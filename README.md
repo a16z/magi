@@ -163,8 +163,7 @@ The [ChainConfig](./src/config/mod.rs) contains default implementations for cert
 - [ ] In the [Driver](./src/driver/mod.rs), we should be writing to the [Backend DB](./src/backend/mod.rs) as we process blocks. This allows for persisting L2 chain state on disk and optionally allows for restarting the node without having to re-process all of the blocks.
 - [ ] In the [Backend DB](./src/backend/mod.rs), the `ConstructedBlock` type should match, or at least implement coercions to/from, the [Driver](./src/driver/mod.rs) output type.
 - [ ] Subscribe to P2P Gossip on the configured L2 P2P Network. This will allow us to receive new blocks from other nodes on the network.
-- [ ] Gracefully handle missing or present port in the EngineApi `base_url` passed into the constructor.
-- [ ] Graceful restarting on failure.
+- [ ] Graceful restart on failure.
 - [ ] Foundryup-style installer
 
 ## Contributing
