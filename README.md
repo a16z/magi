@@ -4,21 +4,17 @@
 
 `magi` (pronounced may-jai) is an Optimism full node implemented in pure Rust.
 
-## Getting Started
+## Quickstart
 
-_Prerequisites: Install rust and cargo with `curl https://sh.rustup.rs -sSf | sh`_
+First install `magup`, Magi's installer:
 
-Install the latest version of `magi` with
-
-```bash
-cargo install magi
+```
+curl https://raw.githubusercontent.com/a16z/magi/master/magup/install | bash
 ```
 
-Alternatively, you can clone the repo and run `cargo build --release` to build a release binary that you can then run with `./target/release/magi`. Cargo also allows you to run `cargo run --release`, building and executing the binary in one step.
+To install Magi, run `magup`.
 
-To run `magi`'s test suite, you can run `cargo test --all`. Tests are named with respect to the modules they test against, located inside the [tests](./tests) directory. There are also additional unit tests written inline with some modules.
-
-## Quickstart
+## Configuration
 
 `magi` exposes a number of configuration flags for executing the full node. To see a list of all available flags, run `magi --help`. This will print output similar to the following:
 
@@ -164,7 +160,6 @@ The [ChainConfig](./src/config/mod.rs) contains default implementations for cert
 - [ ] In the [Backend DB](./src/backend/mod.rs), the `ConstructedBlock` type should match, or at least implement coercions to/from, the [Driver](./src/driver/mod.rs) output type.
 - [ ] Subscribe to P2P Gossip on the configured L2 P2P Network. This will allow us to receive new blocks from other nodes on the network.
 - [ ] Graceful restart on failure.
-- [ ] Foundryup-style installer
 
 ## Contributing
 
