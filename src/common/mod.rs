@@ -7,7 +7,7 @@ use ethers_core::{
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 
 /// A Block Identifier
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct BlockID {
     pub hash: H256,
     pub number: u64,

@@ -1,5 +1,5 @@
 use eyre::Result;
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 use uuid::Uuid;
 
 use super::types::*;
@@ -40,7 +40,7 @@ impl Default for Database {
 
 impl Database {
     /// Creates a new database.
-    pub fn new(loc: &str) -> Self {
+    pub fn new(loc: &PathBuf) -> Self {
         Self {
             db: Self::try_construct_db(loc),
             ..Default::default()
@@ -67,7 +67,7 @@ impl Database {
     ///
     /// This function will panic if neither the given file location
     /// nor a temporary location can be used to construct a database.
-    fn try_construct_db(loc: &str) -> sled::Db {
+    fn try_construct_db(loc: &PathBuf) -> sled::Db {
         match sled::open(loc) {
             Ok(db) => db,
             Err(e) => {
@@ -92,6 +92,12 @@ impl Database {
     /// Returns the block hash for a given block number.
     pub fn block_hash(&self, number: &BlockNumber) -> Option<BlockHash> {
         self.hashes.get(number).copied()
+    }
+
+    /// Sets a new HeadInfo value
+    pub fn write_head(&self, head: HeadInfo) -> Result<()> {
+        self.db.insert("HEAD_INFO", head)?;
+        Ok(())
     }
 
     /// Internal function to write a block to the database.
@@ -146,6 +152,12 @@ impl Database {
         let qid = dbid.as_bytes();
         self.db.insert(qid, ivec)?;
         Ok(())
+    }
+
+    /// Reads the most recent HeadInfo value
+    pub fn read_head(&self) -> Result<Option<HeadInfo>> {
+        let head = self.db.get("HEAD_INFO")?;
+        head.map(HeadInfo::try_from).transpose()
     }
 
     /// Reads a block from cache, or the database.

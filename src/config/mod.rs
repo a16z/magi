@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr};
 
 use ethers_core::types::{Address, H256};
 
@@ -9,12 +9,14 @@ use crate::common::BlockID;
 pub struct Config {
     /// The base chain RPC URL
     pub l1_rpc: String,
+    /// Url of the L2 engine API
+    pub engine_url: String,
+    /// JWT secret for the L2 engine API
+    pub jwt_secret: String,
+    /// Location of the database folder
+    pub db_location: Option<PathBuf>,
     /// The base chain config
     pub chain: ChainConfig,
-    /// The maximum number of intermediate pending channels
-    pub max_channels: usize,
-    /// The max timeout for a channel (as measured by the frame L1 block number)
-    pub max_timeout: u64,
 }
 
 /// A Chain Configuration
@@ -30,6 +32,10 @@ pub struct ChainConfig {
     pub batch_inbox: Address,
     /// The deposit contract address
     pub deposit_contract: Address,
+    /// The maximum number of intermediate pending channels
+    pub max_channels: usize,
+    /// The max timeout for a channel (as measured by the frame L1 block number)
+    pub max_timeout: u64,
 }
 
 /// System accounts
@@ -60,6 +66,8 @@ impl ChainConfig {
             batch_sender: addr("0x7431310e026b69bfc676c0013e12a1a11411eec9"),
             batch_inbox: addr("0xff00000000000000000000000000000000000420"),
             deposit_contract: addr("0x5b47E1A08Ea6d985D6649300584e6722Ec4B1383"),
+            max_channels: 100_000_000,
+            max_timeout: 100,
         }
     }
 }
