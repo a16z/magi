@@ -22,9 +22,10 @@ async fn test_attributes_match() {
 
     let config = Arc::new(Config {
         l1_rpc: rpc.to_string(),
+        engine_url: String::new(),
+        jwt_secret: String::new(),
+        db_location: None,
         chain: ChainConfig::goerli(),
-        max_channels: 100_000_000,
-        max_timeout: 100,
     });
 
     let mut pipeline = Pipeline::new(start_epoch, config).unwrap();
