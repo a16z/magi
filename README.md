@@ -166,8 +166,6 @@ The [ChainConfig](./src/config/mod.rs) contains default implementations for cert
 - [ ] Gracefully handle missing or present port in the EngineApi `base_url` passed into the constructor.
 - [ ] Graceful restarting on failure.
 - [ ] Foundryup-style installer
-- [ ] Foundryup-style cli
-- [ ] Do initial sync from geth by default, with full sync through the derivation pipeline as an option
 
 ## Contributing
 
