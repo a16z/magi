@@ -10,10 +10,9 @@
 //!
 //! ```rust
 //! use magi::backend::prelude::*;
-//! use std::{str::FromStr, path::PathBuf};
 //!
 //! // Note: this will panic if both `/tmp/magi` and the hardcoded temporary location cannot be used.
-//! let mut db = Database::new(&PathBuf::from_str("/tmp/magi").unwrap());
+//! let mut db = Database::new("/tmp/magi");
 //! let mut block = ConstructedBlock::default();
 //! block.hash = Some(BlockHash::from_low_u64_be(1));
 //! db.write_block(block.clone()).unwrap();

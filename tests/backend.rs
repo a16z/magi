@@ -1,11 +1,11 @@
-use std::{path::PathBuf, str::FromStr};
+use std::str::FromStr;
 
 use ethers_core::types::*;
 use magi::backend::prelude::*;
 
 #[test]
 fn test_backend_db() {
-    let mut db = Database::new(&PathBuf::from_str("/tmp/magi").unwrap());
+    let mut db = Database::new("/tmp/magi");
     let block = ConstructedBlock {
         hash: Some(BlockHash::from([1; 32])),
         ..Default::default()
@@ -18,7 +18,7 @@ fn test_backend_db() {
 
 #[test]
 fn test_db_full_block() {
-    let mut db = Database::new(&PathBuf::from_str("/tmp/magi").unwrap());
+    let mut db = Database::new("/tmp/magi");
     let mut block = ConstructedBlock {
         hash: Some(BlockHash::from([1; 32])),
         number: U64::one(),
@@ -43,7 +43,7 @@ fn test_db_full_block() {
 
 #[test]
 fn test_db_missing_block_hash() {
-    let mut db = Database::new(&PathBuf::from_str("/tmp/magi").unwrap());
+    let mut db = Database::new("/tmp/magi");
     let mut block = ConstructedBlock {
         hash: None,
         number: U64::from(69),
@@ -68,7 +68,7 @@ fn test_db_missing_block_hash() {
 
 #[test]
 fn test_db_fetch_by_timestamp() {
-    let mut db = Database::new(&PathBuf::from_str("/tmp/magi").unwrap());
+    let mut db = Database::new("/tmp/magi");
     let block = ConstructedBlock {
         hash: None,
         number: U64::from(69),
@@ -95,8 +95,7 @@ fn test_db_fetch_by_origin_hash() {
     let block_hash =
         BlockHash::from_str("0x91e7616d8588b3ff63aea5cf406f37f62bb5767a6c59551e0b163be475de145c")
             .unwrap();
-
-    let mut db = Database::new(&PathBuf::from_str("/tmp/magi").unwrap());
+    let mut db = Database::new("/tmp/magi");
     let block = ConstructedBlock {
         hash: None,
         number: U64::from(69),
@@ -123,7 +122,7 @@ fn test_db_fetch_by_origin_hash() {
 #[test]
 fn test_db_fetch_by_origin_number() {
     let block_number = U64::from(16706439);
-    let mut db = Database::new(&PathBuf::from_str("/tmp/magi").unwrap());
+    let mut db = Database::new("/tmp/magi");
     let block = ConstructedBlock {
         hash: None,
         number: U64::from(69),
@@ -149,7 +148,7 @@ fn test_db_fetch_by_origin_number() {
 
 #[test]
 fn test_db_fetch_by_transaction_hash() {
-    let mut db = Database::new(&PathBuf::from_str("/tmp/magi").unwrap());
+    let mut db = Database::new("/tmp/magi");
     let tx_hash = TxHash::from([3; 32]);
     let tx = Transaction {
         hash: tx_hash,

@@ -1,5 +1,8 @@
 use eyre::Result;
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 use uuid::Uuid;
 
 use super::types::*;
@@ -40,9 +43,9 @@ impl Default for Database {
 
 impl Database {
     /// Creates a new database.
-    pub fn new(loc: &PathBuf) -> Self {
+    pub fn new<P: AsRef<Path>>(path: P) -> Self {
         Self {
-            db: Self::try_construct_db(loc),
+            db: Self::try_construct_db(path),
             ..Default::default()
         }
     }
@@ -67,8 +70,8 @@ impl Database {
     ///
     /// This function will panic if neither the given file location
     /// nor a temporary location can be used to construct a database.
-    fn try_construct_db(loc: &PathBuf) -> sled::Db {
-        match sled::open(loc) {
+    fn try_construct_db<P: AsRef<Path>>(path: P) -> sled::Db {
+        match sled::open(path) {
             Ok(db) => db,
             Err(e) => {
                 tracing::error!("Failed to open database: {}", e);
