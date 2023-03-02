@@ -9,6 +9,8 @@ use crate::common::BlockID;
 pub struct Config {
     /// The base chain RPC URL
     pub l1_rpc: String,
+    /// An External L2 RPC URL that can be used for fast syncing
+    pub l2_rpc: Option<String>,
     /// The base chain config
     pub chain: ChainConfig,
     /// The maximum number of intermediate pending channels

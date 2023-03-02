@@ -22,6 +22,7 @@ async fn test_attributes_match() {
 
     let config = Arc::new(Config {
         l1_rpc: rpc.to_string(),
+        l2_rpc: None,
         chain: ChainConfig::goerli(),
         max_channels: 100_000_000,
         max_timeout: 100,

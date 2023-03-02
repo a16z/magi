@@ -18,6 +18,20 @@ Alternatively, you can clone the repo and run `cargo build --release` to build a
 
 To run `magi`'s test suite, you can run `cargo test --all`. Tests are named with respect to the modules they test against, located inside the [tests](./tests) directory. There are also additional unit tests written inline with some modules.
 
+## Quickstart
+
+`magi` exposes a number of configuration flags for executing the full node. To see a list of all available flags, run `magi --help`. This will print output similar to the following:
+
+```bash
+// TODO: once cli is implemented
+```
+
+By default, `magi` syncs in fast mode, querying other L2 nodes to construct the canonical L2 chain. This is the fastest, and most unsafe way to sync since it trusts L2 rpc nodes to provide valid L2 safe blocks, that are batched to L1, but are not yet finalized. Safe, but non finalized blocks are blocks that are posted to L1, but have not yet past the fault proof window (7 days). This means that the block is not yet guaranteed to be part of the L2 canonical chain. The default mode does not require the sync flag to be specified, but it can be explicit, setting `--sync-mode` to `fast`.
+
+Another more secure way to sync is to query L2 nodes for all _finalized L2 blocks_, and then run the derivation for all safe blocks that are still within the fault proof window. This mode can be specified using the `--sync-mode` flag, setting it to `challenge`.
+
+Lastly, the fully trustless, most secure method of syncing is to _fully_ derive the L2 canonical chain from L1 blocks. This mode can be specified using the `--sync-mode` flag, setting it to `full`.
+
 ## Specifications
 
 ### Driver

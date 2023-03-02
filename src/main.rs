@@ -15,9 +15,11 @@ async fn main() -> Result<()> {
     telemetry::init(false)?;
 
     let rpc = "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc";
+    let l2_rpc = "TODO";
 
     let config = Arc::new(Config {
         l1_rpc: rpc.to_string(),
+        l2_rpc: Some(l2_rpc.to_string()),
         chain: ChainConfig::goerli(),
         max_channels: 100_000_000,
         max_timeout: 100,
