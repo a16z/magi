@@ -38,7 +38,8 @@ impl Driver<EngineApi, Pipeline> {
             .map(Database::new)
             .unwrap_or_default();
 
-        let head = db.read_head()?;
+        let head = db.read_head();
+
         let safe_block = head
             .as_ref()
             .map(|h| prev_block_id(&h.l2_block_id))

@@ -1,8 +1,5 @@
 use eyre::Result;
-use std::{
-    collections::HashMap,
-    path::{Path, PathBuf},
-};
+use std::{collections::HashMap, path::Path};
 use uuid::Uuid;
 
 use super::types::*;
@@ -158,9 +155,9 @@ impl Database {
     }
 
     /// Reads the most recent HeadInfo value
-    pub fn read_head(&self) -> Result<Option<HeadInfo>> {
-        let head = self.db.get("HEAD_INFO")?;
-        head.map(HeadInfo::try_from).transpose()
+    pub fn read_head(&self) -> Option<HeadInfo> {
+        let head = self.db.get("HEAD_INFO").unwrap_or_default();
+        head.map(HeadInfo::try_from).transpose().unwrap_or_default()
     }
 
     /// Reads a block from cache, or the database.
