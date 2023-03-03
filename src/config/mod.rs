@@ -2,9 +2,9 @@ use std::{collections::HashMap, path::PathBuf, process::exit, str::FromStr};
 
 use ethers_core::types::{Address, H256};
 use figment::{
-    providers::{Format, Serialized, Toml},
-    value::Value,
-    Figment,
+    providers::{Format, Serialized, Toml, Data},
+    value::{Value, Dict, Tag, Empty},
+    Figment, Provider, Error,
 };
 use serde::{Deserialize, Serialize};
 
@@ -66,21 +66,24 @@ impl Config {
 
 impl Config {
     pub fn from_file(config_path: &PathBuf, cli_config: &Config) -> Self {
-        let toml_provider = Toml::file(config_path).nested();
+        let toml_provider: Data<Toml> = Toml::file(config_path).nested();
         let cli_provider = cli_config.as_provider();
-        let config_res = Figment::new()
-            .merge(toml_provider)
+        let config_res: Result<Config, Error> = Figment::new()
             .merge(cli_provider)
+            .merge(toml_provider)
             .extract();
         match config_res {
-            Ok(config) => config,
+            Ok(config) => {
+                // if config.chain.is_zero
+                config
+            }
             Err(err) => {
                 match err.kind {
                     figment::error::Kind::MissingField(field) => {
                         let field = field.replace('_', "-");
                         println!("\x1b[91merror\x1b[0m: missing configuration field: {field}");
                         println!("\n\ttry supplying the propoper command line argument: --{field}");
-                        println!("\talternatively, you can add the field to your helios.toml file or as an environment variable");
+                        println!("\talternatively, you can add the field to your magi.toml file or as an environment variable");
                         println!("\nfor more information, check the github README");
                     }
                     _ => println!("cannot parse configuration: {err}"),
@@ -104,15 +107,13 @@ impl Config {
         if let Some(jwt_secret) = &self.jwt_secret {
             user_dict.insert("jwt_secret", Value::from(jwt_secret.clone()));
         }
-
-        // TODO: serialize chain config
-
+        user_dict.insert("chain", Value::from(self.chain));
         Serialized::from(user_dict, "default".to_string())
     }
 }
 
 /// A Chain Configuration
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Copy, Clone, Deserialize)]
 pub struct ChainConfig {
     /// The L1 block referenced by the L2 chain
     pub l1_start_epoch: BlockID,
@@ -124,6 +125,22 @@ pub struct ChainConfig {
     pub batch_inbox: Address,
     /// The deposit contract address
     pub deposit_contract: Address,
+}
+
+fn address_to_str(address: &Address) -> String {
+    format!("0x{}", hex::encode(address.as_bytes()))
+}
+
+impl From<ChainConfig> for Value {
+    fn from(value: ChainConfig) -> Value {
+        let mut dict = Dict::new();
+        dict.insert("l1_start_epoch".to_string(), Value::from(value.l1_start_epoch));
+        dict.insert("l2_genesis".to_string(), Value::from(value.l2_genesis));
+        dict.insert("batch_sender".to_string(), Value::from(address_to_str(&value.batch_sender)));
+        dict.insert("batch_inbox".to_string(), Value::from(address_to_str(&value.batch_inbox)));
+        dict.insert("deposit_contract".to_string(), Value::from(address_to_str(&value.deposit_contract)));
+        Value::Dict(Tag::Default, dict)
+    }
 }
 
 /// System accounts

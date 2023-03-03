@@ -1,5 +1,6 @@
 use std::{fmt::Debug, str::FromStr};
 
+use figment::value::{Value, Dict, Tag};
 use ethers_core::{
     types::H256,
     utils::rlp::{Decodable, DecoderError, Rlp},
@@ -14,6 +15,16 @@ pub struct BlockID {
     pub parent_hash: H256,
 }
 
+impl From<BlockID> for Value {
+    fn from(value: BlockID) -> Value {
+        let mut dict = Dict::new();
+        dict.insert("hash".to_string(), Value::from(value.hash.as_bytes()));
+        dict.insert("number".to_string(), Value::from(value.number));
+        dict.insert("parent_hash".to_string(), Value::from(value.parent_hash.as_bytes()));
+        Value::Dict(Tag::Default, dict)
+    }
+}
+
 impl FromStr for BlockID {
     type Err = String;
 
@@ -25,10 +36,17 @@ impl FromStr for BlockID {
                 parent_hash: H256::zero(),
             });
         }
-        let number = s.parse().map_err(|_| "invalid block number")?;
+        if let Ok(number) = u64::from_str(s) {
+            return Ok(Self {
+                hash: H256::zero(),
+                number,
+                parent_hash: H256::zero(),
+            });
+        }
+        // Otherwise, use 0 as the block number
         Ok(Self {
             hash: H256::zero(),
-            number,
+            number: 0,
             parent_hash: H256::zero(),
         })
     }
