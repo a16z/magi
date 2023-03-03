@@ -71,6 +71,10 @@ pub struct PayloadAttributes {
     /// This field overrides the gas limit used during block-building.
     /// If not specified as rollup, a STATUS_INVALID is returned.
     pub gas_limit: U64,
+    /// The batch epoch number from derivation. This value is not expected by the engine is skipped
+    /// during serialization and deserialization.
+    #[serde(skip)]
+    pub epoch_number: Option<u64>,
 }
 
 /// ## PayloadId

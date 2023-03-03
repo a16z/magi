@@ -41,8 +41,8 @@ impl Channels {
             prev_stage,
             ready_channel: None,
             frame_bank: Vec::new(),
-            max_channels: config.max_channels,
-            max_timeout: config.max_timeout,
+            max_channels: config.chain.max_channels,
+            max_timeout: config.chain.max_timeout,
         }))
     }
 

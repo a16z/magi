@@ -23,7 +23,7 @@
 
 /// Core Backend Types
 mod types;
-pub use types::{BlockHash, BlockNumber, ConstructedBlock};
+pub use types::{BlockHash, BlockNumber, ConstructedBlock, HeadInfo};
 
 /// Core Backend Database
 mod database;

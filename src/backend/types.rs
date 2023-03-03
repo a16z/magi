@@ -1,6 +1,9 @@
 use ethers_core::types::{Transaction, TransactionReceipt};
 use ethers_core::types::{H256, U64};
+use eyre::Result;
 use serde::{Deserialize, Serialize};
+
+use crate::common::BlockID;
 
 /// A database identifier.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -74,6 +77,35 @@ impl From<ConstructedBlock> for sled::IVec {
             Ok(v) => v,
             Err(e) => {
                 panic!("Failed to serialize ConstructedBlock: {}", e)
+            }
+        };
+        sled::IVec::from(serialized)
+    }
+}
+
+/// Block info for the current head of the chain
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+pub struct HeadInfo {
+    /// L2 BlockID value
+    pub l2_block_id: BlockID,
+    /// L1 batch epoch of the L2 block
+    pub l1_epoch_number: u64,
+}
+
+impl TryFrom<sled::IVec> for HeadInfo {
+    type Error = eyre::Report;
+
+    fn try_from(bytes: sled::IVec) -> Result<Self> {
+        Ok(serde_json::from_slice(bytes.as_ref())?)
+    }
+}
+
+impl From<HeadInfo> for sled::IVec {
+    fn from(val: HeadInfo) -> Self {
+        let serialized = match serde_json::to_vec(&val) {
+            Ok(v) => v,
+            Err(e) => {
+                panic!("Failed to serialize HeadInfo: {}", e)
             }
         };
         sled::IVec::from(serialized)
