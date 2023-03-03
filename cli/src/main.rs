@@ -1,25 +1,22 @@
 use std::{
-    path::PathBuf,
     process::exit,
-    str::FromStr,
     sync::{Arc, Mutex},
+    str::FromStr,
 };
 
 use clap::Parser;
 use dirs::home_dir;
-use env_logger::Env;
+use ethers_core::types::Address;
 use eyre::Result;
 
-use client::{database::FileDB, Client, ClientBuilder};
-use config::{CliConfig, Config};
-use futures::executor::block_on;
 use log::{error, info};
 
 use magi::{
-    config::{ChainConfig, Config},
+    common::BlockID,
+    config::{ChainConfig, Config, SyncMode},
     derive::Pipeline,
     driver::Driver,
-    engine::EngineApi,
+    engine::{EngineApi},
     telemetry,
 };
 
@@ -29,20 +26,15 @@ async fn main() -> Result<()> {
 
     let config = get_config();
 
-    let pipeline = Pipeline::new(config.chain.l1_start_epoch.number, config.clone())?;
-    let engine = EngineApi::new(config.get_engine_api_url(), config.jwt_secret);
-    let mut driver = Driver::new(engine, pipeline, config);
+    let pipeline = Pipeline::new(config.chain.l1_start_epoch.number, config.clone().into())?;
+    let engine = EngineApi::new(config.get_engine_api_url(), config.jwt_secret.clone());
+    let mut driver = Driver::new(engine, pipeline, config.into());
     if let Err(err) = driver.start().await {
         error!("{}", err);
         exit(1);
     }
 
-    register_shutdown_handler(driver);
-    std::future::pending().await
-}
-
-fn register_shutdown_handler(driver: Driver) {
-    let client = Arc::new(driver);
+    // let a_driver = Arc::new(driver);
     let shutdown_counter = Arc::new(Mutex::new(0));
 
     ctrlc::set_handler(move || {
@@ -62,14 +54,17 @@ fn register_shutdown_handler(driver: Driver) {
         );
 
         if counter_value == 1 {
-            let client = client.clone();
-            std::thread::spawn(move || {
-                block_on(client.shutdown());
-                exit(0);
-            });
+            exit(0);
+            // let a_driver = a_driver.clone();
+            // std::thread::spawn(move || {
+            //     block_on(a_driver.shutdown());
+            //     exit(0);
+            // });
         }
     })
     .expect("could not register shutdown handler");
+
+    std::future::pending().await
 }
 
 fn get_config() -> Config {
@@ -83,7 +78,7 @@ fn get_config() -> Config {
 struct Cli {
     #[clap(short, long)]
     l1_rpc_url: String,
-    #[clap(short = "t", long)]
+    #[clap(short = 't', long)]
     l2_rpc_url: String,
     #[clap(short, long)]
     l1_start_epoch: String,
@@ -101,25 +96,28 @@ struct Cli {
     max_timeout: u64,
     #[clap(short, long)]
     sync_mode: SyncMode,
+    #[clap(short, long)]
+    engine_api_url: Option<String>,
+    #[clap(short, long)]
+    jwt_secret: Option<String>,
 }
 
 impl Cli {
     fn to_config(&self) -> Config {
         Config {
-            l1_rpc: self.l1_rpc_url.clone(),
-            l2_rpc: Some(self.l2_rpc_url.clone()),
+            l1_rpc_url: self.l1_rpc_url.clone(),
+            l2_rpc_url: Some(self.l2_rpc_url.clone()),
             chain: ChainConfig {
-                l1_start_epoch: Epoch {
-                    number: self.l1_start_epoch.parse().unwrap(),
-                    block_hash: None,
-                },
-                l2_genesis: self.l2_genesis.clone(),
-                batch_sender: self.batch_sender.clone(),
-                batch_inbox: self.batch_inbox.clone(),
-                deposit_contract: self.deposit_contract.clone(),
+                l1_start_epoch: BlockID::from_str(&self.l1_start_epoch).unwrap(),
+                l2_genesis: BlockID::from_str(&self.l2_genesis).unwrap(),
+                batch_sender: Address::from_str(&self.batch_sender).unwrap(),
+                batch_inbox: Address::from_str(&self.batch_inbox).unwrap(),
+                deposit_contract: Address::from_str(&self.deposit_contract).unwrap(),
             },
-            max_channels: self.max_channels,
+            max_channels: self.max_channels as usize,
             max_timeout: self.max_timeout,
+            engine_api_url: self.engine_api_url.clone(),
+            jwt_secret: self.jwt_secret.clone(),
         }
     }
 }

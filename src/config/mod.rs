@@ -6,12 +6,12 @@ use figment::{
     value::Value,
     Figment,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::common::BlockID;
 
 /// Sync Mode Specifies how `magi` should sync the L2 chain
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SyncMode {
     /// Fast sync mode
     Fast,
@@ -21,6 +21,19 @@ pub enum SyncMode {
     Challenge,
     /// Full sync mode
     Full,
+}
+
+impl FromStr for SyncMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "fast" => Ok(Self::Fast),
+            "challenge" => Ok(Self::Challenge),
+            "full" => Ok(Self::Full),
+            _ => Err("invalid sync mode".to_string()),
+        }
+    }
 }
 
 /// A system configuration

@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, str::FromStr};
 
 use ethers_core::{
     types::H256,
@@ -12,6 +12,26 @@ pub struct BlockID {
     pub hash: H256,
     pub number: u64,
     pub parent_hash: H256,
+}
+
+impl FromStr for BlockID {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if let Ok(hash) = H256::from_str(s) {
+            return Ok(Self {
+                hash,
+                number: 0,
+                parent_hash: H256::zero(),
+            });
+        }
+        let number = s.parse().map_err(|_| "invalid block number")?;
+        Ok(Self {
+            hash: H256::zero(),
+            number,
+            parent_hash: H256::zero(),
+        })
+    }
 }
 
 /// A raw transaction
