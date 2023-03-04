@@ -2,9 +2,9 @@ use std::{collections::HashMap, path::PathBuf, process::exit, str::FromStr};
 
 use ethers_core::types::{Address, H256};
 use figment::{
-    providers::{Format, Serialized, Toml, Data},
-    value::{Value, Dict, Tag, Empty},
-    Figment, Provider, Error,
+    providers::{Data, Format, Serialized, Toml},
+    value::{Dict, Tag, Value},
+    Error, Figment,
 };
 use serde::{Deserialize, Serialize};
 
@@ -49,6 +49,8 @@ pub struct Config {
     pub max_channels: usize,
     /// The max timeout for a channel (as measured by the frame L1 block number)
     pub max_timeout: u64,
+    /// Location of the database folder
+    pub db_location: Option<PathBuf>,
     /// Engine API URL
     pub engine_api_url: Option<String>,
     /// Engine API JWT Secret
@@ -99,6 +101,11 @@ impl Config {
         if let Some(l2_rpc) = &self.l2_rpc_url {
             user_dict.insert("l2_rpc_url", Value::from(l2_rpc.clone()));
         }
+        if let Some(db_loc) = &self.db_location {
+            if let Some(str) = db_loc.to_str() {
+                user_dict.insert("db_location", Value::from(str));
+            }
+        }
         user_dict.insert("max_channels", Value::from(self.max_channels));
         user_dict.insert("max_timeout", Value::from(self.max_timeout));
         if let Some(engine_api_url) = &self.engine_api_url {
@@ -125,6 +132,10 @@ pub struct ChainConfig {
     pub batch_inbox: Address,
     /// The deposit contract address
     pub deposit_contract: Address,
+    /// The maximum number of intermediate pending channels
+    pub max_channels: usize,
+    /// The max timeout for a channel (as measured by the frame L1 block number)
+    pub max_timeout: u64,
 }
 
 fn address_to_str(address: &Address) -> String {
@@ -134,11 +145,23 @@ fn address_to_str(address: &Address) -> String {
 impl From<ChainConfig> for Value {
     fn from(value: ChainConfig) -> Value {
         let mut dict = Dict::new();
-        dict.insert("l1_start_epoch".to_string(), Value::from(value.l1_start_epoch));
+        dict.insert(
+            "l1_start_epoch".to_string(),
+            Value::from(value.l1_start_epoch),
+        );
         dict.insert("l2_genesis".to_string(), Value::from(value.l2_genesis));
-        dict.insert("batch_sender".to_string(), Value::from(address_to_str(&value.batch_sender)));
-        dict.insert("batch_inbox".to_string(), Value::from(address_to_str(&value.batch_inbox)));
-        dict.insert("deposit_contract".to_string(), Value::from(address_to_str(&value.deposit_contract)));
+        dict.insert(
+            "batch_sender".to_string(),
+            Value::from(address_to_str(&value.batch_sender)),
+        );
+        dict.insert(
+            "batch_inbox".to_string(),
+            Value::from(address_to_str(&value.batch_inbox)),
+        );
+        dict.insert(
+            "deposit_contract".to_string(),
+            Value::from(address_to_str(&value.deposit_contract)),
+        );
         Value::Dict(Tag::Default, dict)
     }
 }
@@ -171,6 +194,8 @@ impl ChainConfig {
             batch_sender: addr("0x7431310e026b69bfc676c0013e12a1a11411eec9"),
             batch_inbox: addr("0xff00000000000000000000000000000000000420"),
             deposit_contract: addr("0x5b47E1A08Ea6d985D6649300584e6722Ec4B1383"),
+            max_channels: 100_000_000,
+            max_timeout: 100,
         }
     }
 }

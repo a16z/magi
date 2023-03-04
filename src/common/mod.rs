@@ -1,14 +1,14 @@
 use std::{fmt::Debug, str::FromStr};
 
-use figment::value::{Value, Dict, Tag};
 use ethers_core::{
     types::H256,
     utils::rlp::{Decodable, DecoderError, Rlp},
 };
+use figment::value::{Dict, Tag, Value};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 
 /// A Block Identifier
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct BlockID {
     pub hash: H256,
     pub number: u64,
@@ -20,7 +20,10 @@ impl From<BlockID> for Value {
         let mut dict = Dict::new();
         dict.insert("hash".to_string(), Value::from(value.hash.as_bytes()));
         dict.insert("number".to_string(), Value::from(value.number));
-        dict.insert("parent_hash".to_string(), Value::from(value.parent_hash.as_bytes()));
+        dict.insert(
+            "parent_hash".to_string(),
+            Value::from(value.parent_hash.as_bytes()),
+        );
         Value::Dict(Tag::Default, dict)
     }
 }

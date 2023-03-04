@@ -26,6 +26,7 @@ async fn test_attributes_match() {
         chain: ChainConfig::goerli(),
         max_channels: 100_000_000,
         max_timeout: 100,
+        db_location: None,
         engine_api_url: None,
         jwt_secret: None,
     });

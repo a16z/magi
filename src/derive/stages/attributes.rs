@@ -57,6 +57,7 @@ impl Attributes {
 
         let timestamp = U64([batch.timestamp]);
         let prev_randao = l1_info.block_info.mix_hash;
+        let epoch_number = Some(batch.epoch_num);
         let transactions = Some(self.derive_transactions(batch, l1_info));
         let suggested_fee_recipient = SystemAccounts::default().fee_vault;
 
@@ -67,6 +68,7 @@ impl Attributes {
             transactions,
             no_tx_pool: true,
             gas_limit: U64([l1_info.system_config.gas_limit.as_u64()]),
+            epoch_number,
         }
     }
 

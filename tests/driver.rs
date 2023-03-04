@@ -17,12 +17,11 @@ async fn test_advance() {
     let engine = create_engine(next_block_hash, &config);
     let pipeline = create_pipeline();
 
-    let mut driver = Driver::new(engine, pipeline, config);
+    let mut driver = Driver::from_internals(engine, pipeline, config);
     driver.advance().await.unwrap();
 
-    assert_eq!(driver.head_block_hash, next_block_hash);
-    assert_eq!(driver.safe_block_hash, next_block_hash);
-    assert_eq!(driver.finalized_hash, H256::zero());
+    assert_eq!(driver.safe_block.hash, next_block_hash);
+    assert_eq!(driver.finalized_block.hash, H256::zero());
 }
 
 fn creat_config() -> Config {
@@ -32,13 +31,18 @@ fn creat_config() -> Config {
         l1_rpc_url: String::new(),
         max_channels: 100_000_000,
         max_timeout: 100,
+        db_location: None,
         engine_api_url: None,
         jwt_secret: None,
     }
 }
 
 fn create_pipeline() -> IntoIter<PayloadAttributes> {
-    let attributes = vec![PayloadAttributes::default()];
+    let attr = PayloadAttributes {
+        epoch_number: Some(1),
+        ..Default::default()
+    };
+    let attributes = vec![attr];
     attributes.into_iter()
 }
 
