@@ -2,12 +2,12 @@
 network="goerli"
 l1_rpc_url="https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc"
 l2_rpc_url="https://opt-mainnet.g.alchemy.com/v2/Q9K5rbJD5gOf0LcJfLBq3Vt-yWeONBrh"
-max_channels=100_000_000
-max_timeout=100
 engine_api_url="http://127.0.0.1:8551"
 jwt_secret="bf549f5188556ce0951048ef467ec93067bc4ea21acebe46ef675cd4e8e015ff"
 
 [default.chain]
+max_channels=100_000_000
+max_timeout=100
 batch_sender="0x7431310e026b69bfc676c0013e12a1a11411eec9"
 batch_inbox="0xff00000000000000000000000000000000000420"
 deposit_contract="0x5b47E1A08Ea6d985D6649300584e6722Ec4B1383"

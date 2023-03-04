@@ -45,10 +45,6 @@ pub struct Config {
     pub l2_rpc_url: Option<String>,
     /// The base chain config
     pub chain: ChainConfig,
-    /// The maximum number of intermediate pending channels
-    pub max_channels: usize,
-    /// The max timeout for a channel (as measured by the frame L1 block number)
-    pub max_timeout: u64,
     /// Location of the database folder
     pub db_location: Option<PathBuf>,
     /// Engine API URL
@@ -106,8 +102,6 @@ impl Config {
                 user_dict.insert("db_location", Value::from(str));
             }
         }
-        user_dict.insert("max_channels", Value::from(self.max_channels));
-        user_dict.insert("max_timeout", Value::from(self.max_timeout));
         if let Some(engine_api_url) = &self.engine_api_url {
             user_dict.insert("engine_api_url", Value::from(engine_api_url.clone()));
         }
@@ -162,6 +156,8 @@ impl From<ChainConfig> for Value {
             "deposit_contract".to_string(),
             Value::from(address_to_str(&value.deposit_contract)),
         );
+        dict.insert("max_channels".to_string(), Value::from(value.max_channels));
+        dict.insert("max_timeout".to_string(), Value::from(value.max_timeout));
         Value::Dict(Tag::Default, dict)
     }
 }

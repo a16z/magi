@@ -24,8 +24,6 @@ async fn test_attributes_match() {
         l1_rpc_url: rpc.to_string(),
         l2_rpc_url: None,
         chain: ChainConfig::goerli(),
-        max_channels: 100_000_000,
-        max_timeout: 100,
         db_location: None,
         engine_api_url: None,
         jwt_secret: None,

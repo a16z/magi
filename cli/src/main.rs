@@ -2,6 +2,7 @@ use std::{
     process::exit,
     sync::{Arc, Mutex},
     str::FromStr,
+    path::PathBuf,
 };
 
 use clap::Parser;
@@ -28,7 +29,7 @@ async fn main() -> Result<()> {
 
     let pipeline = Pipeline::new(config.chain.l1_start_epoch.number, config.clone().into())?;
     let engine = EngineApi::new(config.get_engine_api_url(), config.jwt_secret.clone());
-    let mut driver = Driver::new(engine, pipeline, config.into());
+    let mut driver = Driver::from_internals(engine, pipeline, Arc::new(config));
     if let Err(err) = driver.start().await {
         error!("{}", err);
         exit(1);
@@ -78,6 +79,8 @@ fn get_config() -> Config {
 pub struct Cli {
     #[clap(short, long, default_value = "goerli")]
     network: Chain,
+    #[clap(long, default_value = "~/.magi/db")]
+    db_location: String,
     #[clap(long, default_value = "")]
     l1_rpc_url: String,
     #[clap(long)]
@@ -115,9 +118,10 @@ impl Cli {
                 batch_sender: parsed_or_zero(&self.batch_sender),
                 batch_inbox: parsed_or_zero(&self.batch_inbox),
                 deposit_contract: parsed_or_zero(&self.deposit_contract),
+                max_channels: self.max_channels as usize,
+                max_timeout: self.max_timeout,
             },
-            max_channels: self.max_channels as usize,
-            max_timeout: self.max_timeout,
+            db_location: PathBuf::from_str(&self.db_location).ok(),
             engine_api_url: self.engine_api_url.clone(),
             jwt_secret: self.jwt_secret.clone(),
         }
