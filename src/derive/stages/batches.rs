@@ -1,4 +1,5 @@
 use core::fmt::Debug;
+use std::cmp::Ordering;
 use std::sync::Arc;
 use std::{cell::RefCell, io::Read, rc::Rc};
 
@@ -8,16 +9,16 @@ use ethers_core::utils::rlp::{Decodable, DecoderError, Rlp};
 use eyre::Result;
 use libflate::zlib::Decoder;
 
-use crate::common::{Epoch, RawTransaction, BlockInfo};
+use crate::common::RawTransaction;
 use crate::config::Config;
+use crate::derive::state::State;
 
 use super::channels::{Channel, Channels};
 
 pub struct Batches {
     batches: Vec<Batch>,
     prev_stage: Rc<RefCell<Channels>>,
-    safe_epoch: Rc<RefCell<Epoch>>,
-    safe_head: Rc<RefCell<BlockInfo>>,
+    state: Rc<RefCell<State>>,
     config: Arc<Config>,
 }
 
@@ -35,15 +36,13 @@ impl Iterator for Batches {
 impl Batches {
     pub fn new(
         prev_stage: Rc<RefCell<Channels>>,
-        safe_epoch: Rc<RefCell<Epoch>>,
-        safe_head: Rc<RefCell<BlockInfo>>,
+        state: Rc<RefCell<State>>,
         config: Arc<Config>,
     ) -> Rc<RefCell<Self>> {
         Rc::new(RefCell::new(Self {
             batches: Vec::new(),
             prev_stage,
-            safe_epoch,
-            safe_head,
+            state,
             config,
         }))
     }
@@ -78,18 +77,24 @@ impl Batches {
     }
 
     fn set_batch_status(&self, mut batch: Batch) -> Batch {
-        let epoch = self.safe_epoch.borrow();
-        let head = self.safe_head.borrow();
+        let epoch = self.state.borrow().safe_epoch;
+        let head = self.state.borrow().safe_head;
         let next_timestamp = head.timestamp + 2;
 
-        if batch.timestamp > next_timestamp {
-            batch.status = BatchStatus::Future;
-            return batch;
-        } else if batch.timestamp < next_timestamp {
-            batch.status = BatchStatus::Drop;
-            return batch;
+        // check timestamp range
+        match batch.timestamp.cmp(&next_timestamp) {
+            Ordering::Greater => {
+                batch.status = BatchStatus::Future;
+                return batch;
+            }
+            Ordering::Less => {
+                batch.status = BatchStatus::Drop;
+                return batch;
+            }
+            Ordering::Equal => (),
         }
 
+        // check that block builds on existing chain
         if batch.parent_hash != head.hash {
             batch.status = BatchStatus::Drop;
             return batch;
@@ -97,16 +102,40 @@ impl Batches {
 
         // TODO: inclusion window check
 
-        let _batch_origin = if batch.epoch_num == epoch.number {
+        // check and set batch origin epoch
+        let batch_origin = if batch.epoch_num == epoch.number {
             Some(epoch)
         } else if batch.epoch_num == epoch.number + 1 {
-            None
+            self.state.borrow().epoch_by_number(batch.epoch_num)
         } else {
             batch.status = BatchStatus::Drop;
             return batch;
         };
 
-        // TODO: batch origin checks
+        if let Some(batch_origin) = batch_origin {
+            if batch.epoch_hash != batch_origin.hash {
+                batch.status = BatchStatus::Drop;
+                return batch;
+            }
+
+            if batch.timestamp < batch_origin.timestamp {
+                batch.status = BatchStatus::Drop;
+                return batch;
+            }
+
+            // handle sequencer drift
+            if batch.timestamp > batch_origin.timestamp + self.config.chain.max_seq_drif {
+                if batch.transactions.is_empty() {
+                    // TODO: handle
+                } else {
+                    batch.status = BatchStatus::Drop;
+                    return batch;
+                }
+            }
+        } else {
+            batch.status = BatchStatus::Undecided;
+            return batch;
+        }
 
         if batch.has_invalid_transactions() {
             batch.status = BatchStatus::Drop;
@@ -186,9 +215,7 @@ impl Batch {
     fn has_invalid_transactions(&self) -> bool {
         self.transactions
             .iter()
-            .filter(|b| b.0.len() == 0 || b.0[0] == 0x7E)
-            .next()
-            .is_some()
+            .any(|tx| tx.0.is_empty() || tx.0[0] == 0x7E)
     }
 
     fn is_dropped(&self) -> bool {

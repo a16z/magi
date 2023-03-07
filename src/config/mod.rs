@@ -37,7 +37,9 @@ pub struct ChainConfig {
     /// The max timeout for a channel (as measured by the frame L1 block number)
     pub max_timeout: u64,
     /// Number of L1 blocks in a sequence window
-    pub sequence_window_size: u64,
+    pub seq_window_size: u64,
+    /// Maximum timestamp drift
+    pub max_seq_drif: u64,
 }
 
 /// System accounts
@@ -69,7 +71,8 @@ impl ChainConfig {
             deposit_contract: addr("0x5b47E1A08Ea6d985D6649300584e6722Ec4B1383"),
             max_channels: 100_000_000,
             max_timeout: 100,
-            sequence_window_size: 120,
+            seq_window_size: 120,
+            max_seq_drif: 3600,
         }
     }
 }

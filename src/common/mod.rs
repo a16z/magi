@@ -53,4 +53,3 @@ impl<'de> Deserialize<'de> for RawTransaction {
         Ok(RawTransaction(hex::decode(tx).map_err(D::Error::custom)?))
     }
 }
-

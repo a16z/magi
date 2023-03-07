@@ -7,10 +7,11 @@ use crate::{
     backend::{Database, HeadInfo},
     common::{BlockInfo, Epoch},
     config::Config,
-    derive::Pipeline,
+    derive::{state::State, Pipeline},
     engine::{
         EngineApi, ExecutionPayload, ForkchoiceState, L2EngineApi, PayloadAttributes, Status,
     },
+    l1::ChainWatcher,
 };
 
 /// Driver is responsible for advancing the execution node by feeding
@@ -23,9 +24,11 @@ pub struct Driver<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> {
     /// Database for storing progress data
     db: Database,
     /// Most recent block hash that can be derived from L1 data
-    pub safe_block: Rc<RefCell<BlockInfo>>,
+    safe_head: BlockInfo,
     /// Batch epoch of the safe head
-    pub safe_epoch: Rc<RefCell<Epoch>>,
+    safe_epoch: Epoch,
+    /// State struct to keep track of global state
+    state: Rc<RefCell<State>>,
 }
 
 impl Driver<EngineApi, Pipeline> {
@@ -38,7 +41,7 @@ impl Driver<EngineApi, Pipeline> {
 
         let head = db.read_head();
 
-        let safe_block = head
+        let safe_head = head
             .as_ref()
             .map(|h| prev_block_id(&h.l2_block_info))
             .unwrap_or(config.chain.l2_genesis);
@@ -47,39 +50,55 @@ impl Driver<EngineApi, Pipeline> {
             .map(|h| h.l1_epoch)
             .unwrap_or(config.chain.l1_start_epoch);
 
-        tracing::info!("syncing from: {:?}", safe_block.hash);
+        tracing::info!("syncing from: {:?}", safe_head.hash);
 
-        let safe_block = Rc::new(RefCell::new(safe_block));
-        let safe_epoch = Rc::new(RefCell::new(safe_epoch));
+        let config = Arc::new(config);
+        let mut chain_watcher = ChainWatcher::new(safe_head.number, config.clone())?;
+        let tx_recv = chain_watcher.take_tx_receiver().unwrap();
+        let state = Rc::new(RefCell::new(State::new(
+            safe_head,
+            safe_epoch,
+            chain_watcher,
+        )));
+
+        state.borrow_mut().update_safe_head(safe_head, safe_epoch);
 
         let engine = EngineApi::new(config.engine_url.clone(), Some(config.jwt_secret.clone()));
-        let pipeline = Pipeline::new(safe_epoch.clone(), safe_block.clone(), Arc::new(config))?;
+        let pipeline = Pipeline::new(state.clone(), tx_recv, config)?;
 
         Ok(Self {
             db,
             engine,
             pipeline,
+            safe_head,
             safe_epoch,
-            safe_block,
+            state,
         })
     }
 }
 
 impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
     /// Creates a new Driver instance
-    pub fn from_internals(engine: E, pipeline: P, config: Arc<Config>) -> Self {
-        let safe_block = Rc::new(RefCell::new(config.chain.l2_genesis));
-        let safe_epoch = Rc::new(RefCell::new(config.chain.l1_start_epoch));
+    pub fn from_internals(engine: E, pipeline: P, config: Arc<Config>) -> Result<Self> {
+        let safe_head = config.chain.l2_genesis;
+        let safe_epoch = config.chain.l1_start_epoch;
+        let chain_watcher = ChainWatcher::new(safe_epoch.number, config)?;
+        let state = Rc::new(RefCell::new(State::new(
+            safe_head,
+            safe_epoch,
+            chain_watcher,
+        )));
 
         let db = Database::default();
 
-        Self {
+        Ok(Self {
             pipeline,
             engine,
             db,
-            safe_block,
+            safe_head,
             safe_epoch,
-        }
+            state,
+        })
     }
 
     /// Attempts to advance the execution node forward one block using derived
@@ -87,6 +106,8 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
     /// does not successfully advance the node
     pub async fn advance(&mut self) -> Result<()> {
         let next_attributes = loop {
+            self.update_state();
+
             if let Some(next_attributes) = self.pipeline.next() {
                 break next_attributes;
             }
@@ -94,11 +115,11 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
 
         tracing::debug!("next attributes: {:?}", next_attributes);
 
-        let new_epoch = next_attributes.epoch.as_ref().unwrap().clone();
+        let new_epoch = *next_attributes.epoch.as_ref().unwrap();
 
         let payload = self.build_payload(next_attributes).await?;
 
-        let new_block = BlockInfo {
+        let new_head = BlockInfo {
             number: payload.block_number.as_u64(),
             hash: payload.block_hash,
             parent_hash: payload.parent_hash,
@@ -106,9 +127,16 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
         };
 
         self.push_payload(payload).await?;
-        self.update_forkchoice(new_block, new_epoch).await?;
+        self.update_forkchoice(new_head, new_epoch).await?;
 
         Ok(())
+    }
+
+    fn update_state(&self) {
+        self.state.borrow_mut().update_l1_info();
+        self.state
+            .borrow_mut()
+            .update_safe_head(self.safe_head, self.safe_epoch);
     }
 
     async fn build_payload(&self, attributes: PayloadAttributes) -> Result<ExecutionPayload> {
@@ -139,20 +167,20 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
         Ok(())
     }
 
-    async fn update_forkchoice(&mut self, new_block: BlockInfo, new_epoch: Epoch) -> Result<()> {
-        if self.safe_block.borrow().hash != new_block.hash {
-            tracing::info!("chain head updated: {:?}", new_block.hash);
-            if self.safe_epoch.borrow().hash != new_epoch.hash {
-                tracing::info!("saving new head to db: {:?}", new_block.hash);
+    async fn update_forkchoice(&mut self, new_head: BlockInfo, new_epoch: Epoch) -> Result<()> {
+        if self.safe_head != new_head {
+            tracing::info!("chain head updated: {:?}", new_head.hash);
+            if self.safe_epoch != new_epoch {
+                tracing::info!("saving new head to db: {:?}", new_head.hash);
 
                 self.db.write_head(HeadInfo {
-                    l2_block_info: new_block,
+                    l2_block_info: new_head,
                     l1_epoch: new_epoch,
                 })?;
             }
 
-            self.safe_block.replace(new_block);
-            self.safe_epoch.replace(new_epoch);
+            self.safe_head = new_head;
+            self.safe_epoch = new_epoch;
         }
 
         let forkchoice = self.create_forkchoice_state();
@@ -170,8 +198,8 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
 
     fn create_forkchoice_state(&self) -> ForkchoiceState {
         ForkchoiceState {
-            head_block_hash: self.safe_block.borrow().hash,
-            safe_block_hash: self.safe_block.borrow().hash,
+            head_block_hash: self.safe_head.hash,
+            safe_block_hash: self.safe_head.hash,
             finalized_block_hash: H256::zero(),
         }
     }
