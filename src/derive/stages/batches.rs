@@ -78,6 +78,7 @@ impl Batches {
 
     fn set_batch_status(&self, mut batch: Batch) -> Batch {
         let epoch = self.state.borrow().safe_epoch;
+        let next_epoch = self.state.borrow().epoch_by_number(epoch.number + 1);
         let head = self.state.borrow().safe_head;
         let next_timestamp = head.timestamp + 2;
 
@@ -106,7 +107,7 @@ impl Batches {
         let batch_origin = if batch.epoch_num == epoch.number {
             Some(epoch)
         } else if batch.epoch_num == epoch.number + 1 {
-            self.state.borrow().epoch_by_number(batch.epoch_num)
+            next_epoch
         } else {
             batch.status = BatchStatus::Drop;
             return batch;
@@ -126,7 +127,17 @@ impl Batches {
             // handle sequencer drift
             if batch.timestamp > batch_origin.timestamp + self.config.chain.max_seq_drif {
                 if batch.transactions.is_empty() {
-                    // TODO: handle
+                    if epoch.number == batch.epoch_num {
+                        if let Some(next_epoch) = next_epoch {
+                            if batch.timestamp >= next_epoch.timestamp {
+                                batch.status = BatchStatus::Drop;
+                                return batch;
+                            }
+                        } else {
+                            batch.status = BatchStatus::Undecided;
+                            return batch;
+                        }
+                    }
                 } else {
                     batch.status = BatchStatus::Drop;
                     return batch;
