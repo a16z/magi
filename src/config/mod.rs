@@ -16,8 +16,6 @@ pub enum SyncMode {
     /// Fast sync mode
     Fast,
     /// Challenge sync mode
-    ///
-    /// This mode will pull **finalized** blocks from the L2 RPC and then derive safe blocks.
     Challenge,
     /// Full sync mode
     Full,
@@ -41,14 +39,14 @@ impl FromStr for SyncMode {
 pub struct Config {
     /// The base chain RPC URL
     pub l1_rpc_url: String,
-    /// An External L2 RPC URL that can be used for fast syncing
+    /// The L2 engine RPC URL 
     pub l2_rpc_url: Option<String>,
+    /// Engine API URL
+    pub engine_api_url: Option<String>,
     /// The base chain config
     pub chain: ChainConfig,
     /// Location of the database folder
     pub db_location: Option<PathBuf>,
-    /// Engine API URL
-    pub engine_api_url: Option<String>,
     /// Engine API JWT Secret
     /// This is used to authenticate with the engine API
     pub jwt_secret: Option<String>,

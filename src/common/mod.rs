@@ -16,46 +16,6 @@ pub struct BlockInfo {
     pub timestamp: u64,
 }
 
-impl From<BlockID> for Value {
-    fn from(value: BlockID) -> Value {
-        let mut dict = Dict::new();
-        dict.insert("hash".to_string(), Value::from(value.hash.as_bytes()));
-        dict.insert("number".to_string(), Value::from(value.number));
-        dict.insert(
-            "parent_hash".to_string(),
-            Value::from(value.parent_hash.as_bytes()),
-        );
-        Value::Dict(Tag::Default, dict)
-    }
-}
-
-impl FromStr for BlockID {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Ok(hash) = H256::from_str(s) {
-            return Ok(Self {
-                hash,
-                number: 0,
-                parent_hash: H256::zero(),
-            });
-        }
-        if let Ok(number) = u64::from_str(s) {
-            return Ok(Self {
-                hash: H256::zero(),
-                number,
-                parent_hash: H256::zero(),
-            });
-        }
-        // Otherwise, use 0 as the block number
-        Ok(Self {
-            hash: H256::zero(),
-            number: 0,
-            parent_hash: H256::zero(),
-        })
-    }
-}
-
 /// A raw transaction
 #[derive(Clone, PartialEq, Eq)]
 pub struct RawTransaction(pub Vec<u8>);
@@ -66,6 +26,30 @@ pub struct Epoch {
     pub number: u64,
     pub hash: H256,
     pub timestamp: u64,
+}
+
+impl From<BlockInfo> for Value {
+    fn from(value: BlockInfo) -> Value {
+        let mut dict = Dict::new();
+        dict.insert("hash".to_string(), Value::from(value.hash.as_bytes()));
+        dict.insert("number".to_string(), Value::from(value.number));
+        dict.insert("timestamp".to_string(), Value::from(value.timestamp));
+        dict.insert(
+            "parent_hash".to_string(),
+            Value::from(value.parent_hash.as_bytes()),
+        );
+        Value::Dict(Tag::Default, dict)
+    }
+}
+
+impl From<Epoch> for Value {
+    fn from(value: Epoch) -> Self {
+        let mut dict = Dict::new();
+        dict.insert("hash".to_string(), Value::from(value.hash.as_bytes()));
+        dict.insert("number".to_string(), Value::from(value.number));
+        dict.insert("timestamp".to_string(), Value::from(value.timestamp));
+        Value::Dict(Tag::Default, dict)
+    }
 }
 
 impl Decodable for RawTransaction {
