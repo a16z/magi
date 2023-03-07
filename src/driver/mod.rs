@@ -53,15 +53,14 @@ impl Driver<EngineApi, Pipeline> {
         tracing::info!("syncing from: {:?}", safe_head.hash);
 
         let config = Arc::new(config);
-        let mut chain_watcher = ChainWatcher::new(safe_head.number, config.clone())?;
+        let mut chain_watcher = ChainWatcher::new(safe_epoch.number, config.clone())?;
         let tx_recv = chain_watcher.take_tx_receiver().unwrap();
+
         let state = Rc::new(RefCell::new(State::new(
             safe_head,
             safe_epoch,
             chain_watcher,
         )));
-
-        state.borrow_mut().update_safe_head(safe_head, safe_epoch);
 
         let engine = EngineApi::new(config.engine_url.clone(), Some(config.jwt_secret.clone()));
         let pipeline = Pipeline::new(state.clone(), tx_recv, config)?;

@@ -158,6 +158,7 @@ impl InnerWatcher {
             .number
             .ok_or(eyre::eyre!("block not included"))?
             .as_u64();
+
         let block_hash = block.hash.ok_or(eyre::eyre!("block not included"))?;
 
         let block_info = L1BlockInfo {

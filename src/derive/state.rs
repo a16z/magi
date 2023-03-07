@@ -54,6 +54,8 @@ impl State {
 
     pub fn update_l1_info(&mut self) {
         while let Ok(l1_info) = self.chain_watcher.l1_info_receiver.try_recv() {
+            self.l1_hashes
+                .insert(l1_info.block_info.number, l1_info.block_info.hash);
             self.l1_info.insert(l1_info.block_info.hash, l1_info);
         }
     }
