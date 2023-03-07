@@ -1,7 +1,7 @@
 use ethers_core::types::{Bytes, H160, H256, U64};
 use serde::{Deserialize, Serialize};
 
-use crate::common::RawTransaction;
+use crate::common::{Epoch, RawTransaction};
 
 /// ## ExecutionPayload
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -74,7 +74,7 @@ pub struct PayloadAttributes {
     /// The batch epoch number from derivation. This value is not expected by the engine is skipped
     /// during serialization and deserialization.
     #[serde(skip)]
-    pub epoch_number: Option<u64>,
+    pub epoch: Option<Epoch>,
 }
 
 /// ## PayloadId
