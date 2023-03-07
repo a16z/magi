@@ -39,7 +39,7 @@ impl FromStr for SyncMode {
 pub struct Config {
     /// The base chain RPC URL
     pub l1_rpc_url: String,
-    /// The L2 engine RPC URL 
+    /// The L2 engine RPC URL
     pub l2_rpc_url: Option<String>,
     /// Engine API URL
     pub engine_api_url: Option<String>,
