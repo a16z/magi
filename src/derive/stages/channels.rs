@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::sync::{Arc, Mutex};
 
 use ethers_core::types::H256;
 use eyre::Result;
@@ -8,7 +8,7 @@ use crate::{common::BlockID, config::Config};
 
 pub struct Channels {
     pending_channels: Vec<PendingChannel>,
-    prev_stage: Rc<RefCell<BatcherTransactions>>,
+    prev_stage: Arc<Mutex<BatcherTransactions>>,
     ready_channel: Option<Channel>,
     /// A bank of frames and their version numbers pulled from a [BatcherTransaction]
     frame_bank: Vec<Frame>,
@@ -33,10 +33,10 @@ impl Iterator for Channels {
 
 impl Channels {
     pub fn new(
-        prev_stage: Rc<RefCell<BatcherTransactions>>,
+        prev_stage: Arc<Mutex<BatcherTransactions>>,
         config: Arc<Config>,
-    ) -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {
+    ) -> Arc<Mutex<Self>> {
+        Arc::new(Mutex::new(Self {
             pending_channels: Vec::new(),
             prev_stage,
             ready_channel: None,
@@ -105,8 +105,9 @@ impl Channels {
 
         let next_batcher_tx = self
             .prev_stage
-            .borrow_mut()
-            .next()
+            .lock()
+            .ok()
+            .and_then(|mut s| s.next())
             .ok_or(eyre::eyre!("No batcher tx"))?;
 
         self.frame_bank = next_batcher_tx.frames.to_vec();

@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::common::BlockID;
 
 /// Sync Mode Specifies how `magi` should sync the L2 chain
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SyncMode {
     /// Fast sync mode
     Fast,

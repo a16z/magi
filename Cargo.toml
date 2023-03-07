@@ -19,6 +19,7 @@ tracing = "0.1.36"
 ansi_term = "0.12.1"
 tracing-log = "0.1.3"
 tracing-subscriber = { version = "0.3.16", features = ["fmt", "env-filter", "ansi"] }
+ctrlc = "3.2.3"
 
 # Serialization
 serde = { version = "1.0.152", features = [ "derive" ] }

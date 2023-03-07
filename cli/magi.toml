@@ -2,8 +2,8 @@
 network="goerli"
 l1_rpc_url="https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc"
 l2_rpc_url="https://opt-mainnet.g.alchemy.com/v2/Q9K5rbJD5gOf0LcJfLBq3Vt-yWeONBrh"
-engine_api_url="http://127.0.0.1:8551"
-jwt_secret="bf549f5188556ce0951048ef467ec93067bc4ea21acebe46ef675cd4e8e015ff"
+# engine_api_url="http://127.0.0.1:8551"
+# jwt_secret="bf549f5188556ce0951048ef467ec93067bc4ea21acebe46ef675cd4e8e015ff"
 
 [default.chain]
 max_channels=100_000_000

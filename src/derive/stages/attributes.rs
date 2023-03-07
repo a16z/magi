@@ -1,5 +1,5 @@
-use std::sync::Arc;
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::sync::{Arc, Mutex};
+use std::{collections::HashMap};
 
 use ethers_core::abi::{decode, encode, ParamType, Token};
 use ethers_core::types::{Address, Log, H256, U256, U64};
@@ -15,8 +15,8 @@ use crate::l1::L1Info;
 use super::batches::{Batch, Batches};
 
 pub struct Attributes {
-    prev_stage: Rc<RefCell<Batches>>,
-    l1_info: Rc<RefCell<HashMap<H256, L1Info>>>,
+    prev_stage: Arc<Mutex<Batches>>,
+    l1_info: Arc<Mutex<HashMap<H256, L1Info>>>,
     sequence_number: u64,
     epoch_hash: H256,
 }
@@ -25,7 +25,7 @@ impl Iterator for Attributes {
     type Item = PayloadAttributes;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let batch = self.prev_stage.borrow_mut().next()?;
+        let batch = self.prev_stage.lock().ok().and_then(|mut s| s.next())?;
         let payload_attributes = self.derive_attributes(batch);
 
         Some(payload_attributes)
@@ -34,11 +34,11 @@ impl Iterator for Attributes {
 
 impl Attributes {
     pub fn new(
-        prev_stage: Rc<RefCell<Batches>>,
+        prev_stage: Arc<Mutex<Batches>>,
         config: Arc<Config>,
-        l1_info: Rc<RefCell<HashMap<H256, L1Info>>>,
-    ) -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {
+        l1_info: Arc<Mutex<HashMap<H256, L1Info>>>,
+    ) -> Arc<Mutex<Self>> {
+        Arc::new(Mutex::new(Self {
             prev_stage,
             l1_info,
             sequence_number: 0,
@@ -52,7 +52,7 @@ impl Attributes {
 
         self.update_sequence_number(batch.epoch_hash);
 
-        let l1_info = self.l1_info.borrow();
+        let l1_info = self.l1_info.lock().unwrap();
         let l1_info = l1_info.get(&batch.epoch_hash).unwrap();
 
         let timestamp = U64([batch.timestamp]);
@@ -97,7 +97,7 @@ impl Attributes {
     }
 
     fn derive_user_deposited(&self) -> Vec<RawTransaction> {
-        let l1_info = self.l1_info.borrow();
+        let l1_info = self.l1_info.lock().unwrap();
         l1_info
             .get(&self.epoch_hash)
             .map(|info| &info.user_deposits)

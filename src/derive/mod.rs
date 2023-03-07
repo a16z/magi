@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::Arc};
+use std::{collections::HashMap, sync::{Arc, Mutex}};
 
 use ethers_core::types::H256;
 use eyre::Result;
@@ -17,9 +17,9 @@ use self::stages::{
 pub mod stages;
 
 pub struct Pipeline {
-    attributes: Rc<RefCell<Attributes>>,
+    attributes: Arc<Mutex<Attributes>>,
     chain_watcher: ChainWatcher,
-    l1_info: Rc<RefCell<HashMap<H256, L1Info>>>,
+    l1_info: Arc<Mutex<HashMap<H256, L1Info>>>,
 }
 
 impl Iterator for Pipeline {
@@ -27,7 +27,8 @@ impl Iterator for Pipeline {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.update_l1_info();
-        self.attributes.borrow_mut().next()
+        tracing::debug!(target: "magi", "pipeline updated new l1 info");
+        self.attributes.lock().ok().and_then(|mut a| a.next())
     }
 }
 
@@ -38,7 +39,7 @@ impl Pipeline {
             .take_tx_receiver()
             .ok_or(eyre::eyre!("tx receiver already taken"))?;
 
-        let l1_info = Rc::new(RefCell::new(HashMap::<H256, L1Info>::new()));
+        let l1_info = Arc::new(Mutex::new(HashMap::<H256, L1Info>::new()));
 
         let batcher_transactions = BatcherTransactions::new(tx_recv);
         let channels = Channels::new(batcher_transactions, Arc::clone(&config));
@@ -55,7 +56,8 @@ impl Pipeline {
     fn update_l1_info(&mut self) {
         while let Ok(l1_info) = self.chain_watcher.l1_info_receiver.try_recv() {
             self.l1_info
-                .borrow_mut()
+                .lock()
+                .unwrap()
                 .insert(l1_info.block_info.hash, l1_info);
         }
     }

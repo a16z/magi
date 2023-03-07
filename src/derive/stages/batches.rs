@@ -1,5 +1,6 @@
 use core::fmt::Debug;
-use std::{cell::RefCell, io::Read, rc::Rc};
+use std::sync::{Arc, Mutex};
+use std::io::Read;
 
 use ethers_core::types::H256;
 use ethers_core::utils::rlp::{Decodable, DecoderError, Rlp};
@@ -13,7 +14,7 @@ use super::channels::{Channel, Channels};
 
 pub struct Batches {
     batches: Vec<Batch>,
-    prev_stage: Rc<RefCell<Channels>>,
+    prev_stage: Arc<Mutex<Channels>>,
     start_epoch: u64,
 }
 
@@ -29,8 +30,8 @@ impl Iterator for Batches {
 }
 
 impl Batches {
-    pub fn new(prev_stage: Rc<RefCell<Channels>>, start_epoch: u64) -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {
+    pub fn new(prev_stage: Arc<Mutex<Channels>>, start_epoch: u64) -> Arc<Mutex<Self>> {
+        Arc::new(Mutex::new(Self {
             batches: Vec::new(),
             prev_stage,
             start_epoch,
@@ -38,7 +39,7 @@ impl Batches {
     }
 
     fn try_next(&mut self) -> Result<Option<Batch>> {
-        let channel = self.prev_stage.borrow_mut().next();
+        let channel = self.prev_stage.lock().ok().and_then(|mut c| c.next());
         if let Some(channel) = channel {
             let mut batches = decode_batches(&channel)?
                 .into_iter()

@@ -1,6 +1,5 @@
 use std::{
-    process::exit,
-    sync::{Arc, Mutex},
+    sync::Arc,
     str::FromStr,
     path::PathBuf,
 };
@@ -9,8 +8,6 @@ use clap::Parser;
 use dirs::home_dir;
 use ethers_core::types::{H160, Chain};
 use eyre::Result;
-
-use log::{error, info};
 
 use magi::{
     common::BlockID,
@@ -24,55 +21,76 @@ use magi::{
 #[tokio::main]
 async fn main() -> Result<()> {
     telemetry::init(false)?;
+    telemetry::register_shutdown();
 
-    let config = get_config();
+    // Construct all magi components
+    let cli = Cli::parse();
+    let sync_mode = cli.sync_mode.clone();
+    let config = cli.to_config();
+    println!("Config: {:#?}", config);
 
-    let pipeline = Pipeline::new(config.chain.l1_start_epoch.number, config.clone().into())?;
-    let engine = EngineApi::new(config.get_engine_api_url(), config.jwt_secret.clone());
-    let mut driver = Driver::from_internals(engine, pipeline, Arc::new(config));
-    if let Err(err) = driver.start().await {
-        error!("{}", err);
-        exit(1);
+    // TODO: if we spawn slow sync in a separate thread that writes to db,
+    // TODO: and fast sync writes an invalid payload to db, we need to bubble
+    // TODO: this error up to the slow sync thread and the main thread.
+
+    // We want to spawn slow sync in a separate thread
+    // this allows the happy-path to gracefully fail without
+    // delaying slow sync.
+    let arc_config = Arc::new(config);
+    slow_sync(arc_config).await?;
+    // let slow_sync = std::thread::spawn(|| async move {
+    //     slow_sync(arc_config).await
+    // });
+
+    // If we have fast sync enabled, we need to sync the state first
+    if sync_mode == SyncMode::Fast {
+        tracing::info!(target: "magi", "syncing in fast mode...");
+        // TODO:: fast sync
+        panic!("fast sync not implemented yet");
+        // driver.fast_sync().await?;
+    } else {
+        tracing::info!(target: "magi", "syncing in challenge or full mode...");
+        // let res = slow_sync.join();
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+        // println!("slow sync finished: {:?}", res);
+        // loop join until slow sync is finished
+        // loop {
+        //     // TODO: add an optional timeout for slow sync
+        //     if slow_sync.is_finished() {
+        //         tracing::info!(target: "magi", "slow sync finished");
+        //         break;
+        //     }
+        // }
     }
 
-    let shutdown_counter = Arc::new(Mutex::new(0));
-
-    ctrlc::set_handler(move || {
-        let mut counter = shutdown_counter.lock().unwrap();
-        *counter += 1;
-
-        let counter_value = *counter;
-
-        if counter_value == 3 {
-            info!("forced shutdown");
-            exit(0);
-        }
-
-        info!(
-            "shutting down... press ctrl-c {} more times to force quit",
-            3 - counter_value
-        );
-
-        if counter_value == 1 {
-            exit(0);
-            // std::thread::spawn(move || {
-            //     block_on(driver.shutdown());
-            //     exit(0);
-            // });
-        }
-    })
-    .expect("could not register shutdown handler");
-
-    std::future::pending().await
+    Ok(())
 }
 
-fn get_config() -> Config {
-    let cli = Cli::parse();
-    let config_path = home_dir().unwrap().join(".magi/magi.toml");
-    let cli_config: Config = cli.to_config();
-    let base_config = Config::from_file(&config_path, &cli_config);
-    let local_path = std::env::current_dir().unwrap().join("magi.toml");
-    Config::from_file(&local_path, &base_config)
+pub async fn slow_sync(config: Arc<Config>) -> Result<()> {
+    let chain_number = config.chain.l1_start_epoch.number;
+    tracing::info!(target: "magi", "starting full sync on chain {}", chain_number);
+    let pipeline = match Pipeline::new(chain_number, config.clone().into()) {
+        Ok(pipeline) => pipeline,
+        Err(err) => {
+            tracing::error!(target: "magi", "Pipeline construction error: {}", err);
+            std::process::exit(1);
+        }
+    };
+    tracing::info!(target: "magi", "created pipeline");
+    let engine = EngineApi::new(config.get_engine_api_url(), config.jwt_secret.clone());
+    tracing::info!(target: "magi", "constructed engine");
+    let mut driver = Driver::from_internals(engine, pipeline, Arc::clone(&config));
+    tracing::info!(target: "magi", "executing driver...");
+
+    // Run the driver
+    if let Err(err) = driver.start().await {
+        tracing::error!(target: "magi", "{}", err);
+        std::process::exit(1);
+    }
+
+    Ok(())
 }
 
 #[derive(Parser)]
@@ -108,7 +126,15 @@ pub struct Cli {
 }
 
 impl Cli {
-    fn to_config(&self) -> Config {
+    pub fn to_config(self) -> Config {
+        let config_path = home_dir().unwrap().join(".magi/magi.toml");
+        let cli_config: Config = self.cli_config();
+        let base_config = Config::from_file(&config_path, &cli_config);
+        let local_path = std::env::current_dir().unwrap().join("magi.toml");
+        Config::from_file(&local_path, &base_config)
+    }
+
+    pub fn cli_config(&self) -> Config {
         Config {
             l1_rpc_url: self.l1_rpc_url.clone(),
             l2_rpc_url: self.l2_rpc_url.clone(),

@@ -49,7 +49,7 @@ impl Driver<EngineApi, Pipeline> {
             .map(|h| h.l1_epoch_number)
             .unwrap_or(config.chain.l1_start_epoch.number);
 
-        tracing::info!("syncing from: {:?}", safe_block.hash);
+        tracing::info!(target: "magi", "syncing from: {:?}", safe_block.hash);
 
         let engine = EngineApi::new(
             config.engine_api_url.clone().unwrap_or_default(),
@@ -90,7 +90,9 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
     /// Runs the Driver
     pub async fn start(&mut self) -> Result<()> {
         loop {
+            tracing::info!(target: "magi::driver", "advancing driver...");
             self.advance().await?;
+            tracing::info!(target: "magi", "synced to: {:?}", self.safe_block.number);
         }
     }
 
@@ -109,6 +111,7 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
                 break next_attributes;
             }
         };
+        tracing::debug!(target: "magi", "received new attributes from the pipeline");
 
         let new_epoch = next_attributes.epoch_number.unwrap();
 

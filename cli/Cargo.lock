@@ -258,13 +258,12 @@ dependencies = [
  "clap",
  "ctrlc",
  "dirs",
- "env_logger",
  "ethers-core",
  "eyre",
  "futures",
- "log",
  "magi",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -531,19 +530,6 @@ dependencies = [
  "serde",
  "sha3",
  "zeroize",
-]
-
-[[package]]
-name = "env_logger"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a12e6657c4c97ebab115a42dcee77225f7f482cdd841cf7088c657a42e9e00e7"
-dependencies = [
- "atty",
- "humantime",
- "log",
- "regex",
- "termcolor",
 ]
 
 [[package]]
@@ -1038,12 +1024,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4a1e36c821dbe04574f602848a19f742f4fb3c98d40449f11bcad18d6b17421"
 
 [[package]]
-name = "humantime"
-version = "2.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
-
-[[package]]
 name = "hyper"
 version = "0.14.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1340,6 +1320,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "chrono",
+ "ctrlc",
  "ethers-core",
  "ethers-providers",
  "eyre",
