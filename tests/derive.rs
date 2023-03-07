@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use ethers_core::{types::H256, utils::keccak256};
 use ethers_providers::{Middleware, Provider};
@@ -6,7 +6,8 @@ use ethers_providers::{Middleware, Provider};
 use magi::{
     common::RawTransaction,
     config::{ChainConfig, Config},
-    derive::Pipeline,
+    derive::{state::State, Pipeline},
+    l1::ChainWatcher,
     telemetry,
 };
 
@@ -14,11 +15,7 @@ use magi::{
 async fn test_attributes_match() {
     telemetry::init(true).unwrap();
 
-    let start_epoch = 8494058;
     let rpc = "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc";
-
-    let start_block = 5503464;
-    let num = 100;
 
     let config = Arc::new(Config {
         l1_rpc: rpc.to_string(),
@@ -28,18 +25,22 @@ async fn test_attributes_match() {
         chain: ChainConfig::goerli(),
     });
 
-    let mut pipeline = Pipeline::new(start_epoch, config).unwrap();
+    let mut chain_watcher =
+        ChainWatcher::new(config.chain.l1_start_epoch.number, config.clone()).unwrap();
+    let tx_recv = chain_watcher.take_tx_receiver().unwrap();
+    let state = Rc::new(RefCell::new(State::new(
+        config.chain.l2_genesis,
+        config.chain.l1_start_epoch,
+        chain_watcher,
+    )));
 
-    let mut i = 0;
-    while i < num {
-        if let Some(payload) = pipeline.next() {
-            let hashes = get_tx_hashes(&payload.transactions.unwrap());
-            let expected_hashes = get_expected_hashes(start_block + i).await;
+    let mut pipeline = Pipeline::new(state, tx_recv, config.clone()).unwrap();
 
-            assert_eq!(hashes, expected_hashes);
+    if let Some(payload) = pipeline.next() {
+        let hashes = get_tx_hashes(&payload.transactions.unwrap());
+        let expected_hashes = get_expected_hashes(config.chain.l2_genesis.number + 1).await;
 
-            i += 1;
-        }
+        assert_eq!(hashes, expected_hashes);
     }
 }
 

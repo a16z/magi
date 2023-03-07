@@ -2,6 +2,7 @@ use std::{sync::Arc, vec::IntoIter};
 
 use ethers_core::types::{H256, U64};
 use magi::{
+    common::Epoch,
     config::{ChainConfig, Config},
     driver::Driver,
     engine::{
@@ -17,17 +18,16 @@ async fn test_advance() {
     let engine = create_engine(next_block_hash, &config);
     let pipeline = create_pipeline();
 
-    let mut driver = Driver::from_internals(engine, pipeline, config);
+    let mut driver = Driver::from_internals(engine, pipeline, config).unwrap();
     driver.advance().await.unwrap();
 
-    assert_eq!(driver.safe_block.hash, next_block_hash);
-    assert_eq!(driver.finalized_block.hash, H256::zero());
+    assert_eq!(driver.safe_head.hash, next_block_hash);
 }
 
 fn creat_config() -> Config {
     Config {
         chain: ChainConfig::goerli(),
-        l1_rpc: String::new(),
+        l1_rpc: "http://example.com".to_string(),
         engine_url: String::new(),
         jwt_secret: String::new(),
         db_location: None,
@@ -36,7 +36,7 @@ fn creat_config() -> Config {
 
 fn create_pipeline() -> IntoIter<PayloadAttributes> {
     let attr = PayloadAttributes {
-        epoch_number: Some(1),
+        epoch: Some(Epoch::default()),
         ..Default::default()
     };
     let attributes = vec![attr];

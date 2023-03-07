@@ -24,7 +24,7 @@ pub struct Driver<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> {
     /// Database for storing progress data
     db: Database,
     /// Most recent block hash that can be derived from L1 data
-    safe_head: BlockInfo,
+    pub safe_head: BlockInfo,
     /// Batch epoch of the safe head
     safe_epoch: Epoch,
     /// State struct to keep track of global state
