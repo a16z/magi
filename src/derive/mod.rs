@@ -4,6 +4,7 @@ use ethers_core::types::H256;
 use eyre::Result;
 
 use crate::{
+    common::{Epoch, BlockInfo},
     config::Config,
     engine::PayloadAttributes,
     l1::{ChainWatcher, L1Info},
@@ -32,8 +33,8 @@ impl Iterator for Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(start_epoch: u64, config: Arc<Config>) -> Result<Self> {
-        let mut chain_watcher = ChainWatcher::new(start_epoch, config.clone())?;
+    pub fn new(head_epoch: Rc<RefCell<Epoch>>, safe_head: Rc<RefCell<BlockInfo>>, config: Arc<Config>) -> Result<Self> {
+        let mut chain_watcher = ChainWatcher::new(head_epoch.borrow().number, config.clone())?;
         let tx_recv = chain_watcher
             .take_tx_receiver()
             .ok_or(eyre::eyre!("tx receiver already taken"))?;
@@ -41,8 +42,8 @@ impl Pipeline {
         let l1_info = Rc::new(RefCell::new(HashMap::<H256, L1Info>::new()));
 
         let batcher_transactions = BatcherTransactions::new(tx_recv);
-        let channels = Channels::new(batcher_transactions, Arc::clone(&config));
-        let batches = Batches::new(channels, start_epoch);
+        let channels = Channels::new(batcher_transactions, config.clone());
+        let batches = Batches::new(channels, head_epoch, safe_head, config.clone());
         let attributes = Attributes::new(batches, config, l1_info.clone());
 
         Ok(Self {

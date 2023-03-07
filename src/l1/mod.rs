@@ -34,7 +34,7 @@ pub struct ChainWatcher {
 #[derive(Debug)]
 pub struct L1Info {
     /// L1 block data
-    pub block_info: BlockInfo,
+    pub block_info: L1BlockInfo,
     /// The system config at the block
     pub system_config: SystemConfig,
     /// User deposits from that block
@@ -43,7 +43,7 @@ pub struct L1Info {
 
 /// L1 block info
 #[derive(Debug)]
-pub struct BlockInfo {
+pub struct L1BlockInfo {
     /// L1 block number
     pub number: u64,
     /// L1 block hash
@@ -160,7 +160,7 @@ impl InnerWatcher {
             .as_u64();
         let block_hash = block.hash.ok_or(eyre::eyre!("block not included"))?;
 
-        let block_info = BlockInfo {
+        let block_info = L1BlockInfo {
             number: block_number,
             hash: block_hash,
             timestamp: block.timestamp.as_u64(),

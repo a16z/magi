@@ -7,7 +7,7 @@ use ethers_core::utils::{keccak256, rlp::Encodable, rlp::RlpStream};
 
 use eyre::Result;
 
-use crate::common::RawTransaction;
+use crate::common::{Epoch, RawTransaction};
 use crate::config::{Config, SystemAccounts};
 use crate::engine::PayloadAttributes;
 use crate::l1::L1Info;
@@ -55,9 +55,14 @@ impl Attributes {
         let l1_info = self.l1_info.borrow();
         let l1_info = l1_info.get(&batch.epoch_hash).unwrap();
 
+        let epoch = Some(Epoch {
+            number: batch.epoch_num,
+            hash: batch.epoch_hash,
+            timestamp: l1_info.block_info.timestamp,
+        });
+
         let timestamp = U64([batch.timestamp]);
         let prev_randao = l1_info.block_info.mix_hash;
-        let epoch_number = Some(batch.epoch_num);
         let transactions = Some(self.derive_transactions(batch, l1_info));
         let suggested_fee_recipient = SystemAccounts::default().fee_vault;
 
@@ -68,7 +73,7 @@ impl Attributes {
             transactions,
             no_tx_pool: true,
             gas_limit: U64([l1_info.system_config.gas_limit.as_u64()]),
-            epoch_number,
+            epoch,
         }
     }
 
