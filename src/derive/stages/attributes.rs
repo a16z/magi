@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use ethers_core::abi::{decode, encode, ParamType, Token};
 use ethers_core::types::{Address, Log, H256, U256, U64};
@@ -7,8 +7,9 @@ use ethers_core::utils::{keccak256, rlp::Encodable, rlp::RlpStream};
 
 use eyre::Result;
 
-use crate::common::RawTransaction;
+use crate::common::{Epoch, RawTransaction};
 use crate::config::{Config, SystemAccounts};
+use crate::derive::state::State;
 use crate::engine::PayloadAttributes;
 use crate::l1::L1Info;
 
@@ -16,7 +17,7 @@ use super::batches::{Batch, Batches};
 
 pub struct Attributes {
     prev_stage: Rc<RefCell<Batches>>,
-    l1_info: Rc<RefCell<HashMap<H256, L1Info>>>,
+    state: Rc<RefCell<State>>,
     sequence_number: u64,
     epoch_hash: H256,
 }
@@ -36,14 +37,14 @@ impl Attributes {
     pub fn new(
         prev_stage: Rc<RefCell<Batches>>,
         config: Arc<Config>,
-        l1_info: Rc<RefCell<HashMap<H256, L1Info>>>,
-    ) -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {
+        state: Rc<RefCell<State>>,
+    ) -> Self {
+        Self {
             prev_stage,
-            l1_info,
+            state,
             sequence_number: 0,
             epoch_hash: config.chain.l1_start_epoch.hash,
-        }))
+        }
     }
 
     fn derive_attributes(&mut self, batch: Batch) -> PayloadAttributes {
@@ -52,12 +53,17 @@ impl Attributes {
 
         self.update_sequence_number(batch.epoch_hash);
 
-        let l1_info = self.l1_info.borrow();
-        let l1_info = l1_info.get(&batch.epoch_hash).unwrap();
+        let state = self.state.borrow();
+        let l1_info = state.l1_info_by_hash(batch.epoch_hash).unwrap();
+
+        let epoch = Some(Epoch {
+            number: batch.epoch_num,
+            hash: batch.epoch_hash,
+            timestamp: l1_info.block_info.timestamp,
+        });
 
         let timestamp = U64([batch.timestamp]);
         let prev_randao = l1_info.block_info.mix_hash;
-        let epoch_number = Some(batch.epoch_num);
         let transactions = Some(self.derive_transactions(batch, l1_info));
         let suggested_fee_recipient = SystemAccounts::default().fee_vault;
 
@@ -68,7 +74,7 @@ impl Attributes {
             transactions,
             no_tx_pool: true,
             gas_limit: U64([l1_info.system_config.gas_limit.as_u64()]),
-            epoch_number,
+            epoch,
         }
     }
 
@@ -97,9 +103,9 @@ impl Attributes {
     }
 
     fn derive_user_deposited(&self) -> Vec<RawTransaction> {
-        let l1_info = self.l1_info.borrow();
-        l1_info
-            .get(&self.epoch_hash)
+        let state = self.state.borrow();
+        state
+            .l1_info_by_hash(self.epoch_hash)
             .map(|info| &info.user_deposits)
             .map(|deposits| {
                 deposits

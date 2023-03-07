@@ -8,7 +8,7 @@ use figment::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::common::BlockID;
+use crate::common::{BlockInfo, Epoch};
 
 /// Sync Mode Specifies how `magi` should sync the L2 chain
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -117,9 +117,9 @@ impl Config {
 #[derive(Debug, Copy, Clone, Deserialize)]
 pub struct ChainConfig {
     /// The L1 block referenced by the L2 chain
-    pub l1_start_epoch: BlockID,
-    /// The L2 genesis block
-    pub l2_genesis: BlockID,
+    pub l1_start_epoch: Epoch,
+    /// The L2 genesis block info
+    pub l2_genesis: BlockInfo,
     /// The batch sender address
     pub batch_sender: Address,
     /// The batch inbox address
@@ -130,6 +130,10 @@ pub struct ChainConfig {
     pub max_channels: usize,
     /// The max timeout for a channel (as measured by the frame L1 block number)
     pub max_timeout: u64,
+    /// Number of L1 blocks in a sequence window
+    pub seq_window_size: u64,
+    /// Maximum timestamp drift
+    pub max_seq_drif: u64,
 }
 
 fn address_to_str(address: &Address) -> String {
@@ -173,25 +177,26 @@ pub struct SystemAccounts {
 impl ChainConfig {
     pub fn goerli() -> Self {
         Self {
-            l1_start_epoch: BlockID {
+            l1_start_epoch: Epoch {
                 hash: hash("0x6ffc1bf3754c01f6bb9fe057c1578b87a8571ce2e9be5ca14bace6eccfd336c7"),
-                parent_hash: hash(
-                    "0xf8b68fcad82739208baff929ef51dff682b5960a57cad693babe01b23fd65460",
-                ),
                 number: 8300214,
+                timestamp: 1673550516,
             },
-            l2_genesis: BlockID {
+            l2_genesis: BlockInfo {
                 hash: hash("0x0f783549ea4313b784eadd9b8e8a69913b368b7366363ea814d7707ac505175f"),
                 number: 4061224,
                 parent_hash: hash(
                     "0x31267a44f1422f4cab59b076548c075e79bd59e691a23fbce027f572a2a49dc9",
                 ),
+                timestamp: 1673550516,
             },
             batch_sender: addr("0x7431310e026b69bfc676c0013e12a1a11411eec9"),
             batch_inbox: addr("0xff00000000000000000000000000000000000420"),
             deposit_contract: addr("0x5b47E1A08Ea6d985D6649300584e6722Ec4B1383"),
             max_channels: 100_000_000,
             max_timeout: 100,
+            seq_window_size: 120,
+            max_seq_drif: 3600,
         }
     }
 }

@@ -7,12 +7,13 @@ use ethers_core::{
 use figment::value::{Dict, Tag, Value};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 
-/// A Block Identifier
+/// Selected block header info
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Default, Serialize, Deserialize)]
-pub struct BlockID {
+pub struct BlockInfo {
     pub hash: H256,
     pub number: u64,
     pub parent_hash: H256,
+    pub timestamp: u64,
 }
 
 impl From<BlockID> for Value {
@@ -58,6 +59,14 @@ impl FromStr for BlockID {
 /// A raw transaction
 #[derive(Clone, PartialEq, Eq)]
 pub struct RawTransaction(pub Vec<u8>);
+
+/// L1 epoch block
+#[derive(Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Epoch {
+    pub number: u64,
+    pub hash: H256,
+    pub timestamp: u64,
+}
 
 impl Decodable for RawTransaction {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
