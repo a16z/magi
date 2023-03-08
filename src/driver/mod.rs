@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 
 use ethers_core::types::H256;
 use eyre::Result;
@@ -28,7 +28,7 @@ pub struct Driver<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> {
     /// Batch epoch of the safe head
     safe_epoch: Epoch,
     /// State struct to keep track of global state
-    state: Arc<Mutex<State>>,
+    state: Arc<RwLock<State>>,
 }
 
 impl Driver<EngineApi, Pipeline> {
@@ -56,7 +56,11 @@ impl Driver<EngineApi, Pipeline> {
         let mut chain_watcher = ChainWatcher::new(safe_epoch.number, config.clone())?;
         let tx_recv = chain_watcher.take_tx_receiver().unwrap();
 
-        let state = Arc::new(Mutex::new(State::new(safe_head, safe_epoch, chain_watcher)));
+        let state = Arc::new(RwLock::new(State::new(
+            safe_head,
+            safe_epoch,
+            chain_watcher,
+        )));
 
         let engine = EngineApi::new(
             config.engine_api_url.clone().unwrap_or_default(),
@@ -82,7 +86,11 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
         let safe_head = config.chain.l2_genesis;
         let safe_epoch = config.chain.l1_start_epoch;
         let chain_watcher = ChainWatcher::new(safe_epoch.number, config)?;
-        let state = Arc::new(Mutex::new(State::new(safe_head, safe_epoch, chain_watcher)));
+        let state = Arc::new(RwLock::new(State::new(
+            safe_head,
+            safe_epoch,
+            chain_watcher,
+        )));
 
         let db = Database::default();
 
@@ -99,10 +107,8 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
     /// Runs the Driver
     pub async fn start(&mut self) -> Result<()> {
         loop {
-            tracing::info!(target: "magi::driver", "advancing driver...");
             self.advance().await?;
-            let state = self.state.lock().unwrap();
-            tracing::info!(target: "magi", "synced to: {:?}", state.safe_head.number);
+            tracing::info!(target: "magi", "head updated: {} {:?}", self.safe_head.number, self.safe_head.hash);
         }
     }
 
@@ -123,6 +129,7 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
                 break next_attributes;
             }
         };
+
         tracing::debug!(target: "magi", "received new attributes from the pipeline");
 
         tracing::debug!("next attributes: {:?}", next_attributes);
@@ -145,7 +152,7 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
     }
 
     fn update_state(&self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.write().unwrap();
         state.update_l1_info();
         state.update_safe_head(self.safe_head, self.safe_epoch);
     }
@@ -180,7 +187,6 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
 
     async fn update_forkchoice(&mut self, new_head: BlockInfo, new_epoch: Epoch) -> Result<()> {
         if self.safe_head != new_head {
-            tracing::info!("chain head updated: {:?}", new_head.hash);
             if self.safe_epoch != new_epoch {
                 tracing::info!("saving new head to db: {:?}", new_head.hash);
 
