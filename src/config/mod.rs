@@ -1,26 +1,108 @@
-use std::{path::PathBuf, str::FromStr};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::PathBuf,
+    process::exit,
+    str::FromStr,
+};
 
 use ethers_core::types::{Address, H256};
+use figment::{
+    providers::{Format, Serialized, Toml},
+    value::Value,
+    Figment,
+};
+use serde::{Deserialize, Serialize};
 
 use crate::common::{BlockInfo, Epoch};
 
+/// Sync Mode Specifies how `magi` should sync the L2 chain
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum SyncMode {
+    /// Fast sync mode
+    Fast,
+    /// Challenge sync mode
+    Challenge,
+    /// Full sync mode
+    Full,
+}
+
+impl FromStr for SyncMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "fast" => Ok(Self::Fast),
+            "challenge" => Ok(Self::Challenge),
+            "full" => Ok(Self::Full),
+            _ => Err("invalid sync mode".to_string()),
+        }
+    }
+}
+
 /// A system configuration
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct Config {
     /// The base chain RPC URL
-    pub l1_rpc: String,
-    /// Url of the L2 engine API
-    pub engine_url: String,
-    /// JWT secret for the L2 engine API
-    pub jwt_secret: String,
-    /// Location of the database folder
-    pub db_location: Option<PathBuf>,
+    pub l1_rpc_url: String,
+    /// The L2 engine RPC URL
+    pub l2_rpc_url: Option<String>,
+    /// Engine API URL
+    pub engine_api_url: Option<String>,
     /// The base chain config
     pub chain: ChainConfig,
+    /// Location of the database folder
+    pub data_dir: Option<PathBuf>,
+    /// Engine API JWT Secret
+    /// This is used to authenticate with the engine API
+    pub jwt_secret: Option<String>,
+}
+
+pub struct CliConfig {}
+
+impl Config {
+    pub fn get_engine_api_url(&self) -> String {
+        self.engine_api_url
+            .clone()
+            .unwrap_or("http://localhost:8551".to_string())
+    }
+}
+
+impl Config {
+    pub fn new(
+        config_path: &PathBuf,
+        cli_provider: Serialized<HashMap<&str, Value>>,
+        chain: ChainConfig,
+    ) -> Self {
+        let chain_provider = chain.as_provider();
+        let toml_provider = Toml::file(config_path).nested();
+
+        let config_res = Figment::new()
+            .merge(chain_provider)
+            .merge(toml_provider)
+            .merge(cli_provider)
+            .extract();
+
+        match config_res {
+            Ok(config) => config,
+            Err(err) => {
+                match err.kind {
+                    figment::error::Kind::MissingField(field) => {
+                        let field = field.replace('_', "-");
+                        println!("\x1b[91merror\x1b[0m: missing configuration field: {field}");
+                        println!("\n\ttry supplying the propoper command line argument: --{field}");
+                        println!("\talternatively, you can add the field to your magi.toml file or as an environment variable");
+                        println!("\nfor more information, check the github README");
+                    }
+                    _ => println!("cannot parse configuration: {err}"),
+                }
+                exit(1);
+            }
+        }
+    }
 }
 
 /// A Chain Configuration
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone, Deserialize)]
 pub struct ChainConfig {
     /// The L1 block referenced by the L2 chain
     pub l1_start_epoch: Epoch,
@@ -39,7 +121,55 @@ pub struct ChainConfig {
     /// Number of L1 blocks in a sequence window
     pub seq_window_size: u64,
     /// Maximum timestamp drift
-    pub max_seq_drif: u64,
+    pub max_seq_drift: u64,
+}
+
+fn address_to_str(address: &Address) -> String {
+    format!("0x{}", hex::encode(address.as_bytes()))
+}
+
+impl ChainConfig {
+    pub fn as_provider(&self) -> Serialized<HashMap<&str, Value>> {
+        let mut dict = HashMap::new();
+        let value = Value::from(self);
+        dict.insert("chain", value);
+        Serialized::from(dict, "default".to_string())
+    }
+
+    fn as_dict(&self) -> BTreeMap<String, Value> {
+        let mut dict = BTreeMap::new();
+        dict.insert(
+            "l1_start_epoch".to_string(),
+            Value::from(self.l1_start_epoch),
+        );
+        dict.insert("l2_genesis".to_string(), Value::from(self.l2_genesis));
+        dict.insert(
+            "batch_sender".to_string(),
+            Value::from(address_to_str(&self.batch_sender)),
+        );
+        dict.insert(
+            "batch_inbox".to_string(),
+            Value::from(address_to_str(&self.batch_inbox)),
+        );
+        dict.insert(
+            "deposit_contract".to_string(),
+            Value::from(address_to_str(&self.deposit_contract)),
+        );
+        dict.insert("max_channels".to_string(), Value::from(self.max_channels));
+        dict.insert("max_timeout".to_string(), Value::from(self.max_timeout));
+        dict.insert(
+            "seq_window_size".to_string(),
+            Value::from(self.seq_window_size),
+        );
+        dict.insert("max_seq_drift".to_string(), Value::from(self.max_seq_drift));
+        dict
+    }
+}
+
+impl From<&ChainConfig> for Value {
+    fn from(value: &ChainConfig) -> Self {
+        Value::from(value.as_dict())
+    }
 }
 
 /// System accounts
@@ -72,7 +202,7 @@ impl ChainConfig {
             max_channels: 100_000_000,
             max_timeout: 100,
             seq_window_size: 120,
-            max_seq_drif: 3600,
+            max_seq_drift: 3600,
         }
     }
 }

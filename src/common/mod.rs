@@ -4,6 +4,7 @@ use ethers_core::{
     types::H256,
     utils::rlp::{Decodable, DecoderError, Rlp},
 };
+use figment::value::{Dict, Tag, Value};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 
 /// Selected block header info
@@ -25,6 +26,30 @@ pub struct Epoch {
     pub number: u64,
     pub hash: H256,
     pub timestamp: u64,
+}
+
+impl From<BlockInfo> for Value {
+    fn from(value: BlockInfo) -> Value {
+        let mut dict = Dict::new();
+        dict.insert("hash".to_string(), Value::from(value.hash.as_bytes()));
+        dict.insert("number".to_string(), Value::from(value.number));
+        dict.insert("timestamp".to_string(), Value::from(value.timestamp));
+        dict.insert(
+            "parent_hash".to_string(),
+            Value::from(value.parent_hash.as_bytes()),
+        );
+        Value::Dict(Tag::Default, dict)
+    }
+}
+
+impl From<Epoch> for Value {
+    fn from(value: Epoch) -> Self {
+        let mut dict = Dict::new();
+        dict.insert("hash".to_string(), Value::from(value.hash.as_bytes()));
+        dict.insert("number".to_string(), Value::from(value.number));
+        dict.insert("timestamp".to_string(), Value::from(value.timestamp));
+        Value::Dict(Tag::Default, dict)
+    }
 }
 
 impl Decodable for RawTransaction {

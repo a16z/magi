@@ -8,7 +8,7 @@ async fn test_engine_api() {
 
         let base_body = engine_api.base_body();
         assert_eq!(base_body.get("jsonrpc").unwrap(), "2.0");
-        assert_eq!(base_body.get("id").unwrap(), "1");
+        assert_eq!(base_body.get("id").unwrap(), 1);
 
         match engine_api.get_payload(U64([10])).await {
             Ok(res) => {

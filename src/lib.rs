@@ -16,8 +16,8 @@ pub mod driver;
 /// A module for the L2 Engine API
 pub mod engine;
 
-/// Application telemetry and logging
-pub mod telemetry;
-
 /// The backend module
 pub mod backend;
+
+/// Application telemetry and logging
+pub mod telemetry;

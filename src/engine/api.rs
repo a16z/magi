@@ -21,6 +21,8 @@ use super::{JSONRPC_VERSION, STATIC_ID};
 pub struct EngineApi {
     /// Base request url
     pub base_url: String,
+    /// The url port
+    pub port: u32,
     /// HTTP Client
     pub client: Option<Client>,
     /// A [crate::engine::JwtSecret] used to authenticate with the engine api
@@ -40,17 +42,30 @@ impl EngineApi {
                 JwtSecret::random()
             }
         };
+        // Gracefully parse the port from the base url
+        let parts: Vec<&str> = base_url.split(':').collect();
+        let port = parts[parts.len() - 1]
+            .parse::<u32>()
+            .unwrap_or(DEFAULT_AUTH_PORT);
+        let base_url = if parts.len() <= 2 {
+            parts[0].to_string()
+        } else {
+            parts.join(":")
+        };
         Self {
             base_url,
+            port,
             client: Some(reqwest::Client::new()),
             secret,
         }
     }
 
     /// Constructs the base engine api url for the given address
-    pub fn auth_url_from_addr(addr: &str) -> String {
+    pub fn auth_url_from_addr(addr: &str, port: Option<u32>) -> String {
         let stripped = addr.strip_prefix("http://").unwrap_or(addr);
-        format!("http://{stripped}:{DEFAULT_AUTH_PORT}")
+        let stripped = addr.strip_prefix("https://").unwrap_or(stripped);
+        let port = port.unwrap_or(DEFAULT_AUTH_PORT);
+        format!("http://{stripped}:{port}")
     }
 
     /// Returns if the provided secret matches the secret used to authenticate with the engine api.
@@ -73,7 +88,7 @@ impl EngineApi {
                 This should be the same as set in the `--auth.secret` flag when executing go-ethereum."
             )
         });
-        let base_url = EngineApi::auth_url_from_addr(&base_url);
+        let base_url = EngineApi::auth_url_from_addr(&base_url, None);
         Self::new(base_url, Some(secret_key))
     }
 
@@ -209,8 +224,11 @@ mod tests {
     #[tokio::test]
     async fn test_engine_get_payload() {
         // Construct the engine api client
-        let base_url = EngineApi::auth_url_from_addr(AUTH_ADDR);
-        let _engine_api = EngineApi::new(base_url, Some(SECRET.to_string()));
+        let base_url = EngineApi::auth_url_from_addr(AUTH_ADDR, Some(8551));
+        assert_eq!(base_url, "http://0.0.0.0:8551");
+        let engine_api = EngineApi::new(base_url, Some(SECRET.to_string()));
+        assert_eq!(engine_api.base_url, "http://0.0.0.0:8551");
+        assert_eq!(engine_api.port, 8551);
 
         // Construct mock server params
         let secret = JwtSecret::from_hex(SECRET).unwrap();

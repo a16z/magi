@@ -1,7 +1,7 @@
 use core::fmt::Debug;
 use std::cmp::Ordering;
-use std::sync::Arc;
-use std::{cell::RefCell, io::Read, rc::Rc};
+use std::io::Read;
+use std::sync::{Arc, Mutex};
 
 use ethers_core::types::H256;
 use ethers_core::utils::rlp::{Decodable, DecoderError, Rlp};
@@ -17,8 +17,8 @@ use super::channels::{Channel, Channels};
 
 pub struct Batches {
     batches: Vec<Batch>,
-    prev_stage: Rc<RefCell<Channels>>,
-    state: Rc<RefCell<State>>,
+    prev_stage: Arc<Mutex<Channels>>,
+    state: Arc<Mutex<State>>,
     config: Arc<Config>,
 }
 
@@ -35,11 +35,11 @@ impl Iterator for Batches {
 
 impl Batches {
     pub fn new(
-        prev_stage: Rc<RefCell<Channels>>,
-        state: Rc<RefCell<State>>,
+        prev_stage: Arc<Mutex<Channels>>,
+        state: Arc<Mutex<State>>,
         config: Arc<Config>,
-    ) -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {
+    ) -> Arc<Mutex<Self>> {
+        Arc::new(Mutex::new(Self {
             batches: Vec::new(),
             prev_stage,
             state,
@@ -48,7 +48,7 @@ impl Batches {
     }
 
     fn try_next(&mut self) -> Result<Option<Batch>> {
-        let channel = self.prev_stage.borrow_mut().next();
+        let channel = self.prev_stage.lock().unwrap().next();
         if let Some(channel) = channel {
             let mut batches = decode_batches(&channel)?;
             self.batches.append(&mut batches);
@@ -77,9 +77,10 @@ impl Batches {
     }
 
     fn set_batch_status(&self, mut batch: Batch) -> Batch {
-        let epoch = self.state.borrow().safe_epoch;
-        let next_epoch = self.state.borrow().epoch_by_number(epoch.number + 1);
-        let head = self.state.borrow().safe_head;
+        let state = self.state.lock().unwrap();
+        let epoch = state.safe_epoch;
+        let next_epoch = state.epoch_by_number(epoch.number + 1);
+        let head = state.safe_head;
         let next_timestamp = head.timestamp + 2;
 
         // check timestamp range
@@ -125,7 +126,7 @@ impl Batches {
             }
 
             // handle sequencer drift
-            if batch.timestamp > batch_origin.timestamp + self.config.chain.max_seq_drif {
+            if batch.timestamp > batch_origin.timestamp + self.config.chain.max_seq_drift {
                 if batch.transactions.is_empty() {
                     if epoch.number == batch.epoch_num {
                         if let Some(next_epoch) = next_epoch {

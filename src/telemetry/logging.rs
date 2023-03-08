@@ -1,3 +1,6 @@
+use std::env::current_dir;
+use std::path::Path;
+
 use eyre::Result;
 use tracing::subscriber::set_global_default;
 use tracing::{Level, Subscriber};
@@ -108,17 +111,47 @@ where
         }
 
         print!("{} ", Purple.paint(event.metadata().target()));
-        print!(
-            "at {} ",
-            Cyan.paint(
-                event
-                    .metadata()
-                    .name()
-                    .split(' ')
-                    .last()
-                    .unwrap_or_default()
+
+        let original_location = event
+            .metadata()
+            .name()
+            .split(' ')
+            .last()
+            .unwrap_or_default();
+        let relative_path = current_dir()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+
+        // Remove common prefixes from the location and relative path
+        let location_path = std::path::Path::new(original_location);
+        let relative_path_path = std::path::Path::new(&relative_path);
+        let common_prefix = location_path
+            .ancestors()
+            .collect::<Vec<&Path>>()
+            .iter()
+            .cloned()
+            .rev()
+            .zip(
+                relative_path_path
+                    .ancestors()
+                    .collect::<Vec<&Path>>()
+                    .iter()
+                    .cloned()
+                    .rev(),
             )
-        );
+            .take_while(|(a, b)| a == b)
+            .last()
+            .map(|(a, _)| a)
+            .unwrap_or_else(|| std::path::Path::new(""));
+        let location = location_path
+            .strip_prefix(common_prefix)
+            .unwrap_or(location_path)
+            .to_str()
+            .unwrap_or(original_location);
+        let location = location.strip_prefix('/').unwrap_or(location);
+        print!("at {} ", Cyan.paint(location.to_string()));
+
         let mut visitor = AnsiVisitor;
         event.record(&mut visitor);
     }

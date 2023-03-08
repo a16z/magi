@@ -27,10 +27,11 @@ async fn test_advance() {
 fn creat_config() -> Config {
     Config {
         chain: ChainConfig::goerli(),
-        l1_rpc: "http://example.com".to_string(),
-        engine_url: String::new(),
-        jwt_secret: String::new(),
-        db_location: None,
+        l2_rpc_url: None,
+        l1_rpc_url: "http://example.com".to_string(),
+        engine_api_url: Some(String::new()),
+        data_dir: None,
+        jwt_secret: None,
     }
 }
 

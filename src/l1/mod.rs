@@ -115,7 +115,8 @@ impl InnerWatcher {
         tx_sender: Sender<BatcherTransactionData>,
         l1_info_sender: Sender<L1Info>,
     ) -> Result<Self> {
-        let http = Http::from_str(&config.l1_rpc).map_err(|_| eyre::eyre!("invalid L1 RPC URL"))?;
+        let http =
+            Http::from_str(&config.l1_rpc_url).map_err(|_| eyre::eyre!("invalid L1 RPC URL"))?;
         let policy = Box::new(HttpRateLimitRetryPolicy);
         let client = RetryClient::new(http, policy, 100, 50);
         let provider = Provider::new(client);

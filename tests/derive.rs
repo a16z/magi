@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::sync::{Arc, Mutex};
 
 use ethers_core::{types::H256, utils::keccak256};
 use ethers_providers::{Middleware, Provider};
@@ -18,17 +18,18 @@ async fn test_attributes_match() {
     let rpc = "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc";
 
     let config = Arc::new(Config {
-        l1_rpc: rpc.to_string(),
-        engine_url: String::new(),
-        jwt_secret: String::new(),
-        db_location: None,
+        l1_rpc_url: rpc.to_string(),
+        l2_rpc_url: None,
         chain: ChainConfig::goerli(),
+        data_dir: None,
+        engine_api_url: None,
+        jwt_secret: None,
     });
 
     let mut chain_watcher =
         ChainWatcher::new(config.chain.l1_start_epoch.number, config.clone()).unwrap();
     let tx_recv = chain_watcher.take_tx_receiver().unwrap();
-    let state = Rc::new(RefCell::new(State::new(
+    let state = Arc::new(Mutex::new(State::new(
         config.chain.l2_genesis,
         config.chain.l1_start_epoch,
         chain_watcher,

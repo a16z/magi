@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::sync::{Arc, Mutex};
 
 use eyre::Result;
 use tokio::sync::mpsc::Receiver;
@@ -23,8 +23,8 @@ impl Iterator for BatcherTransactions {
 }
 
 impl BatcherTransactions {
-    pub fn new(tx_recv: Receiver<Vec<u8>>) -> Rc<RefCell<Self>> {
-        Rc::new(RefCell::new(Self {
+    pub fn new(tx_recv: Receiver<Vec<u8>>) -> Arc<Mutex<Self>> {
+        Arc::new(Mutex::new(Self {
             txs: Vec::new(),
             tx_recv,
         }))

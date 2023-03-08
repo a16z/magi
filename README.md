@@ -4,19 +4,35 @@
 
 `magi` (pronounced may-jai) is an Optimism full node implemented in pure Rust.
 
-## Getting Started
+## Quickstart
 
-_Prerequisites: Install rust and cargo with `curl https://sh.rustup.rs -sSf | sh`_
+First install `magup`, Magi's installer:
 
-Install the latest version of `magi` with
-
-```bash
-cargo install magi
+```
+curl https://raw.githubusercontent.com/a16z/magi/master/magup/install | bash
 ```
 
-Alternatively, you can clone the repo and run `cargo build --release` to build a release binary that you can then run with `./target/release/magi`. Cargo also allows you to run `cargo run --release`, building and executing the binary in one step.
+To install Magi, run `magup`.
 
-To run `magi`'s test suite, you can run `cargo test --all`. Tests are named with respect to the modules they test against, located inside the [tests](./tests) directory. There are also additional unit tests written inline with some modules.
+## Configuration
+
+`magi` exposes a number of configuration flags for executing the full node. To see a list of all available flags, run `magi --help`. This will print output similar to the following:
+
+```bash
+// TODO: once cli is implemented
+```
+
+By default, `magi` syncs in fast mode, querying other L2 nodes to construct the canonical L2 chain. This is the fastest, and most unsafe way to sync since it trusts L2 nodes to provide valid L2 blocks, that are batched to L1, but are not yet finalized. Safe, but non finalized blocks are blocks that are posted to L1, but have not yet past the fault proof window (7 days). This means that the block is not yet guaranteed to be part of the L2 canonical chain. The default mode does not require the sync flag to be specified, but it can be explicit, setting `--sync-mode` to `fast`.
+
+Leveraging go-ethereum, the rollup node offers a p2p network that propogates "unsafe" L2 blocks.
+
+Read more about the [Optimistic P2P rollup node](https://github.com/ethereum-optimism/optimism/blob/develop/specs/rollup-node-p2p.md).
+
+Another more secure way to sync is to query L2 nodes for all _finalized L2 blocks_, and then run the derivation for all safe blocks that are still within the fault proof window. This mode can be specified using the `--sync-mode` flag, setting it to `challenge`.
+
+Lastly, the fully trustless, most secure method of syncing is to _fully_ derive the L2 canonical chain from L1 blocks. This mode can be specified using the `--sync-mode` flag, setting it to `full`.
+
+
 
 ## Specifications
 
@@ -149,11 +165,8 @@ The [ChainConfig](./src/config/mod.rs) contains default implementations for cert
 - [ ] In the [Driver](./src/driver/mod.rs), we should be writing to the [Backend DB](./src/backend/mod.rs) as we process blocks. This allows for persisting L2 chain state on disk and optionally allows for restarting the node without having to re-process all of the blocks.
 - [ ] In the [Backend DB](./src/backend/mod.rs), the `ConstructedBlock` type should match, or at least implement coercions to/from, the [Driver](./src/driver/mod.rs) output type.
 - [ ] Subscribe to P2P Gossip on the configured L2 P2P Network. This will allow us to receive new blocks from other nodes on the network.
-- [ ] Gracefully handle missing or present port in the EngineApi `base_url` passed into the constructor.
-- [ ] Graceful restarting on failure.
-- [ ] Foundryup-style installer
-- [ ] Foundryup-style cli
-- [ ] Do initial sync from geth by default, with full sync through the derivation pipeline as an option
+- [ ] Graceful restart on failure.
+- [ ] Unsafe chain derivation using p2p block headers. See the [rollup node p2p](https://github.com/ethereum-optimism/optimism/blob/develop/specs/rollup-node-p2p.md)
 
 ## Contributing
 

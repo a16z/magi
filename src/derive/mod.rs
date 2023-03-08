@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::sync::{Arc, Mutex};
 
 use eyre::Result;
 use tokio::sync::mpsc::Receiver;
@@ -30,7 +30,7 @@ impl Iterator for Pipeline {
 
 impl Pipeline {
     pub fn new(
-        state: Rc<RefCell<State>>,
+        state: Arc<Mutex<State>>,
         tx_recv: Receiver<Vec<u8>>,
         config: Arc<Config>,
     ) -> Result<Self> {
