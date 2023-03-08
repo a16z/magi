@@ -6,6 +6,10 @@ on:
         - master
   pull_request:
 
+env:
+  ENGINE_API_URL: ${{ secrets.ENGINE_API_URL }}
+  JWT_SECRET: ${{ secrets.JWT_SECRET }}
+
 jobs:
   check:
     runs-on: ubuntu-latest
