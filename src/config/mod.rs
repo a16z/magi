@@ -1,10 +1,15 @@
-use std::{collections::HashMap, path::PathBuf, process::exit, str::FromStr};
+use std::{
+    collections::{BTreeMap, HashMap},
+    path::PathBuf,
+    process::exit,
+    str::FromStr,
+};
 
 use ethers_core::types::{Address, H256};
 use figment::{
-    providers::{Data, Format, Serialized, Toml},
-    value::{Dict, Tag, Value},
-    Error, Figment,
+    providers::{Format, Serialized, Toml},
+    value::Value,
+    Figment,
 };
 use serde::{Deserialize, Serialize};
 
@@ -52,6 +57,8 @@ pub struct Config {
     pub jwt_secret: Option<String>,
 }
 
+pub struct CliConfig {}
+
 impl Config {
     pub fn get_engine_api_url(&self) -> String {
         self.engine_api_url
@@ -61,19 +68,22 @@ impl Config {
 }
 
 impl Config {
-    pub fn from_file(config_path: &PathBuf, cli_config: &Config) -> Self {
-        let toml_provider: Data<Toml> = Toml::file(config_path).nested();
-        let cli_provider = cli_config.as_provider();
-        let config_res: Result<Config, Error> = Figment::new()
-            .merge(cli_provider)
+    pub fn new(
+        config_path: &PathBuf,
+        cli_provider: Serialized<HashMap<&str, Value>>,
+        chain: ChainConfig,
+    ) -> Self {
+        let chain_provider = chain.as_provider();
+        let toml_provider = Toml::file(config_path).nested();
+
+        let config_res = Figment::new()
+            .merge(chain_provider)
             .merge(toml_provider)
+            .merge(cli_provider)
             .extract();
 
         match config_res {
-            Ok(config) => {
-                // if config.chain.is_zero
-                config
-            }
+            Ok(config) => config,
             Err(err) => {
                 match err.kind {
                     figment::error::Kind::MissingField(field) => {
@@ -88,27 +98,6 @@ impl Config {
                 exit(1);
             }
         }
-    }
-
-    pub fn as_provider(&self) -> Serialized<HashMap<&str, Value>> {
-        let mut user_dict = HashMap::new();
-        user_dict.insert("l1_rpc_url", Value::from(self.l1_rpc_url.clone()));
-        if let Some(l2_rpc) = &self.l2_rpc_url {
-            user_dict.insert("l2_rpc_url", Value::from(l2_rpc.clone()));
-        }
-        if let Some(db_loc) = &self.db_location {
-            if let Some(str) = db_loc.to_str() {
-                user_dict.insert("db_location", Value::from(str));
-            }
-        }
-        if let Some(engine_api_url) = &self.engine_api_url {
-            user_dict.insert("engine_api_url", Value::from(engine_api_url.clone()));
-        }
-        if let Some(jwt_secret) = &self.jwt_secret {
-            user_dict.insert("jwt_secret", Value::from(jwt_secret.clone()));
-        }
-        user_dict.insert("chain", Value::from(self.chain));
-        Serialized::from(user_dict, "default".to_string())
     }
 }
 
@@ -139,31 +128,47 @@ fn address_to_str(address: &Address) -> String {
     format!("0x{}", hex::encode(address.as_bytes()))
 }
 
-impl From<ChainConfig> for Value {
-    fn from(value: ChainConfig) -> Value {
-        let mut dict = Dict::new();
+impl ChainConfig {
+    pub fn as_provider(&self) -> Serialized<HashMap<&str, Value>> {
+        let mut dict = HashMap::new();
+        let value = Value::from(self);
+        dict.insert("chain", value);
+        Serialized::from(dict, "default".to_string())
+    }
+
+    fn as_dict(&self) -> BTreeMap<String, Value> {
+        let mut dict = BTreeMap::new();
         dict.insert(
             "l1_start_epoch".to_string(),
-            Value::from(value.l1_start_epoch),
+            Value::from(self.l1_start_epoch),
         );
-        dict.insert("l2_genesis".to_string(), Value::from(value.l2_genesis));
+        dict.insert("l2_genesis".to_string(), Value::from(self.l2_genesis));
         dict.insert(
             "batch_sender".to_string(),
-            Value::from(address_to_str(&value.batch_sender)),
+            Value::from(address_to_str(&self.batch_sender)),
         );
         dict.insert(
             "batch_inbox".to_string(),
-            Value::from(address_to_str(&value.batch_inbox)),
+            Value::from(address_to_str(&self.batch_inbox)),
         );
         dict.insert(
             "deposit_contract".to_string(),
-            Value::from(address_to_str(&value.deposit_contract)),
+            Value::from(address_to_str(&self.deposit_contract)),
         );
-        dict.insert("max_channels".to_string(), Value::from(value.max_channels));
-        dict.insert("max_timeout".to_string(), Value::from(value.max_timeout));
-        dict.insert("seq_window_size".to_string(), Value::from(value.seq_window_size));
-        dict.insert("max_seq_drift".to_string(), Value::from(value.max_seq_drift));
-        Value::Dict(Tag::Default, dict)
+        dict.insert("max_channels".to_string(), Value::from(self.max_channels));
+        dict.insert("max_timeout".to_string(), Value::from(self.max_timeout));
+        dict.insert(
+            "seq_window_size".to_string(),
+            Value::from(self.seq_window_size),
+        );
+        dict.insert("max_seq_drift".to_string(), Value::from(self.max_seq_drift));
+        dict
+    }
+}
+
+impl From<&ChainConfig> for Value {
+    fn from(value: &ChainConfig) -> Self {
+        Value::from(value.as_dict())
     }
 }
 

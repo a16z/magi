@@ -1,14 +1,9 @@
-use std::{
-    sync::{Arc, Mutex},
-    str::FromStr,
-    path::PathBuf,
-    process::exit,
-};
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 use clap::Parser;
 use dirs::home_dir;
 use eyre::Result;
-use tracing::info;
+use figment::{providers::Serialized, value::Value};
 
 use magi::{
     config::{ChainConfig, Config, SyncMode},
@@ -21,7 +16,6 @@ async fn main() -> Result<()> {
     telemetry::init(false)?;
     telemetry::register_shutdown();
 
-    // Construct all magi components
     let cli = Cli::parse();
     let sync_mode = cli.sync_mode.clone();
     let config = cli.to_config();
@@ -63,13 +57,12 @@ async fn main() -> Result<()> {
 }
 
 pub async fn full_sync(config: Config) -> Result<()> {
-    let chain_number = config.chain.l1_start_epoch.number;
-    tracing::info!(target: "magi", "starting full sync on chain {}", chain_number);
-    let mut driver = Driver::from_config(config);
+    tracing::info!(target: "magi", "starting full sync");
+    let mut driver = Driver::from_config(config)?;
     tracing::info!(target: "magi", "executing driver...");
 
     // Run the driver
-    if let Err(err) = driver.unwrap().start().await {
+    if let Err(err) = driver.start().await {
         tracing::error!(target: "magi", "{}", err);
         std::process::exit(1);
     }
@@ -83,8 +76,8 @@ pub struct Cli {
     network: String,
     #[clap(long)]
     db_location: Option<String>,
-    #[clap(long, default_value = "")]
-    l1_rpc_url: String,
+    #[clap(long)]
+    l1_rpc_url: Option<String>,
     #[clap(long)]
     l2_rpc_url: Option<String>,
     #[clap(short = 'm', long, default_value = "fast")]
@@ -102,44 +95,43 @@ impl Cli {
             _ => panic!("network not recognized"),
         };
 
-        let default_db_loc = home_dir().unwrap().join(".magi/data");
-        let db_loc = self.db_location.map(|f| PathBuf::from_str(&f).ok()).flatten().unwrap_or(default_db_loc);
+        let config_path = home_dir().unwrap().join(".magi/magi.toml");
+        let mut config = Config::new(&config_path, self.as_provider(), chain);
 
-        Config {
-            l1_rpc_url: self.l1_rpc_url.clone(),
-            l2_rpc_url: self.l2_rpc_url.clone(),
-            db_location: Some(db_loc),
-            engine_api_url: self.engine_api_url.clone(),
-            jwt_secret: self.jwt_secret.clone(),
-            chain,
+        let default_db_loc = home_dir().unwrap().join(".magi/data");
+        let db_loc = self
+            .db_location
+            .and_then(|f| PathBuf::from_str(&f).ok())
+            .unwrap_or(default_db_loc);
+
+        config.db_location = Some(db_loc);
+
+        config
+    }
+
+    pub fn as_provider(&self) -> Serialized<HashMap<&str, Value>> {
+        let mut user_dict = HashMap::new();
+
+        if let Some(l1_rpc) = &self.l1_rpc_url {
+            user_dict.insert("l1_rpc_url", Value::from(l1_rpc.clone()));
         }
+
+        if let Some(l2_rpc) = &self.l2_rpc_url {
+            user_dict.insert("l2_rpc_url", Value::from(l2_rpc.clone()));
+        }
+
+        if let Some(db_loc) = &self.db_location {
+            user_dict.insert("db_location", Value::from(db_loc.clone()));
+        }
+
+        if let Some(engine_api_url) = &self.engine_api_url {
+            user_dict.insert("engine_api_url", Value::from(engine_api_url.clone()));
+        }
+
+        if let Some(jwt_secret) = &self.jwt_secret {
+            user_dict.insert("jwt_secret", Value::from(jwt_secret.clone()));
+        }
+
+        Serialized::from(user_dict, "default".to_string())
     }
 }
-
-fn register_shutdown_handler() {
-    let shutdown_counter = Arc::new(Mutex::new(0));
-
-    ctrlc::set_handler(move || {
-        let mut counter = shutdown_counter.lock().unwrap();
-        *counter += 1;
-
-        let counter_value = *counter;
-
-        if counter_value == 1 {
-            // TODO: handle driver shutdown
-            exit(0);
-        }
-
-        if counter_value == 3 {
-            info!("forced shutdown");
-            exit(0);
-        }
-
-        info!(
-            "shutting down... press ctrl-c {} more times to force quit",
-            3 - counter_value
-        );
-    })
-    .expect("could not register shutdown handler");
-}
-
