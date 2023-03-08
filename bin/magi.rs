@@ -27,34 +27,19 @@ async fn main() -> Result<()> {
     // We want to spawn slow sync in a separate thread
     // this allows the happy-path to gracefully fail without
     // delaying slow sync.
-    full_sync(config).await?;
+    // full_sync(config).await?;
 
     // let slow_sync = std::thread::spawn(|| async move {
     //     slow_sync(arc_config).await
     // });
 
-    // If we have fast sync enabled, we need to sync the state first
-    if sync_mode == SyncMode::Fast {
-        tracing::info!(target: "magi", "syncing in fast mode...");
-        // TODO:: fast sync
-        panic!("fast sync not implemented yet");
-        // driver.fast_sync().await?;
-    } else {
-        tracing::info!(target: "magi", "syncing in challenge or full mode...");
-        // let res = slow_sync.join();
-        loop {
-            std::thread::sleep(std::time::Duration::from_secs(1));
-        }
-        // println!("slow sync finished: {:?}", res);
-        // loop join until slow sync is finished
-        // loop {
-        //     // TODO: add an optional timeout for slow sync
-        //     if slow_sync.is_finished() {
-        //         tracing::info!(target: "magi", "slow sync finished");
-        //         break;
-        //     }
-        // }
-    }
+    match sync_mode {
+        SyncMode::Fast => panic!("fast sync not implemented"),
+        SyncMode::Full => full_sync(config).await?,
+        SyncMode::Challenge => panic!("challenge sync not implemented"),
+    };
+
+    Ok(())
 }
 
 pub async fn full_sync(config: Config) -> Result<()> {
