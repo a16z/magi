@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 
 use eyre::Result;
 use tokio::sync::mpsc::Receiver;
@@ -30,7 +30,7 @@ impl Iterator for Pipeline {
 
 impl Pipeline {
     pub fn new(
-        state: Arc<Mutex<State>>,
+        state: Arc<RwLock<State>>,
         tx_recv: Receiver<Vec<u8>>,
         config: Arc<Config>,
     ) -> Result<Self> {

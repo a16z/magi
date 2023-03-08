@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 
 use ethers_core::{types::H256, utils::keccak256};
 use ethers_providers::{Middleware, Provider};
@@ -29,7 +29,7 @@ async fn test_attributes_match() {
     let mut chain_watcher =
         ChainWatcher::new(config.chain.l1_start_epoch.number, config.clone()).unwrap();
     let tx_recv = chain_watcher.take_tx_receiver().unwrap();
-    let state = Arc::new(Mutex::new(State::new(
+    let state = Arc::new(RwLock::new(State::new(
         config.chain.l2_genesis,
         config.chain.l1_start_epoch,
         chain_watcher,

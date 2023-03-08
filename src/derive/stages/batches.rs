@@ -1,7 +1,7 @@
 use core::fmt::Debug;
 use std::cmp::Ordering;
 use std::io::Read;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use ethers_core::types::H256;
 use ethers_core::utils::rlp::{Decodable, DecoderError, Rlp};
@@ -18,7 +18,7 @@ use super::channels::{Channel, Channels};
 pub struct Batches {
     batches: Vec<Batch>,
     prev_stage: Arc<Mutex<Channels>>,
-    state: Arc<Mutex<State>>,
+    state: Arc<RwLock<State>>,
     config: Arc<Config>,
 }
 
@@ -36,7 +36,7 @@ impl Iterator for Batches {
 impl Batches {
     pub fn new(
         prev_stage: Arc<Mutex<Channels>>,
-        state: Arc<Mutex<State>>,
+        state: Arc<RwLock<State>>,
         config: Arc<Config>,
     ) -> Arc<Mutex<Self>> {
         Arc::new(Mutex::new(Self {
@@ -77,7 +77,7 @@ impl Batches {
     }
 
     fn set_batch_status(&self, mut batch: Batch) -> Batch {
-        let state = self.state.lock().unwrap();
+        let state = self.state.read().unwrap();
         let epoch = state.safe_epoch;
         let next_epoch = state.epoch_by_number(epoch.number + 1);
         let head = state.safe_head;

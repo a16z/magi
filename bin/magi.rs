@@ -28,6 +28,7 @@ async fn main() -> Result<()> {
     // this allows the happy-path to gracefully fail without
     // delaying slow sync.
     full_sync(config).await?;
+
     // let slow_sync = std::thread::spawn(|| async move {
     //     slow_sync(arc_config).await
     // });
@@ -59,7 +60,6 @@ async fn main() -> Result<()> {
 pub async fn full_sync(config: Config) -> Result<()> {
     tracing::info!(target: "magi", "starting full sync");
     let mut driver = Driver::from_config(config)?;
-    tracing::info!(target: "magi", "executing driver...");
 
     // Run the driver
     if let Err(err) = driver.start().await {
