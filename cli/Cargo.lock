@@ -260,6 +260,7 @@ dependencies = [
  "dirs",
  "ethers-core",
  "eyre",
+ "figment",
  "futures",
  "magi",
  "tokio",

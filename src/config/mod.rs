@@ -160,6 +160,11 @@ impl From<ChainConfig> for Value {
         );
         dict.insert("max_channels".to_string(), Value::from(value.max_channels));
         dict.insert("max_timeout".to_string(), Value::from(value.max_timeout));
+        dict.insert(
+            "seq_window_size".to_string(),
+            Value::from(value.seq_window_size),
+        );
+        dict.insert("max_seq_drif".to_string(), Value::from(value.max_seq_drif));
         Value::Dict(Tag::Default, dict)
     }
 }

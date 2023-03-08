@@ -1,18 +1,19 @@
 use std::{
-    sync::Arc,
+    sync::{Arc, Mutex},
     str::FromStr,
     path::PathBuf,
 };
 
 use clap::Parser;
 use dirs::home_dir;
-use ethers_core::types::{H160, Chain};
+use ethers_core::types::{H256, H160, Chain};
 use eyre::Result;
 
 use magi::{
-    common::BlockID,
+    l1::ChainWatcher,
+    common::{BlockInfo, Epoch},
     config::{ChainConfig, Config, SyncMode},
-    derive::Pipeline,
+    derive::{Pipeline, state::State},
     driver::Driver,
     engine::{EngineApi},
     telemetry,
@@ -64,14 +65,19 @@ async fn main() -> Result<()> {
         //     }
         // }
     }
-
-    Ok(())
 }
 
 pub async fn slow_sync(config: Arc<Config>) -> Result<()> {
     let chain_number = config.chain.l1_start_epoch.number;
+    let mut chain_watcher = ChainWatcher::new(chain_number, config.clone()).unwrap();
+    let tx_recv = chain_watcher.take_tx_receiver().unwrap();
+    let state = Arc::new(Mutex::new(State::new(
+        config.chain.l2_genesis,
+        config.chain.l1_start_epoch,
+        chain_watcher,
+    )));
     tracing::info!(target: "magi", "starting full sync on chain {}", chain_number);
-    let pipeline = match Pipeline::new(chain_number, config.clone().into()) {
+    let pipeline = match Pipeline::new(state, tx_recv, config.clone().into()) {
         Ok(pipeline) => pipeline,
         Err(err) => {
             tracing::error!(target: "magi", "Pipeline construction error: {}", err);
@@ -81,11 +87,11 @@ pub async fn slow_sync(config: Arc<Config>) -> Result<()> {
     tracing::info!(target: "magi", "created pipeline");
     let engine = EngineApi::new(config.get_engine_api_url(), config.jwt_secret.clone());
     tracing::info!(target: "magi", "constructed engine");
-    let mut driver = Driver::from_internals(engine, pipeline, Arc::clone(&config));
+    let driver = Driver::from_internals(engine, pipeline, Arc::clone(&config));
     tracing::info!(target: "magi", "executing driver...");
 
     // Run the driver
-    if let Err(err) = driver.start().await {
+    if let Err(err) = driver.unwrap().start().await {
         tracing::error!(target: "magi", "{}", err);
         std::process::exit(1);
     }
@@ -117,6 +123,10 @@ pub struct Cli {
     max_channels: u64,
     #[clap(long, default_value = "100")]
     max_timeout: u64,
+    #[clap(long, default_value = "300")]
+    max_seq_drif: u64,
+    #[clap(long, default_value = "120")]
+    seq_window_size: u64,
     #[clap(short = 'm', long, default_value = "fast")]
     sync_mode: SyncMode,
     #[clap(short = 'e', long)]
@@ -135,17 +145,30 @@ impl Cli {
     }
 
     pub fn cli_config(&self) -> Config {
+        let l1_start_epoch = self.l1_start_epoch.clone().unwrap_or("".to_string());
+        let l2_genesis = self.l2_genesis.clone().unwrap_or("".to_string());
         Config {
             l1_rpc_url: self.l1_rpc_url.clone(),
             l2_rpc_url: self.l2_rpc_url.clone(),
             chain: ChainConfig {
-                l1_start_epoch: BlockID::from_str(&self.l1_start_epoch.clone().unwrap_or("".to_string())).unwrap(),
-                l2_genesis: BlockID::from_str(&self.l2_genesis.clone().unwrap_or("".to_string())).unwrap(),
+                l1_start_epoch: Epoch {
+                    number: 0,
+                    hash: H256::from_str(&l1_start_epoch).unwrap_or_default(),
+                    timestamp: 0,
+                },
+                l2_genesis: BlockInfo {
+                    hash: H256::from_str(&l2_genesis).unwrap_or_default(),
+                    number: 0,
+                    parent_hash: H256::zero(),
+                    timestamp: 0,
+                },
                 batch_sender: parsed_or_zero(&self.batch_sender),
                 batch_inbox: parsed_or_zero(&self.batch_inbox),
                 deposit_contract: parsed_or_zero(&self.deposit_contract),
                 max_channels: self.max_channels as usize,
                 max_timeout: self.max_timeout,
+                max_seq_drif: self.max_seq_drif,
+                seq_window_size: self.seq_window_size,
             },
             db_location: PathBuf::from_str(&self.db_location).ok(),
             engine_api_url: self.engine_api_url.clone(),
