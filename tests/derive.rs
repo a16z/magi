@@ -21,7 +21,7 @@ async fn test_attributes_match() {
         l1_rpc_url: rpc.to_string(),
         l2_rpc_url: None,
         chain: ChainConfig::goerli(),
-        db_location: None,
+        data_dir: None,
         engine_api_url: None,
         jwt_secret: None,
     });

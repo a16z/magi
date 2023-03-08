@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use std::collections::HashMap;
 
 use clap::Parser;
 use dirs::home_dir;
@@ -74,8 +74,8 @@ pub async fn full_sync(config: Config) -> Result<()> {
 pub struct Cli {
     #[clap(short, long, default_value = "optimism-goerli")]
     network: String,
-    #[clap(long)]
-    db_location: Option<String>,
+    #[clap(long, default_value_t = default_data_dir())]
+    data_dir: String,
     #[clap(long)]
     l1_rpc_url: Option<String>,
     #[clap(long)]
@@ -96,21 +96,13 @@ impl Cli {
         };
 
         let config_path = home_dir().unwrap().join(".magi/magi.toml");
-        let mut config = Config::new(&config_path, self.as_provider(), chain);
-
-        let default_db_loc = home_dir().unwrap().join(".magi/data");
-        let db_loc = self
-            .db_location
-            .and_then(|f| PathBuf::from_str(&f).ok())
-            .unwrap_or(default_db_loc);
-
-        config.db_location = Some(db_loc);
-
-        config
+        Config::new(&config_path, self.as_provider(), chain)
     }
 
     pub fn as_provider(&self) -> Serialized<HashMap<&str, Value>> {
         let mut user_dict = HashMap::new();
+
+        user_dict.insert("data_dir", Value::from(self.data_dir.clone()));
 
         if let Some(l1_rpc) = &self.l1_rpc_url {
             user_dict.insert("l1_rpc_url", Value::from(l1_rpc.clone()));
@@ -118,10 +110,6 @@ impl Cli {
 
         if let Some(l2_rpc) = &self.l2_rpc_url {
             user_dict.insert("l2_rpc_url", Value::from(l2_rpc.clone()));
-        }
-
-        if let Some(db_loc) = &self.db_location {
-            user_dict.insert("db_location", Value::from(db_loc.clone()));
         }
 
         if let Some(engine_api_url) = &self.engine_api_url {
@@ -134,4 +122,9 @@ impl Cli {
 
         Serialized::from(user_dict, "default".to_string())
     }
+}
+
+fn default_data_dir() -> String {
+    let dir = home_dir().unwrap().join(".magi/data");
+    dir.to_str().unwrap().to_string()
 }

@@ -51,7 +51,7 @@ pub struct Config {
     /// The base chain config
     pub chain: ChainConfig,
     /// Location of the database folder
-    pub db_location: Option<PathBuf>,
+    pub data_dir: Option<PathBuf>,
     /// Engine API JWT Secret
     /// This is used to authenticate with the engine API
     pub jwt_secret: Option<String>,

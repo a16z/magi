@@ -34,7 +34,7 @@ pub struct Driver<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> {
 impl Driver<EngineApi, Pipeline> {
     pub fn from_config(config: Config) -> Result<Self> {
         let db = config
-            .db_location
+            .data_dir
             .as_ref()
             .map(Database::new)
             .unwrap_or_default();

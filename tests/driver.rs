@@ -30,7 +30,7 @@ fn creat_config() -> Config {
         l2_rpc_url: None,
         l1_rpc_url: "http://example.com".to_string(),
         engine_api_url: Some(String::new()),
-        db_location: None,
+        data_dir: None,
         jwt_secret: None,
     }
 }
