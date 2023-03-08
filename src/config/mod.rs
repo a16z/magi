@@ -68,6 +68,7 @@ impl Config {
             .merge(cli_provider)
             .merge(toml_provider)
             .extract();
+
         match config_res {
             Ok(config) => {
                 // if config.chain.is_zero
@@ -131,7 +132,7 @@ pub struct ChainConfig {
     /// Number of L1 blocks in a sequence window
     pub seq_window_size: u64,
     /// Maximum timestamp drift
-    pub max_seq_drif: u64,
+    pub max_seq_drift: u64,
 }
 
 fn address_to_str(address: &Address) -> String {
@@ -160,11 +161,8 @@ impl From<ChainConfig> for Value {
         );
         dict.insert("max_channels".to_string(), Value::from(value.max_channels));
         dict.insert("max_timeout".to_string(), Value::from(value.max_timeout));
-        dict.insert(
-            "seq_window_size".to_string(),
-            Value::from(value.seq_window_size),
-        );
-        dict.insert("max_seq_drif".to_string(), Value::from(value.max_seq_drif));
+        dict.insert("seq_window_size".to_string(), Value::from(value.seq_window_size));
+        dict.insert("max_seq_drift".to_string(), Value::from(value.max_seq_drift));
         Value::Dict(Tag::Default, dict)
     }
 }
@@ -199,7 +197,7 @@ impl ChainConfig {
             max_channels: 100_000_000,
             max_timeout: 100,
             seq_window_size: 120,
-            max_seq_drif: 3600,
+            max_seq_drift: 3600,
         }
     }
 }

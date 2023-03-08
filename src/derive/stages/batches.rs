@@ -126,7 +126,7 @@ impl Batches {
             }
 
             // handle sequencer drift
-            if batch.timestamp > batch_origin.timestamp + self.config.chain.max_seq_drif {
+            if batch.timestamp > batch_origin.timestamp + self.config.chain.max_seq_drift {
                 if batch.transactions.is_empty() {
                     if epoch.number == batch.epoch_num {
                         if let Some(next_epoch) = next_epoch {
