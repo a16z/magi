@@ -1,7 +1,6 @@
 use std::env::current_dir;
 
 use eyre::Result;
-use home::home_dir;
 use tracing::subscriber::set_global_default;
 use tracing::{Level, Subscriber};
 use tracing_log::LogTracer;
@@ -112,8 +111,16 @@ where
 
         print!("{} ", Purple.paint(event.metadata().target()));
 
-        let location = event.metadata().name().split(' ').last().unwrap_or_default();
-        let relative_path = current_dir().unwrap_or_default().to_string_lossy().to_string();
+        let location = event
+            .metadata()
+            .name()
+            .split(' ')
+            .last()
+            .unwrap_or_default();
+        let relative_path = current_dir()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
         // let stripped = relative_path.remove_matches(relative_path)
         // print!("Current dir: {}", relative_path);
         match location.strip_prefix(&relative_path) {
@@ -121,7 +128,7 @@ where
                 let location = l.strip_prefix('/').unwrap_or(l);
                 print!("at {} ", Cyan.paint(format!("./{}", location)));
             }
-            _ => print!("at {} ", Cyan.paint(location))
+            _ => print!("at {} ", Cyan.paint(location)),
         }
         let mut visitor = AnsiVisitor;
         event.record(&mut visitor);

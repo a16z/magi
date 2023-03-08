@@ -4,7 +4,7 @@ use ethers_core::types::H256;
 use eyre::Result;
 
 use super::batcher_transactions::{BatcherTransactions, Frame};
-use crate::{common::BlockID, config::Config};
+use crate::{common::BlockInfo, config::Config};
 
 pub struct Channels {
     pending_channels: Vec<PendingChannel>,
@@ -81,15 +81,17 @@ impl Channels {
                 frames: vec![frame],
                 size,
                 // TODO: we'll need to set these by param
-                highest_l1_block: BlockID {
+                highest_l1_block: BlockInfo {
                     hash: H256::zero(),
                     number: 0,
                     parent_hash: H256::zero(),
+                    timestamp: 0,
                 },
-                lowest_l1_block: BlockID {
+                lowest_l1_block: BlockInfo {
                     hash: H256::zero(),
                     number: 0,
                     parent_hash: H256::zero(),
+                    timestamp: 0,
                 },
             };
 
@@ -172,8 +174,8 @@ struct PendingChannel {
     channel_id: u128,
     frames: Vec<Frame>,
     size: Option<u16>,
-    highest_l1_block: BlockID,
-    lowest_l1_block: BlockID,
+    highest_l1_block: BlockInfo,
+    lowest_l1_block: BlockInfo,
 }
 
 impl PendingChannel {
