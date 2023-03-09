@@ -16,6 +16,10 @@ exclude = [".gitignore", ".github/*", ".env", "infra/*", "magup/*"]
 name = "magi"
 path = "./bin/magi.rs"
 
+[[bin]]
+name = "peers"
+path = "./bin/peers.rs"
+
 [dependencies]
 tokio = { version = "1.25.0", features = ["full"] }
 async-trait = "0.1.64"
