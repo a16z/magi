@@ -109,7 +109,7 @@ impl Database {
         self.hashes.get(number).copied()
     }
 
-    /// Sets a new HeadInfo value
+    /// Inserts a [`HeadInfo`] into the database with the key `HEAD_INFO`.
     pub fn write_head(&self, head: HeadInfo) -> Result<()> {
         self.db.insert("HEAD_INFO", head)?;
         Ok(())
