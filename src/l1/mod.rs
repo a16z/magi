@@ -159,6 +159,7 @@ impl InnerWatcher {
 
             self.current_block += 1;
         } else {
+            tracing::warn!("l1 watcher sleeping");
             sleep(Duration::from_millis(250)).await;
         }
 
@@ -264,9 +265,13 @@ fn start_watcher(start_block: u64, config: Arc<Config>) -> Result<(JoinHandle<()
     let handle = spawn(async move {
         loop {
             tracing::debug!("fetching L1 data for block {}", watcher.current_block);
+            let start = std::time::SystemTime::now();
             if watcher.try_ingest_block().await.is_err() {
                 tracing::warn!("failed to fetch data for block {}", watcher.current_block);
             }
+            let end = std::time::SystemTime::now();
+            let duration = end.duration_since(start).unwrap().as_millis();
+            tracing::info!("ingest time ms: {}", duration);
         }
     });
 

@@ -31,7 +31,7 @@ impl State {
         let res = self.l1_info.get(&hash);
         let finish = std::time::SystemTime::now();
         let duration = finish.duration_since(start).unwrap().as_nanos();
-        tracing::info!("l1 info by hash ms: {}", duration);
+        tracing::info!("l1 info by hash ns: {}", duration);
         res
     }
 
@@ -65,7 +65,7 @@ impl State {
             self.l1_info.insert(l1_info.block_info.hash, l1_info);
             let finish = std::time::SystemTime::now();
             let duration = finish.duration_since(start).unwrap().as_nanos();
-            tracing::info!("l1 info update ms: {}", duration);
+            tracing::info!("l1 info update ns: {}", duration);
         }
     }
 
