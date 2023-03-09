@@ -169,7 +169,11 @@ impl Database {
         Ok(())
     }
 
-    /// Reads the most recent HeadInfo value
+    /// Reads the most recent [`HeadInfo`].
+    ///
+    /// ## Warning
+    ///
+    /// This function will return [`None`] if the database is empty or panics.
     pub fn read_head(&self) -> Option<HeadInfo> {
         let head = self.db.get("HEAD_INFO").unwrap_or_default();
         head.map(HeadInfo::try_from).transpose().unwrap_or_default()
