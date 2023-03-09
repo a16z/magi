@@ -114,7 +114,8 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
 
     /// Shuts down the driver
     pub async fn shutdown(&self) -> Result<()> {
-        // TODO: flush the database
+        let size = self.db.flush_async().await?;
+        tracing::info!(target: "magi::driver", "flushed {} blocks to disk", size);
         Ok(())
     }
 
