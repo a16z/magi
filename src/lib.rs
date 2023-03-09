@@ -7,6 +7,10 @@ pub mod common;
 /// Configuration management
 pub mod config;
 
+/// Peer-to-peer networking module
+#[cfg(feature = "peers")]
+pub mod net;
+
 /// The derivation pipeline module for deriving the canonical L2 chain
 pub mod derive;
 
