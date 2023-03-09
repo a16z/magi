@@ -160,6 +160,7 @@ impl InnerWatcher {
             self.current_block += 1;
         } else {
             tracing::warn!("l1 watcher sleeping");
+            tracing::warn!("chanel full: {}", self.channels_full());
             sleep(Duration::from_millis(250)).await;
         }
 
