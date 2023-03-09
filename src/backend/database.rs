@@ -61,6 +61,21 @@ impl Database {
         self.db.clear().map_err(|e| eyre::eyre!(e))
     }
 
+    /// ## [`flush_async`]
+    ///
+    /// Flushes the database to disk asynchronously.
+    ///
+    /// Internally, this function uses [`sled::Db::flush_async`] which
+    /// asynchronously flushes all dirty IO buffers and calls fsync.
+    /// If this succeeds, it is guaranteed that all previous writes will
+    /// be recovered if the system crashes.
+    /// Returns the number of bytes flushed during this call.
+    ///
+    /// Flushing can take a long time.
+    pub async fn flush_async(&self) -> Result<usize> {
+        self.db.flush_async().await.map_err(|e| eyre::eyre!(e))
+    }
+
     /// Attempts to construct a database for a given location.
     ///
     /// ## Panics
