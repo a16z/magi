@@ -2,7 +2,7 @@ use std::{iter, str::FromStr, sync::Arc, time::Duration};
 
 use ethers_core::{
     abi::Address,
-    types::{Block, Filter, Transaction, H256, U256},
+    types::{Block, BlockNumber, Filter, Transaction, H256, U256},
     utils::keccak256,
 };
 use ethers_providers::{Http, HttpRateLimitRetryPolicy, Middleware, Provider, RetryClient};
@@ -69,11 +69,21 @@ pub struct SystemConfig {
     pub l1_fee_scalar: U256,
 }
 
+/// Watcher actually ingests the L1 blocks. Should be run in another
+/// thread and called periodically to keep updating channels
 struct InnerWatcher {
+    /// Global Config
     config: Arc<Config>,
+    /// Ethers provider for L1
     provider: Provider<RetryClient<Http>>,
+    /// Channel to send batch tx data
     tx_sender: Sender<BatcherTransactionData>,
+    /// Channel to send L1Info
     l1_info_sender: Sender<L1Info>,
+    /// Most recent ingested block
+    current_block: u64,
+    /// Most recent finalized block
+    finalized_block: u64,
 }
 
 struct Receivers {
@@ -114,6 +124,7 @@ impl InnerWatcher {
         config: Arc<Config>,
         tx_sender: Sender<BatcherTransactionData>,
         l1_info_sender: Sender<L1Info>,
+        start_block: u64,
     ) -> Result<Self> {
         let http =
             Http::from_str(&config.l1_rpc_url).map_err(|_| eyre::eyre!("invalid L1 RPC URL"))?;
@@ -126,12 +137,17 @@ impl InnerWatcher {
             provider,
             tx_sender,
             l1_info_sender,
+            current_block: start_block,
+            finalized_block: 0,
         })
     }
 
-    async fn try_ingest_block(&self, block_num: u64) -> Result<()> {
-        if !self.channels_full() {
-            let block = self.get_block(block_num).await?;
+    async fn try_ingest_block(&mut self) -> Result<()> {
+        let finalized_block = self.get_finalized().await?;
+        self.finalized_block = finalized_block;
+
+        if !self.channels_full() && self.current_block <= self.finalized_block {
+            let block = self.get_block(self.current_block).await?;
             let l1_info = self.get_l1_info(&block).await?;
             let batcher_transactions = self.get_batcher_transactions(&block);
 
@@ -140,11 +156,24 @@ impl InnerWatcher {
             for tx in batcher_transactions {
                 self.tx_sender.send(tx).await?;
             }
+
+            self.current_block += 1;
         } else {
             sleep(Duration::from_millis(250)).await;
         }
 
         Ok(())
+    }
+
+    async fn get_finalized(&self) -> Result<u64> {
+        Ok(self
+            .provider
+            .get_block(BlockNumber::Finalized)
+            .await?
+            .ok_or(eyre::eyre!("block not found"))?
+            .number
+            .ok_or(eyre::eyre!("block pending"))?
+            .as_u64())
     }
 
     async fn get_block(&self, block_num: u64) -> Result<Block<Transaction>> {
@@ -230,17 +259,13 @@ fn start_watcher(start_block: u64, config: Arc<Config>) -> Result<(JoinHandle<()
     let (tx_sender, tx_receiver) = channel(1000);
     let (l1_info_sender, l1_info_receiver) = channel(1000);
 
-    let watcher = InnerWatcher::new(config, tx_sender, l1_info_sender)?;
+    let mut watcher = InnerWatcher::new(config, tx_sender, l1_info_sender, start_block)?;
 
     let handle = spawn(async move {
-        let mut block_num = start_block;
-
         loop {
-            tracing::debug!("fetching L1 data for block {}", block_num);
-            if watcher.try_ingest_block(block_num).await.is_ok() {
-                block_num += 1;
-            } else {
-                tracing::warn!("failed to fetch data for block {}", block_num);
+            tracing::debug!("fetching L1 data for block {}", watcher.current_block);
+            if watcher.try_ingest_block().await.is_err() {
+                tracing::warn!("failed to fetch data for block {}", watcher.current_block);
             }
         }
     });

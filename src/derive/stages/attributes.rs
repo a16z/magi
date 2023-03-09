@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 
 use ethers_core::abi::{decode, encode, ParamType, Token};
 use ethers_core::types::{Address, Log, H256, U256, U64};
@@ -16,7 +16,7 @@ use super::batches::{Batch, Batches};
 
 pub struct Attributes {
     prev_stage: Arc<Mutex<Batches>>,
-    state: Arc<Mutex<State>>,
+    state: Arc<RwLock<State>>,
     sequence_number: u64,
     epoch_hash: H256,
 }
@@ -36,7 +36,7 @@ impl Attributes {
     pub fn new(
         prev_stage: Arc<Mutex<Batches>>,
         config: Arc<Config>,
-        state: Arc<Mutex<State>>,
+        state: Arc<RwLock<State>>,
     ) -> Self {
         Self {
             prev_stage,
@@ -52,7 +52,7 @@ impl Attributes {
 
         self.update_sequence_number(batch.epoch_hash);
 
-        let state = self.state.lock().unwrap();
+        let state = self.state.read().unwrap();
         let l1_info = state.l1_info_by_hash(batch.epoch_hash).unwrap();
 
         let epoch = Some(Epoch {
@@ -102,7 +102,7 @@ impl Attributes {
     }
 
     fn derive_user_deposited(&self) -> Vec<RawTransaction> {
-        let state = self.state.lock().unwrap();
+        let state = self.state.read().unwrap();
         state
             .l1_info_by_hash(self.epoch_hash)
             .map(|info| &info.user_deposits)
