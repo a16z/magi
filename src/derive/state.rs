@@ -27,7 +27,12 @@ impl State {
     }
 
     pub fn l1_info_by_hash(&self, hash: H256) -> Option<&L1Info> {
-        self.l1_info.get(&hash)
+        let start = std::time::SystemTime::now();
+        let res = self.l1_info.get(&hash);
+        let finish = std::time::SystemTime::now();
+        let duration = finish.duration_since(start).unwrap().as_millis();
+        tracing::info!("l1 info by hash ms: {}", duration);
+        res
     }
 
     pub fn l1_info_by_number(&self, num: u64) -> Option<&L1Info> {
