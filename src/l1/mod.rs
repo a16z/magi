@@ -272,7 +272,7 @@ fn start_watcher(start_block: u64, config: Arc<Config>) -> Result<(JoinHandle<()
             }
             let end = std::time::SystemTime::now();
             let duration = end.duration_since(start).unwrap().as_millis();
-            tracing::info!("ingest time ms: {}", duration);
+            tracing::info!(target: "magi", "ingest time ms: {}", duration);
         }
     });
 
