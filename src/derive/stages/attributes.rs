@@ -288,7 +288,10 @@ impl TryFrom<Log> for UserDeposited {
         let is_creation = opaque_data[72] != 0;
         let data = opaque_data[73..].to_vec();
 
-        let l1_block_num = log.block_number.ok_or(eyre::eyre!("block num not found"))?.as_u64();
+        let l1_block_num = log
+            .block_number
+            .ok_or(eyre::eyre!("block num not found"))?
+            .as_u64();
         let l1_block_hash = log.block_hash.ok_or(eyre::eyre!("block hash not found"))?;
         let log_index = log.log_index.unwrap();
 

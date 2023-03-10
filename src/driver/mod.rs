@@ -60,6 +60,7 @@ impl Driver<EngineApi, Pipeline> {
             safe_head,
             safe_epoch,
             chain_watcher,
+            config.clone(),
         )));
 
         let engine = EngineApi::new(
@@ -85,11 +86,12 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
     pub fn from_internals(engine: E, pipeline: P, config: Arc<Config>) -> Result<Self> {
         let safe_head = config.chain.l2_genesis;
         let safe_epoch = config.chain.l1_start_epoch;
-        let chain_watcher = ChainWatcher::new(safe_epoch.number, config)?;
+        let chain_watcher = ChainWatcher::new(safe_epoch.number, config.clone())?;
         let state = Arc::new(RwLock::new(State::new(
             safe_head,
             safe_epoch,
             chain_watcher,
+            config,
         )));
 
         let db = Database::default();

@@ -146,6 +146,8 @@ impl InnerWatcher {
     async fn try_ingest_block(&mut self) -> Result<()> {
         if !self.channels_full() && self.current_block <= self.finalized_block {
             let block_fut = self.get_block(self.current_block);
+
+            // TODO: fetch logs for multiple blocks in one call to reduce latency
             let user_deposits_fut = self.get_deposits(self.current_block);
 
             let (block_res, user_deposits_res) = join!(block_fut, user_deposits_fut);
@@ -232,7 +234,11 @@ impl InnerWatcher {
 }
 
 impl L1Info {
-    pub fn new(block: &Block<Transaction>, user_deposits: Vec<UserDeposited>, batch_sender: Address) -> Result<Self> {
+    pub fn new(
+        block: &Block<Transaction>,
+        user_deposits: Vec<UserDeposited>,
+        batch_sender: Address,
+    ) -> Result<Self> {
         let block_number = block
             .number
             .ok_or(eyre::eyre!("block not included"))?
