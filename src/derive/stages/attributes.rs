@@ -271,8 +271,10 @@ pub struct UserDeposited {
     pub log_index: U256,
 }
 
-impl UserDeposited {
-    pub fn from_log(log: Log, l1_block_num: u64, l1_block_hash: H256) -> Result<Self> {
+impl TryFrom<Log> for UserDeposited {
+    type Error = eyre::Report;
+
+    fn try_from(log: Log) -> Result<Self, Self::Error> {
         let opaque_data = decode(&[ParamType::Bytes], &log.data)?[0]
             .clone()
             .into_bytes()
@@ -286,6 +288,8 @@ impl UserDeposited {
         let is_creation = opaque_data[72] != 0;
         let data = opaque_data[73..].to_vec();
 
+        let l1_block_num = log.block_number.ok_or(eyre::eyre!("block num not found"))?.as_u64();
+        let l1_block_hash = log.block_hash.ok_or(eyre::eyre!("block hash not found"))?;
         let log_index = log.log_index.unwrap();
 
         Ok(Self {
