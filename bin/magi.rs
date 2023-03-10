@@ -13,7 +13,7 @@ use magi::{
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    telemetry::init(false)?;
+    telemetry::init(false, None)?;
     telemetry::register_shutdown();
 
     let cli = Cli::parse();

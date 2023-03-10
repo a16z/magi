@@ -1,3 +1,8 @@
+use std::net::IpAddr;
+
+use discv5::Enr;
+use enr::{CombinedKey, EnrBuilder};
+
 use crate::net::types::NodeRecord;
 
 /// Default bootnodes
@@ -13,6 +18,27 @@ pub const OPTIMISM_MAINNET_BOOTNODES: &[&str] = &[
 /// Returns a list of Optimism Mainnet Bootnodes
 pub fn optimism_mainnet_nodes() -> Vec<NodeRecord> {
     parse_nodes(OPTIMISM_MAINNET_BOOTNODES)
+}
+
+/// Optimism Mainnet Enrs
+pub fn optimism_mainnet_enrs() -> Vec<Enr> {
+    OPTIMISM_MAINNET_BOOTNODES
+        .iter()
+        .map(|s| {
+            let enode: NodeRecord = s.parse().unwrap();
+            let ip = match enode.address {
+                IpAddr::V4(ip) => ip,
+                _ => panic!("Invalid IP"),
+            };
+            let port = enode.udp_port;
+            // TODO: Use the correct key
+            let key = CombinedKey::generate_secp256k1();
+            let mut builder = EnrBuilder::new("v4");
+            builder.ip4(ip);
+            builder.udp4(port);
+            builder.build(&key).unwrap()
+        })
+        .collect()
 }
 
 /// Parses all the nodes

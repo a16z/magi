@@ -13,7 +13,7 @@ use magi::{
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_attributes_match() {
-    telemetry::init(true).unwrap();
+    telemetry::init(true, None).unwrap();
 
     let rpc = "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc";
 

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 // use reth_discv4::bootnodes::mainnet_nodes;
 // use reth_network::config::rng_secret_key;
 // use reth_network::{NetworkConfig, NetworkManager};
@@ -23,21 +25,6 @@
 //         .split_with_handle();
 // }
 
-
-use discv5::{
-    enr,
-    enr::{k256, CombinedKey},
-    Discv5, Discv5ConfigBuilder, Discv5Event,
-};
-use std::{
-    net::{Ipv4Addr, Ipv6Addr, SocketAddr},
-    time::Duration,
-};
-use tracing::{info, warn};
-
-
-
-
 /// Peer Manager Configuration
 #[derive(Debug, Clone)]
 pub struct PeerConfig {}
@@ -49,9 +36,9 @@ pub struct PeerManager {
 }
 
 impl PeerManager {
-    /// Create a new peer Manager
-    pub fn new() -> Self {
-        let config = PeerConfig {};
-        Self { config }
-    }
+    // /// Create a new peer Manager
+    // pub fn new() -> Self {
+    //     let config = PeerConfig {};
+    //     Self { config }
+    // }
 }

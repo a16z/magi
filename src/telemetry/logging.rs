@@ -11,11 +11,13 @@ use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 use ansi_term::Colour::{Blue, Cyan, Purple, Red, Yellow};
 
 /// Configure logging telemetry
-pub fn init(verbose: bool) -> Result<()> {
-    let subscriber = match verbose {
-        true => get_subscriber("magi=debug".into()),
-        false => get_subscriber("magi=info".into()),
+pub fn init(verbose: bool, target: Option<String>) -> Result<()> {
+    let constructed_target = match verbose {
+        true => "magi=debug",
+        false => "magi=info",
     };
+    let target = target.unwrap_or(constructed_target.to_string());
+    let subscriber = get_subscriber(target);
     init_subscriber(subscriber)
 }
 

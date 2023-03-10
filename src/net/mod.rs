@@ -8,16 +8,22 @@ pub mod bootnodes;
 
 /// Discus Disc Wrapper Module
 mod discus;
-pub use discus::Discus;
+pub use discus::*;
 
 /// Network Manager
 pub mod manager;
+
+/// Key Utilities
+pub mod keys;
 
 /// Peer Data Structures
 pub mod peers;
 
 /// Node Record Info
 pub mod node_record;
+
+/// P2P Statistics
+pub mod stats;
 
 /// Re-export Network Types
 pub mod types {
