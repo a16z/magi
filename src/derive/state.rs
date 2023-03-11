@@ -35,12 +35,7 @@ impl State {
     }
 
     pub fn l1_info_by_hash(&self, hash: H256) -> Option<&L1Info> {
-        let start = std::time::SystemTime::now();
-        let res = self.l1_info.get(&hash);
-        let finish = std::time::SystemTime::now();
-        let duration = finish.duration_since(start).unwrap().as_nanos();
-        tracing::info!(target: "magi", "l1 info by hash ns: {}", duration);
-        res
+        self.l1_info.get(&hash)
     }
 
     pub fn l1_info_by_number(&self, num: u64) -> Option<&L1Info> {
@@ -67,13 +62,9 @@ impl State {
 
     pub fn update_l1_info(&mut self) {
         while let Ok(l1_info) = self.chain_watcher.l1_info_receiver.try_recv() {
-            let start = std::time::SystemTime::now();
             self.l1_hashes
                 .insert(l1_info.block_info.number, l1_info.block_info.hash);
             self.l1_info.insert(l1_info.block_info.hash, l1_info);
-            let finish = std::time::SystemTime::now();
-            let duration = finish.duration_since(start).unwrap().as_nanos();
-            tracing::info!(target: "magi", "l1 info update ns: {}", duration);
         }
 
         self.prune();
