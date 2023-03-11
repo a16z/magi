@@ -33,6 +33,7 @@ async fn test_attributes_match() {
         config.chain.l2_genesis,
         config.chain.l1_start_epoch,
         chain_watcher,
+        config.clone(),
     )));
 
     let mut pipeline = Pipeline::new(state, tx_recv, config.clone()).unwrap();
