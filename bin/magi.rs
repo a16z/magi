@@ -13,12 +13,13 @@ use magi::{
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    telemetry::init(false)?;
-    telemetry::register_shutdown();
-
     let cli = Cli::parse();
     let sync_mode = cli.sync_mode.clone();
+    let verbose = cli.verbose;
     let config = cli.to_config();
+
+    telemetry::init(verbose)?;
+    telemetry::register_shutdown();
 
     // TODO: if we spawn slow sync in a separate thread that writes to db,
     // TODO: and fast sync writes an invalid payload to db, we need to bubble
@@ -71,6 +72,8 @@ pub struct Cli {
     engine_api_url: Option<String>,
     #[clap(short = 'j', long)]
     jwt_secret: Option<String>,
+    #[clap(short = 'v', long)]
+    verbose: bool,
 }
 
 impl Cli {

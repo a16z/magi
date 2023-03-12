@@ -133,7 +133,7 @@ impl Attributes {
 struct DepositedTransaction {
     source_hash: H256,
     from: Address,
-    to: Address,
+    to: Option<Address>,
     mint: U256,
     value: U256,
     gas: u64,
@@ -152,7 +152,7 @@ impl From<AttributesDeposited> for DepositedTransaction {
 
         let system_accounts = SystemAccounts::default();
         let from = system_accounts.attributes_depositor;
-        let to = system_accounts.attributes_predeploy;
+        let to = Some(system_accounts.attributes_predeploy);
 
         let data = attributes_deposited.encode();
 
@@ -179,9 +179,9 @@ impl From<UserDeposited> for DepositedTransaction {
         let source_hash = H256::from_slice(&keccak256([domain, h].concat()));
 
         let to = if user_deposited.is_creation {
-            Address::zero()
+            None
         } else {
-            user_deposited.to
+            Some(user_deposited.to)
         };
 
         Self {
@@ -203,7 +203,13 @@ impl Encodable for DepositedTransaction {
         s.begin_list(8);
         s.append(&self.source_hash);
         s.append(&self.from);
-        s.append(&self.to);
+
+        if let Some(to) = self.to {
+            s.append(&to);
+        } else {
+            s.append(&"");
+        }
+
         s.append(&self.mint);
         s.append(&self.value);
         s.append(&self.gas);
