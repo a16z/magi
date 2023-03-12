@@ -67,7 +67,7 @@ impl Batches {
                         break Some(batch);
                     }
                     BatchStatus::Drop => {
-                        tracing::info!("dropping invalid batch");
+                        tracing::warn!("dropping invalid batch");
                         let timestamp = batch.timestamp;
                         self.batches.remove(&timestamp);
                     }
@@ -99,6 +99,7 @@ impl Batches {
 
         // check that block builds on existing chain
         if batch.parent_hash != head.hash {
+            tracing::warn!("invalid parent hash");
             return BatchStatus::Drop;
         }
 
@@ -110,15 +111,18 @@ impl Batches {
         } else if batch.epoch_num == epoch.number + 1 {
             next_epoch
         } else {
+            tracing::warn!("invalid batch origin epoch number");
             return BatchStatus::Drop;
         };
 
         if let Some(batch_origin) = batch_origin {
             if batch.epoch_hash != batch_origin.hash {
+                tracing::warn!("invalid epoch hash");
                 return BatchStatus::Drop;
             }
 
             if batch.timestamp < batch_origin.timestamp {
+                tracing::warn!("batch too old");
                 return BatchStatus::Drop;
             }
 
@@ -128,6 +132,7 @@ impl Batches {
                     if epoch.number == batch.epoch_num {
                         if let Some(next_epoch) = next_epoch {
                             if batch.timestamp >= next_epoch.timestamp {
+                                tracing::warn!("sequencer drift too large");
                                 return BatchStatus::Drop;
                             }
                         } else {
@@ -135,6 +140,7 @@ impl Batches {
                         }
                     }
                 } else {
+                    tracing::warn!("sequencer drift too large");
                     return BatchStatus::Drop;
                 }
             }
@@ -143,6 +149,7 @@ impl Batches {
         }
 
         if batch.has_invalid_transactions() {
+            tracing::warn!("invalid transaction");
             return BatchStatus::Drop;
         }
 
