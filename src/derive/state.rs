@@ -13,6 +13,7 @@ pub struct State {
     l1_hashes: BTreeMap<u64, H256>,
     pub safe_head: BlockInfo,
     pub safe_epoch: Epoch,
+    current_epoch_num: u64,
     chain_watcher: ChainWatcher,
     config: Arc<Config>,
 }
@@ -29,6 +30,7 @@ impl State {
             l1_hashes: BTreeMap::new(),
             safe_head,
             safe_epoch,
+            current_epoch_num: 0,
             chain_watcher,
             config,
         }
@@ -61,14 +63,14 @@ impl State {
     }
 
     pub fn update_l1_info(&mut self) {
-        let mut iter = self.chain_watcher.l1_info_receiver.try_iter().peekable();
-        if let Some(l1_info) = iter.peek() {
-            if l1_info.block_info.number > self.safe_epoch.number + 1000 {
-                return;
-            }
+        if self.current_epoch_num > self.safe_epoch.number + 1000 {
+            return;
         }
 
+        let iter = self.chain_watcher.l1_info_receiver.try_iter();
         for l1_info in iter {
+            self.current_epoch_num = l1_info.block_info.number;
+
             self.l1_hashes
                 .insert(l1_info.block_info.number, l1_info.block_info.hash);
             self.l1_info.insert(l1_info.block_info.hash, l1_info);

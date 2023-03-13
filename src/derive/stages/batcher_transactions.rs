@@ -30,7 +30,7 @@ impl BatcherTransactions {
     }
 
     fn pull_data(&mut self) {
-        while let Ok(data) = self.tx_recv.try_recv() {
+        for data in self.tx_recv.try_iter() {
             let res = BatcherTransaction::from_data(&data).map(|tx| {
                 self.txs.push(tx);
             });
