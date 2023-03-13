@@ -1,4 +1,13 @@
-use std::{collections::HashMap, iter, str::FromStr, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    iter,
+    str::FromStr,
+    sync::{
+        mpsc::{sync_channel, Receiver, SyncSender},
+        Arc,
+    },
+    time::Duration,
+};
 
 use ethers_core::{
     abi::Address,
@@ -8,12 +17,7 @@ use ethers_core::{
 use ethers_providers::{Http, HttpRateLimitRetryPolicy, Middleware, Provider, RetryClient};
 
 use eyre::Result;
-use tokio::{
-    spawn,
-    sync::mpsc::{channel, Receiver, Sender},
-    task::JoinHandle,
-    time::sleep,
-};
+use tokio::{spawn, task::JoinHandle, time::sleep};
 
 use crate::{config::Config, derive::stages::attributes::UserDeposited};
 
@@ -77,9 +81,9 @@ struct InnerWatcher {
     /// Ethers provider for L1
     provider: Provider<RetryClient<Http>>,
     /// Channel to send batch tx data
-    tx_sender: Sender<BatcherTransactionData>,
+    tx_sender: SyncSender<BatcherTransactionData>,
     /// Channel to send L1Info
-    l1_info_sender: Sender<L1Info>,
+    l1_info_sender: SyncSender<L1Info>,
     /// Most recent ingested block
     current_block: u64,
     /// Most recent finalized block
@@ -125,8 +129,8 @@ impl ChainWatcher {
 impl InnerWatcher {
     fn new(
         config: Arc<Config>,
-        tx_sender: Sender<BatcherTransactionData>,
-        l1_info_sender: Sender<L1Info>,
+        tx_sender: SyncSender<BatcherTransactionData>,
+        l1_info_sender: SyncSender<L1Info>,
         start_block: u64,
     ) -> Result<Self> {
         let http =
@@ -147,17 +151,17 @@ impl InnerWatcher {
     }
 
     async fn try_ingest_block(&mut self) -> Result<()> {
-        if !self.channels_full() && self.current_block <= self.finalized_block {
+        if self.current_block <= self.finalized_block {
             let block = self.get_block(self.current_block).await?;
             let user_deposits = self.get_deposits(self.current_block).await?;
 
             let l1_info = L1Info::new(&block, user_deposits, self.config.chain.batch_sender)?;
             let batcher_transactions = self.get_batcher_transactions(&block);
 
-            self.l1_info_sender.send(l1_info).await.unwrap();
+            self.l1_info_sender.send(l1_info)?;
 
             for tx in batcher_transactions {
-                self.tx_sender.send(tx).await?;
+                self.tx_sender.send(tx)?;
             }
 
             self.current_block += 1;
@@ -240,10 +244,6 @@ impl InnerWatcher {
             }
         }
     }
-
-    fn channels_full(&self) -> bool {
-        self.tx_sender.capacity() == 0 || self.l1_info_sender.capacity() == 0
-    }
 }
 
 impl L1Info {
@@ -285,8 +285,8 @@ impl L1Info {
 }
 
 fn start_watcher(start_block: u64, config: Arc<Config>) -> Result<(JoinHandle<()>, Receivers)> {
-    let (tx_sender, tx_receiver) = channel(1000);
-    let (l1_info_sender, l1_info_receiver) = channel(1000);
+    let (tx_sender, tx_receiver) = sync_channel(1000);
+    let (l1_info_sender, l1_info_receiver) = sync_channel(1000);
 
     let mut watcher = InnerWatcher::new(config, tx_sender, l1_info_sender, start_block)?;
 

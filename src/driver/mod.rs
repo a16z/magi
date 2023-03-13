@@ -156,8 +156,8 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
 
     fn update_state(&self) {
         let mut state = self.state.write().unwrap();
-        state.update_l1_info();
         state.update_safe_head(self.safe_head, self.safe_epoch);
+        state.update_l1_info();
     }
 
     async fn build_payload(&self, attributes: PayloadAttributes) -> Result<ExecutionPayload> {
