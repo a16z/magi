@@ -63,7 +63,7 @@ impl State {
     pub fn update_l1_info(&mut self) {
         let mut iter = self.chain_watcher.l1_info_receiver.try_iter().peekable();
         if let Some(l1_info) = iter.peek() {
-            if l1_info.block_info.number > self.safe_epoch.number + 100 {
+            if l1_info.block_info.number > self.safe_epoch.number + 1000 {
                 return;
             }
         }
