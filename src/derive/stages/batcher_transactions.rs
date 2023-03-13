@@ -1,7 +1,6 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc::Receiver, Arc, Mutex};
 
 use eyre::Result;
-use tokio::sync::mpsc::Receiver;
 
 pub struct BatcherTransactions {
     txs: Vec<BatcherTransaction>,

@@ -1,7 +1,6 @@
-use std::sync::{Arc, RwLock};
+use std::sync::{mpsc::Receiver, Arc, RwLock};
 
 use eyre::Result;
-use tokio::sync::mpsc::Receiver;
 
 use crate::{config::Config, engine::PayloadAttributes};
 
