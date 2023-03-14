@@ -2,7 +2,6 @@ use std::sync::{Arc, RwLock};
 
 use ethers_core::types::H256;
 use eyre::Result;
-use tokio::spawn;
 
 use crate::{
     backend::{Database, HeadInfo},
@@ -150,7 +149,7 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
         };
 
         self.push_payload(payload).await?;
-        self.update_forkchoice(new_head);
+        self.update_forkchoice(new_head).await?;
 
         self.update_head(new_head, new_epoch)?;
 
