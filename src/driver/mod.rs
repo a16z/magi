@@ -21,7 +21,7 @@ pub struct Driver<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> {
     /// The derivation pipeline
     pipeline: P,
     /// The L2 execution engine
-    engine: Arc<E>,
+    engine: E,
     /// Database for storing progress data
     db: Database,
     /// Most recent block hash that can be derived from L1 data
@@ -64,10 +64,10 @@ impl Driver<EngineApi, Pipeline> {
             config.clone(),
         )));
 
-        let engine = Arc::new(EngineApi::new(
+        let engine = EngineApi::new(
             config.engine_api_url.clone().unwrap_or_default(),
             config.jwt_secret.clone(),
-        ));
+        );
 
         let pipeline = Pipeline::new(state.clone(), tx_recv, config)?;
 
@@ -99,7 +99,7 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
 
         Ok(Self {
             pipeline,
-            engine: Arc::new(engine),
+            engine,
             db,
             safe_head,
             safe_epoch,
@@ -191,21 +191,17 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
         Ok(())
     }
 
-    fn update_forkchoice(&self, new_head: BlockInfo) {
+    async fn update_forkchoice(&self, new_head: BlockInfo) -> Result<()> {
         let forkchoice = create_forkchoice_state(new_head.hash);
-        let engine = self.engine.clone();
+        let update = self.engine.forkchoice_updated(forkchoice, None).await?;
+        if update.payload_status.status != Status::Valid {
+            eyre::bail!(
+                "could not accept new forkchoice: {:?}",
+                update.payload_status.validation_error
+            );
+        }
 
-        spawn(async move {
-            let update = engine.forkchoice_updated(forkchoice, None).await?;
-            if update.payload_status.status != Status::Valid {
-                eyre::bail!(
-                    "could not accept new forkchoice: {:?}",
-                    update.payload_status.validation_error
-                );
-            }
-
-            Ok(())
-        });
+        Ok(())
     }
 
     fn update_head(&mut self, new_head: BlockInfo, new_epoch: Epoch) -> Result<()> {
