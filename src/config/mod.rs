@@ -201,8 +201,8 @@ impl ChainConfig {
             deposit_contract: addr("0x5b47E1A08Ea6d985D6649300584e6722Ec4B1383"),
             max_channels: 100_000_000,
             max_timeout: 100,
-            seq_window_size: 120,
-            max_seq_drift: 3600,
+            seq_window_size: 3600,
+            max_seq_drift: 600,
         }
     }
 }
