@@ -2,6 +2,7 @@ use std::sync::{Arc, RwLock};
 
 use ethers_core::types::H256;
 use eyre::Result;
+use tokio::spawn;
 
 use crate::{
     backend::{Database, HeadInfo},
@@ -20,7 +21,7 @@ pub struct Driver<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> {
     /// The derivation pipeline
     pipeline: P,
     /// The L2 execution engine
-    engine: E,
+    engine: Arc<E>,
     /// Database for storing progress data
     db: Database,
     /// Most recent block hash that can be derived from L1 data
@@ -63,10 +64,10 @@ impl Driver<EngineApi, Pipeline> {
             config.clone(),
         )));
 
-        let engine = EngineApi::new(
+        let engine = Arc::new(EngineApi::new(
             config.engine_api_url.clone().unwrap_or_default(),
             config.jwt_secret.clone(),
-        );
+        ));
 
         let pipeline = Pipeline::new(state.clone(), tx_recv, config)?;
 
@@ -98,7 +99,7 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
 
         Ok(Self {
             pipeline,
-            engine,
+            engine: Arc::new(engine),
             db,
             safe_head,
             safe_epoch,
@@ -149,7 +150,9 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
         };
 
         self.push_payload(payload).await?;
-        self.update_forkchoice(new_head, new_epoch).await?;
+        self.update_forkchoice(new_head);
+
+        self.update_head(new_head, new_epoch)?;
 
         Ok(())
     }
@@ -161,7 +164,7 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
     }
 
     async fn build_payload(&self, attributes: PayloadAttributes) -> Result<ExecutionPayload> {
-        let forkchoice = self.create_forkchoice_state();
+        let forkchoice = create_forkchoice_state(self.safe_head.hash);
 
         let update = self
             .engine
@@ -188,7 +191,24 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
         Ok(())
     }
 
-    async fn update_forkchoice(&mut self, new_head: BlockInfo, new_epoch: Epoch) -> Result<()> {
+    fn update_forkchoice(&self, new_head: BlockInfo) {
+        let forkchoice = create_forkchoice_state(new_head.hash);
+        let engine = self.engine.clone();
+
+        spawn(async move {
+            let update = engine.forkchoice_updated(forkchoice, None).await?;
+            if update.payload_status.status != Status::Valid {
+                eyre::bail!(
+                    "could not accept new forkchoice: {:?}",
+                    update.payload_status.validation_error
+                );
+            }
+
+            Ok(())
+        });
+    }
+
+    fn update_head(&mut self, new_head: BlockInfo, new_epoch: Epoch) -> Result<()> {
         if self.safe_head != new_head {
             if self.safe_epoch != new_epoch {
                 tracing::info!("saving new head to db: {:?}", new_head.hash);
@@ -203,25 +223,15 @@ impl<E: L2EngineApi, P: Iterator<Item = PayloadAttributes>> Driver<E, P> {
             self.safe_epoch = new_epoch;
         }
 
-        let forkchoice = self.create_forkchoice_state();
-        let update = self.engine.forkchoice_updated(forkchoice, None).await?;
-
-        if update.payload_status.status != Status::Valid {
-            eyre::bail!(
-                "could not accept new forkchoice: {:?}",
-                update.payload_status.validation_error
-            );
-        }
-
         Ok(())
     }
+}
 
-    fn create_forkchoice_state(&self) -> ForkchoiceState {
-        ForkchoiceState {
-            head_block_hash: self.safe_head.hash,
-            safe_block_hash: self.safe_head.hash,
-            finalized_block_hash: H256::zero(),
-        }
+fn create_forkchoice_state(hash: H256) -> ForkchoiceState {
+    ForkchoiceState {
+        head_block_hash: hash,
+        safe_block_hash: hash,
+        finalized_block_hash: H256::zero(),
     }
 }
 

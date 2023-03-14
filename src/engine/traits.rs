@@ -12,7 +12,7 @@ use super::{
 /// This is a modified version of the [Ethereum Execution API Specs](https://github.com/ethereum/execution-apis),
 /// as defined in the [Optimism Exec Engine Specs](https://github.com/ethereum-optimism/optimism/blob/develop/specs/exec-engine.md).
 #[async_trait]
-pub trait L2EngineApi {
+pub trait L2EngineApi: Send + Sync + 'static {
     /// ## forkchoice_updated
     ///
     /// Updates were made to [`engine_forkchoiceUpdatedV1`](https://github.com/ethereum/execution-apis/blob/main/src/engine/paris.md#engine_forkchoiceupdatedv1)
