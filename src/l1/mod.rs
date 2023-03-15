@@ -230,7 +230,7 @@ impl InnerWatcher {
                     .map(|log| UserDeposited::try_from(log).unwrap())
                     .collect::<Vec<UserDeposited>>();
 
-                for num in block_num..end_block {
+                for num in block_num..=end_block {
                     let deposits = deposit_logs
                         .iter()
                         .filter(|d| d.l1_block_num == num)
