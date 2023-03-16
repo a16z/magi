@@ -1,4 +1,4 @@
-use std::sync::{Arc, RwLock};
+use std::{sync::{Arc, RwLock, mpsc::{Receiver, channel}}, process};
 
 use ethers_core::types::H256;
 use eyre::Result;
@@ -40,10 +40,12 @@ pub struct Driver<E: L2EngineApi> {
     state: Arc<RwLock<State>>,
     /// L1 chain watcher
     chain_watcher: ChainWatcher,
+    /// Channel to receive the shutdown signal from
+    shutdown_recv: Receiver<bool>,
 }
 
 impl Driver<EngineApi> {
-    pub fn from_config(config: Config) -> Result<Self> {
+    pub fn from_config(config: Config, shutdown_recv: Receiver<bool>) -> Result<Self> {
         let db = config
             .data_dir
             .as_ref()
@@ -97,6 +99,7 @@ impl Driver<EngineApi> {
             finalized_l1_block_number: 0,
             state,
             chain_watcher,
+            shutdown_recv,
         })
     }
 }
@@ -115,6 +118,7 @@ impl<E: L2EngineApi> Driver<E> {
         let state = Arc::new(RwLock::new(State::new(safe_head, safe_epoch, config)));
 
         let db = Database::default();
+        let (_, shutdown_recv) = channel();
 
         Ok(Self {
             pipeline,
@@ -128,12 +132,19 @@ impl<E: L2EngineApi> Driver<E> {
             finalized_l1_block_number: 0,
             state,
             chain_watcher,
+            shutdown_recv,
         })
     }
 
     /// Runs the Driver
     pub async fn start(&mut self) -> Result<()> {
         loop {
+            if let Ok(shutdown) = self.shutdown_recv.try_recv() {
+                if shutdown {
+                    self.shutdown().await?;
+                }
+            }
+
             self.advance().await?;
         }
     }
@@ -142,7 +153,7 @@ impl<E: L2EngineApi> Driver<E> {
     pub async fn shutdown(&self) -> Result<()> {
         let size = self.db.flush_async().await?;
         tracing::info!(target: "magi::driver", "flushed {} blocks to disk", size);
-        Ok(())
+        process::exit(0);
     }
 
     /// Attempts to advance the execution node forward one L1 block using derived
@@ -150,10 +161,9 @@ impl<E: L2EngineApi> Driver<E> {
     /// does not successfully advance the node
     pub async fn advance(&mut self) -> Result<()> {
         self.handle_next_block_update();
+        self.update_state_head();
 
         while let Some(next_attributes) = self.pipeline.next() {
-            self.update_state_head();
-            
             tracing::debug!(target: "magi", "received new attributes from the pipeline");
 
             tracing::debug!("next attributes: {:?}", next_attributes);
@@ -254,19 +264,15 @@ impl<E: L2EngineApi> Driver<E> {
             .map(|(head, epoch, _, _)| {
                 tracing::info!("saving new finalized head to db: {:?}", head.hash);
 
-                _ = self.db.write_head(HeadInfo {
+                let res = self.db.write_head(HeadInfo {
                     l2_block_info: *head,
                     l1_epoch: *epoch,
                 });
-            });
-
-        self.unfinalized_origins
-            .iter()
-            .filter(|(_, _, origin, _)| *origin <= self.finalized_l1_block_number)
-            .last()
-            .map(|(head, epoch, _, _)| {
-                self.finalized_head = *head;
-                self.finalized_epoch = *epoch;
+                
+                if res.is_ok() {
+                    self.finalized_head = *head;
+                    self.finalized_epoch = *epoch;
+                }
             });
 
         self.unfinalized_origins
