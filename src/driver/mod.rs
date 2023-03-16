@@ -149,10 +149,11 @@ impl<E: L2EngineApi> Driver<E> {
     /// L1 data. Errors if the most recent PayloadAttributes from the pipeline
     /// does not successfully advance the node
     pub async fn advance(&mut self) -> Result<()> {
-        self.update_state_head();
         self.handle_next_block_update();
 
         while let Some(next_attributes) = self.pipeline.next() {
+            self.update_state_head();
+            
             tracing::debug!(target: "magi", "received new attributes from the pipeline");
 
             tracing::debug!("next attributes: {:?}", next_attributes);
