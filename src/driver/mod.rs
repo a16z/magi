@@ -61,6 +61,9 @@ impl Driver<EngineApi> {
             .map(|h| h.l1_epoch)
             .unwrap_or(config.chain.l1_start_epoch);
 
+        println!("{:?}", finalized_head);
+        println!("{:?}", finalized_epoch);
+
         tracing::info!("syncing from: {:?}", finalized_head.hash);
 
         let config = Arc::new(config);
