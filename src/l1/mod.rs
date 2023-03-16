@@ -198,7 +198,9 @@ impl InnerWatcher {
             }
 
             let update = if self.check_reorg() {
-                BlockUpdate::Reorg(l1_info)
+                tracing::error!("reorg broke it");
+                panic!("reorgs aren't handled corrrectly");
+                // BlockUpdate::Reorg(l1_info)
             } else {
                 BlockUpdate::NewBlock(l1_info)
             };
@@ -260,7 +262,7 @@ impl InnerWatcher {
                 let deposit_event = "TransactionDeposited(address,address,uint256,bytes)";
                 let deposit_topic = H256::from_slice(&keccak256(deposit_event));
 
-                let end_block = self.finalized_block.min(block_num + 1000);
+                let end_block = self.head_block.min(block_num + 1000);
 
                 let deposit_filter = Filter::new()
                     .address(self.config.chain.deposit_contract)
