@@ -1,5 +1,6 @@
-use std::sync::{mpsc::Receiver, Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
+use ethers_core::types::H256;
 use eyre::Result;
 
 use crate::{config::Config, engine::PayloadAttributes};
@@ -16,6 +17,9 @@ pub mod stages;
 pub mod state;
 
 pub struct Pipeline {
+    batcher_transactions: Arc<Mutex<BatcherTransactions>>,
+    channels: Arc<Mutex<Channels>>,
+    batches: Arc<Mutex<Batches>>,
     attributes: Attributes,
 }
 
@@ -28,16 +32,31 @@ impl Iterator for Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(
-        state: Arc<RwLock<State>>,
-        tx_recv: Receiver<Vec<u8>>,
-        config: Arc<Config>,
-    ) -> Result<Self> {
-        let batcher_transactions = BatcherTransactions::new(tx_recv);
-        let channels = Channels::new(batcher_transactions, config.clone());
-        let batches = Batches::new(channels, state.clone(), config.clone());
-        let attributes = Attributes::new(batches, config, state);
+    pub fn new(state: Arc<RwLock<State>>, config: Arc<Config>) -> Result<Self> {
+        let batcher_transactions = BatcherTransactions::new();
+        let channels = Channels::new(batcher_transactions.clone(), config.clone());
+        let batches = Batches::new(channels.clone(), state.clone(), config.clone());
+        let attributes = Attributes::new(batches.clone(), config, state);
 
-        Ok(Self { attributes })
+        Ok(Self {
+            batcher_transactions,
+            channels,
+            batches,
+            attributes,
+        })
+    }
+
+    pub fn push_batcher_transactions(&self, txs: Vec<Vec<u8>>, l1_origin: u64) {
+        self.batcher_transactions
+            .lock()
+            .unwrap()
+            .push_data(txs, l1_origin);
+    }
+
+    pub fn reorg(&mut self, l1_ancestor: u64, ancestor_epoch_hash: H256, ancestor_seq_num: u64) {
+        self.batcher_transactions.lock().unwrap().reorg();
+        self.channels.lock().unwrap().reorg(l1_ancestor);
+        self.batches.lock().unwrap().reorg(l1_ancestor);
+        self.attributes.reorg(ancestor_epoch_hash, ancestor_seq_num);
     }
 }

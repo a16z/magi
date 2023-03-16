@@ -46,6 +46,17 @@ impl Channels {
         }))
     }
 
+    pub fn reorg(&mut self, l1_ancestor: u64) {
+        if let Some(ready_channel) = &self.ready_channel {
+            if ready_channel.l1_origin > l1_ancestor {
+                self.ready_channel = None;
+            }
+        }
+
+        self.pending_channels.retain(|pc| pc.l1_origin() <= l1_ancestor);
+        self.frame_bank.retain(|f| f.l1_origin <= l1_ancestor);
+    }
+
     /// Pushes a frame into the correct pending channel
     fn push_frame(&mut self, frame: Frame) {
         // Find a pending channel matching on the channel id
@@ -121,6 +132,7 @@ impl Channels {
                 self.ready_channel = Some(Channel {
                     id: pc.channel_id,
                     data: pc.assemble(),
+                    l1_origin: pc.l1_origin(),
                 });
             }
         }
@@ -198,6 +210,14 @@ impl PendingChannel {
             .iter()
             .fold(Vec::new(), |a, b| [a, b.frame_data.clone()].concat())
     }
+
+    pub fn l1_origin(&self) -> u64 {
+        self.frames
+            .iter()
+            .map(|f| f.l1_origin)
+            .max()
+            .expect("empty frame not allowed")
+    }
 }
 
 /// A Channel
@@ -205,4 +225,5 @@ impl PendingChannel {
 pub struct Channel {
     pub id: u128,
     pub data: Vec<u8>,
+    pub l1_origin: u64,
 }

@@ -46,6 +46,11 @@ impl Attributes {
         }
     }
 
+    pub fn reorg(&mut self, ancestor_epoch_hash: H256, ancestor_seq_num: u64) {
+        self.epoch_hash = ancestor_epoch_hash;
+        self.sequence_number = ancestor_seq_num;
+    }
+
     fn derive_attributes(&mut self, batch: Batch) -> PayloadAttributes {
         tracing::debug!("attributes derived from block {}", batch.epoch_num);
         tracing::debug!("batch epoch hash {:?}", batch.epoch_hash);
@@ -62,6 +67,8 @@ impl Attributes {
         });
 
         let timestamp = U64([batch.timestamp]);
+        let l1_origin = Some(batch.l1_origin);
+        let seq_number = Some(self.sequence_number);
         let prev_randao = l1_info.block_info.mix_hash;
         let transactions = Some(self.derive_transactions(batch, l1_info));
         let suggested_fee_recipient = SystemAccounts::default().fee_vault;
@@ -74,6 +81,8 @@ impl Attributes {
             no_tx_pool: true,
             gas_limit: U64([l1_info.system_config.gas_limit.as_u64()]),
             epoch,
+            l1_origin,
+            seq_number,
         }
     }
 

@@ -1,18 +1,15 @@
-use std::sync::{mpsc::Receiver, Arc, Mutex};
+use std::sync::{Arc, Mutex};
 
 use eyre::Result;
 
 pub struct BatcherTransactions {
     txs: Vec<BatcherTransaction>,
-    tx_recv: Receiver<Vec<u8>>,
 }
 
 impl Iterator for BatcherTransactions {
     type Item = BatcherTransaction;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.pull_data();
-
         if !self.txs.is_empty() {
             Some(self.txs.remove(0))
         } else {
@@ -22,16 +19,13 @@ impl Iterator for BatcherTransactions {
 }
 
 impl BatcherTransactions {
-    pub fn new(tx_recv: Receiver<Vec<u8>>) -> Arc<Mutex<Self>> {
-        Arc::new(Mutex::new(Self {
-            txs: Vec::new(),
-            tx_recv,
-        }))
+    pub fn new() -> Arc<Mutex<Self>> {
+        Arc::new(Mutex::new(Self { txs: Vec::new() }))
     }
 
-    fn pull_data(&mut self) {
-        for data in self.tx_recv.try_iter() {
-            let res = BatcherTransaction::from_data(&data).map(|tx| {
+    pub fn push_data(&mut self, txs: Vec<Vec<u8>>, l1_origin: u64) {
+        for data in txs {
+            let res = BatcherTransaction::new(&data, l1_origin).map(|tx| {
                 self.txs.push(tx);
             });
 
@@ -39,6 +33,10 @@ impl BatcherTransactions {
                 tracing::debug!("Failed to decode batcher transaction");
             }
         }
+    }
+
+    pub fn reorg(&mut self) {
+        self.txs.clear();
     }
 }
 
@@ -49,14 +47,14 @@ pub struct BatcherTransaction {
 }
 
 impl BatcherTransaction {
-    fn from_data(data: &[u8]) -> Result<Self> {
+    fn new(data: &[u8], l1_origin: u64) -> Result<Self> {
         let version = data[0];
         let frame_data = data.get(1..).ok_or(eyre::eyre!("No frame data"))?;
 
         let mut offset = 0;
         let mut frames = Vec::new();
         while offset < frame_data.len() {
-            let (frame, next_offset) = Frame::from_data(frame_data, offset)?;
+            let (frame, next_offset) = Frame::from_data(frame_data, offset, l1_origin)?;
             frames.push(frame);
             offset = next_offset;
         }
@@ -72,10 +70,11 @@ pub struct Frame {
     pub frame_data_len: u32,
     pub frame_data: Vec<u8>,
     pub is_last: bool,
+    pub l1_origin: u64,
 }
 
 impl Frame {
-    fn from_data(data: &[u8], offset: usize) -> Result<(Self, usize)> {
+    fn from_data(data: &[u8], offset: usize, l1_origin: u64) -> Result<(Self, usize)> {
         let data = &data[offset..];
 
         let channel_id = u128::from_be_bytes(data[0..16].try_into()?);
@@ -93,6 +92,7 @@ impl Frame {
             frame_data_len,
             frame_data,
             is_last,
+            l1_origin,
         };
 
         Ok((frame, offset + data.len()))
