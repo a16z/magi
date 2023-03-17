@@ -37,7 +37,7 @@ pub struct ChainWatcher {
 /// Updates L1Info
 pub enum BlockUpdate {
     /// A new block extending the current chain
-    NewBlock(L1Info),
+    NewBlock(Box<L1Info>),
     /// Updates the most recent finalized block
     FinalityUpdate(u64),
     /// Reorg detected
@@ -210,7 +210,7 @@ impl InnerWatcher {
             let update = if self.check_reorg() {
                 BlockUpdate::Reorg
             } else {
-                BlockUpdate::NewBlock(l1_info)
+                BlockUpdate::NewBlock(Box::new(l1_info))
             };
 
             self.block_update_sender.send(update)?;

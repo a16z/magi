@@ -155,7 +155,7 @@ impl<E: L2EngineApi> Driver<E> {
     /// Shuts down the driver
     pub async fn shutdown(&self) -> Result<()> {
         let size = self.db.flush_async().await?;
-        tracing::info!(target: "magi::driver", "flushed {} blocks to disk", size);
+        tracing::info!(target: "magi::driver", "flushed {} bytes to disk", size);
         process::exit(0);
     }
 
@@ -225,7 +225,7 @@ impl<E: L2EngineApi> Driver<E> {
                         self.pipeline
                             .push_batcher_transactions(l1_info.batcher_transactions.clone(), num);
 
-                        state.update_l1_info(l1_info);
+                        state.update_l1_info(*l1_info);
                     }
                     BlockUpdate::Reorg => {
                         tracing::warn!("reorg detected, purging pipeline");
@@ -250,22 +250,24 @@ impl<E: L2EngineApi> Driver<E> {
     }
 
     fn update_finalized(&mut self) {
-        self.unfinalized_origins
+        let new_finalized = self
+            .unfinalized_origins
             .iter()
-            .find(|(_, _, origin, seq)| *origin <= self.finalized_l1_block_number && *seq == 0)
-            .map(|(head, epoch, _, _)| {
-                tracing::info!("saving new finalized head to db: {:?}", head.hash);
+            .find(|(_, _, origin, seq)| *origin <= self.finalized_l1_block_number && *seq == 0);
 
-                let res = self.db.write_head(HeadInfo {
-                    l2_block_info: *head,
-                    l1_epoch: *epoch,
-                });
+        if let Some((head, epoch, _, _)) = new_finalized {
+            tracing::info!("saving new finalized head to db: {:?}", head.hash);
 
-                if res.is_ok() {
-                    self.finalized_head = *head;
-                    self.finalized_epoch = *epoch;
-                }
+            let res = self.db.write_head(HeadInfo {
+                l2_block_info: *head,
+                l1_epoch: *epoch,
             });
+
+            if res.is_ok() {
+                self.finalized_head = *head;
+                self.finalized_epoch = *epoch;
+            }
+        }
 
         self.unfinalized_origins
             .retain(|(_, _, origin, _)| *origin > self.finalized_l1_block_number);
