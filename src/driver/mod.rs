@@ -424,7 +424,7 @@ impl<E: L2EngineApi> Driver<E> {
                 (Some(_), None) => {
                     return Ok(());
                 }
-                _ => sleep(Duration::from_millis(250)),
+                _ => sleep(Duration::from_millis(100)),
             };
         }
     }
@@ -456,6 +456,8 @@ impl<E: L2EngineApi> Driver<E> {
             .push((new_head, new_epoch, l1_origin, seq_number));
 
         self.update_finalized();
+
+        tracing::info!(target: "magi", "head updated: {} {:?}", self.safe_head.number, self.safe_head.hash);
 
         Ok(())
     }
