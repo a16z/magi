@@ -5,7 +5,7 @@ use std::io::Read;
 use std::sync::{Arc, Mutex, RwLock};
 
 use ethers_core::types::H256;
-use ethers_core::utils::rlp::{Decodable, DecoderError, Rlp};
+use ethers_core::utils::rlp::{DecoderError, Rlp};
 
 use eyre::Result;
 use libflate::zlib::Decoder;
@@ -47,6 +47,10 @@ impl Batches {
             state,
             config,
         }))
+    }
+
+    pub fn purge(&mut self) {
+        self.batches.clear();
     }
 
     fn try_next(&mut self) -> Result<Option<Batch>> {
@@ -175,7 +179,7 @@ fn decode_batches(channel: &Channel) -> Result<Vec<Batch>> {
         let rlp = Rlp::new(batch_content);
         let size = rlp.payload_info()?.total();
 
-        let batch: Batch = rlp.as_val()?;
+        let batch = Batch::decode(&rlp, channel.l1_origin)?;
         batches.push(batch);
 
         offset += size + batch_info.header_len + 1;
@@ -191,6 +195,7 @@ pub struct Batch {
     pub epoch_hash: H256,
     pub timestamp: u64,
     pub transactions: Vec<RawTransaction>,
+    pub l1_origin: u64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -201,8 +206,8 @@ enum BatchStatus {
     Future,
 }
 
-impl Decodable for Batch {
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
+impl Batch {
+    fn decode(rlp: &Rlp, l1_origin: u64) -> Result<Self, DecoderError> {
         let parent_hash = rlp.val_at(0)?;
         let epoch_num = rlp.val_at(1)?;
         let epoch_hash = rlp.val_at(2)?;
@@ -215,11 +220,10 @@ impl Decodable for Batch {
             epoch_hash,
             timestamp,
             transactions,
+            l1_origin,
         })
     }
-}
 
-impl Batch {
     fn has_invalid_transactions(&self) -> bool {
         self.transactions
             .iter()

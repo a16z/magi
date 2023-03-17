@@ -7,7 +7,7 @@ use ethers_core::utils::{keccak256, rlp::Encodable, rlp::RlpStream};
 use eyre::Result;
 
 use crate::common::{Epoch, RawTransaction};
-use crate::config::{Config, SystemAccounts};
+use crate::config::SystemAccounts;
 use crate::derive::state::State;
 use crate::engine::PayloadAttributes;
 use crate::l1::L1Info;
@@ -33,17 +33,18 @@ impl Iterator for Attributes {
 }
 
 impl Attributes {
-    pub fn new(
-        prev_stage: Arc<Mutex<Batches>>,
-        config: Arc<Config>,
-        state: Arc<RwLock<State>>,
-    ) -> Self {
+    pub fn new(prev_stage: Arc<Mutex<Batches>>, state: Arc<RwLock<State>>) -> Self {
         Self {
             prev_stage,
             state,
             sequence_number: 0,
-            epoch_hash: config.chain.l1_start_epoch.hash,
+            epoch_hash: H256::zero(),
         }
+    }
+
+    pub fn purge(&mut self) {
+        self.sequence_number = 0;
+        self.epoch_hash = H256::zero();
     }
 
     fn derive_attributes(&mut self, batch: Batch) -> PayloadAttributes {
@@ -62,6 +63,8 @@ impl Attributes {
         });
 
         let timestamp = U64([batch.timestamp]);
+        let l1_origin = Some(batch.l1_origin);
+        let seq_number = Some(self.sequence_number);
         let prev_randao = l1_info.block_info.mix_hash;
         let transactions = Some(self.derive_transactions(batch, l1_info));
         let suggested_fee_recipient = SystemAccounts::default().fee_vault;
@@ -74,6 +77,8 @@ impl Attributes {
             no_tx_pool: true,
             gas_limit: U64([l1_info.system_config.gas_limit.as_u64()]),
             epoch,
+            l1_origin,
+            seq_number,
         }
     }
 

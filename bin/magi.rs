@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::mpsc::channel};
 
 use clap::Parser;
 use dirs::home_dir;
@@ -19,7 +19,6 @@ async fn main() -> Result<()> {
     let config = cli.to_config();
 
     telemetry::init(verbose)?;
-    telemetry::register_shutdown();
 
     // TODO: if we spawn slow sync in a separate thread that writes to db,
     // TODO: and fast sync writes an invalid payload to db, we need to bubble
@@ -45,7 +44,15 @@ async fn main() -> Result<()> {
 
 pub async fn full_sync(config: Config) -> Result<()> {
     tracing::info!(target: "magi", "starting full sync");
-    let mut driver = Driver::from_config(config)?;
+    let (shutdown_sender, shutdown_recv) = channel();
+
+    let mut driver = Driver::from_config(config, shutdown_recv)?;
+
+    ctrlc::set_handler(move || {
+        tracing::info!(target: "magi", "shutting down");
+        shutdown_sender.send(true).expect("shutdown failure");
+    })
+    .expect("could not register shutdown handler");
 
     // Run the driver
     if let Err(err) = driver.start().await {

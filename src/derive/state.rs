@@ -5,7 +5,7 @@ use ethers_core::types::H256;
 use crate::{
     common::{BlockInfo, Epoch},
     config::Config,
-    l1::{ChainWatcher, L1Info},
+    l1::L1Info,
 };
 
 pub struct State {
@@ -14,24 +14,17 @@ pub struct State {
     pub safe_head: BlockInfo,
     pub safe_epoch: Epoch,
     current_epoch_num: u64,
-    chain_watcher: ChainWatcher,
     config: Arc<Config>,
 }
 
 impl State {
-    pub fn new(
-        safe_head: BlockInfo,
-        safe_epoch: Epoch,
-        chain_watcher: ChainWatcher,
-        config: Arc<Config>,
-    ) -> Self {
+    pub fn new(safe_head: BlockInfo, safe_epoch: Epoch, config: Arc<Config>) -> Self {
         Self {
             l1_info: BTreeMap::new(),
             l1_hashes: BTreeMap::new(),
             safe_head,
             safe_epoch,
             current_epoch_num: 0,
-            chain_watcher,
             config,
         }
     }
@@ -62,21 +55,27 @@ impl State {
         })
     }
 
-    pub fn update_l1_info(&mut self) {
-        if self.current_epoch_num > self.safe_epoch.number + 1000 {
-            return;
-        }
+    pub fn is_full(&self) -> bool {
+        self.current_epoch_num > self.safe_epoch.number + 1000
+    }
 
-        let iter = self.chain_watcher.l1_info_receiver.try_iter();
-        for l1_info in iter {
-            self.current_epoch_num = l1_info.block_info.number;
+    pub fn update_l1_info(&mut self, l1_info: L1Info) {
+        self.current_epoch_num = l1_info.block_info.number;
 
-            self.l1_hashes
-                .insert(l1_info.block_info.number, l1_info.block_info.hash);
-            self.l1_info.insert(l1_info.block_info.hash, l1_info);
-        }
+        self.l1_hashes
+            .insert(l1_info.block_info.number, l1_info.block_info.hash);
+        self.l1_info.insert(l1_info.block_info.hash, l1_info);
 
         self.prune();
+    }
+
+    pub fn purge(&mut self, safe_head: BlockInfo, safe_epoch: Epoch) {
+        self.current_epoch_num = 0;
+        self.l1_info.clear();
+        self.l1_hashes.clear();
+
+        self.safe_head = safe_head;
+        self.safe_epoch = safe_epoch;
     }
 
     pub fn update_safe_head(&mut self, safe_head: BlockInfo, safe_epoch: Epoch) {

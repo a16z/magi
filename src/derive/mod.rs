@@ -1,4 +1,4 @@
-use std::sync::{mpsc::Receiver, Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 use eyre::Result;
 
@@ -16,6 +16,9 @@ pub mod stages;
 pub mod state;
 
 pub struct Pipeline {
+    batcher_transactions: Arc<Mutex<BatcherTransactions>>,
+    channels: Arc<Mutex<Channels>>,
+    batches: Arc<Mutex<Batches>>,
     attributes: Attributes,
 }
 
@@ -28,16 +31,44 @@ impl Iterator for Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(
-        state: Arc<RwLock<State>>,
-        tx_recv: Receiver<Vec<u8>>,
-        config: Arc<Config>,
-    ) -> Result<Self> {
-        let batcher_transactions = BatcherTransactions::new(tx_recv);
-        let channels = Channels::new(batcher_transactions, config.clone());
-        let batches = Batches::new(channels, state.clone(), config.clone());
-        let attributes = Attributes::new(batches, config, state);
+    pub fn new(state: Arc<RwLock<State>>, config: Arc<Config>) -> Result<Self> {
+        let batcher_transactions = BatcherTransactions::new();
+        let channels = Channels::new(batcher_transactions.clone(), config.clone());
+        let batches = Batches::new(channels.clone(), state.clone(), config);
+        let attributes = Attributes::new(batches.clone(), state);
 
-        Ok(Self { attributes })
+        Ok(Self {
+            batcher_transactions,
+            channels,
+            batches,
+            attributes,
+        })
+    }
+
+    pub fn push_batcher_transactions(&self, txs: Vec<Vec<u8>>, l1_origin: u64) -> Result<()> {
+        self.batcher_transactions
+            .lock()
+            .map_err(|_| eyre::eyre!("lock poisoned"))?
+            .push_data(txs, l1_origin);
+
+        Ok(())
+    }
+
+    pub fn purge(&mut self) -> Result<()> {
+        self.batcher_transactions
+            .lock()
+            .map_err(|_| eyre::eyre!("lock poisoned"))?
+            .purge();
+        self.channels
+            .lock()
+            .map_err(|_| eyre::eyre!("lock poisoned"))?
+            .purge();
+        self.batches
+            .lock()
+            .map_err(|_| eyre::eyre!("lock poisoned"))?
+            .purge();
+        self.attributes.purge();
+
+        Ok(())
     }
 }

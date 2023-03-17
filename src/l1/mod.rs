@@ -19,7 +19,7 @@ use ethers_providers::{Http, HttpRateLimitRetryPolicy, Middleware, Provider, Ret
 use eyre::Result;
 use tokio::{spawn, task::JoinHandle, time::sleep};
 
-use crate::{config::Config, derive::stages::attributes::UserDeposited};
+use crate::{common::BlockInfo, config::Config, derive::stages::attributes::UserDeposited};
 
 /// Handles watching the L1 chain and monitoring for new blocks, deposits,
 /// and batcher transactions. The monitoring loop is spawned in a seperate
@@ -28,10 +28,20 @@ use crate::{config::Config, derive::stages::attributes::UserDeposited};
 pub struct ChainWatcher {
     /// Task handle for the monitoring loop
     handle: JoinHandle<()>,
-    /// Channel for receiving batcher transactions
-    pub tx_receiver: Option<Receiver<BatcherTransactionData>>,
-    /// Channel for receiving L1Info for each new block
-    pub l1_info_receiver: Receiver<L1Info>,
+    /// Global config
+    config: Arc<Config>,
+    /// Channel for receiving block updates for each new block
+    pub block_update_receiver: Receiver<BlockUpdate>,
+}
+
+/// Updates L1Info
+pub enum BlockUpdate {
+    /// A new block extending the current chain
+    NewBlock(Box<L1Info>),
+    /// Updates the most recent finalized block
+    FinalityUpdate(u64),
+    /// Reorg detected
+    Reorg,
 }
 
 /// Data tied to a specific L1 block
@@ -43,10 +53,14 @@ pub struct L1Info {
     pub system_config: SystemConfig,
     /// User deposits from that block
     pub user_deposits: Vec<UserDeposited>,
+    /// Batcher transactions in block
+    pub batcher_transactions: Vec<BatcherTransactionData>,
+    /// Whether the block has finalized
+    pub finalized: bool,
 }
 
 /// L1 block info
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct L1BlockInfo {
     /// L1 block number
     pub number: u64,
@@ -80,22 +94,19 @@ struct InnerWatcher {
     config: Arc<Config>,
     /// Ethers provider for L1
     provider: Provider<RetryClient<Http>>,
-    /// Channel to send batch tx data
-    tx_sender: SyncSender<BatcherTransactionData>,
-    /// Channel to send L1Info
-    l1_info_sender: SyncSender<L1Info>,
+    /// Channel to send block updates
+    block_update_sender: SyncSender<BlockUpdate>,
     /// Most recent ingested block
     current_block: u64,
+    /// Most recent block
+    head_block: u64,
     /// Most recent finalized block
     finalized_block: u64,
+    /// List of blocks that have not been finalized yet
+    unfinalized_blocks: Vec<BlockInfo>,
     /// Mapping from block number to user deposits. Past block deposits
     /// are removed as they are no longer needed
     deposits: HashMap<u64, Vec<UserDeposited>>,
-}
-
-struct Receivers {
-    tx_receiver: Receiver<BatcherTransactionData>,
-    l1_info_receiver: Receiver<L1Info>,
 }
 
 type BatcherTransactionData = Vec<u8>;
@@ -110,27 +121,31 @@ impl ChainWatcher {
     /// Creates a new ChainWatcher and begins the monitoring task.
     /// Errors if the rpc url in the config is invalid.
     pub fn new(start_block: u64, config: Arc<Config>) -> Result<Self> {
-        let (handle, receivers) = start_watcher(start_block, config)?;
+        let (handle, block_updates) = start_watcher(start_block, config.clone())?;
 
         Ok(Self {
             handle,
-            tx_receiver: Some(receivers.tx_receiver),
-            l1_info_receiver: receivers.l1_info_receiver,
+            config,
+            block_update_receiver: block_updates,
         })
     }
 
-    /// Takes ownership of the batcher transaction receiver. Returns None
-    /// if the receiver has already been taken.
-    pub fn take_tx_receiver(&mut self) -> Option<Receiver<BatcherTransactionData>> {
-        self.tx_receiver.take()
+    pub fn reset(&mut self, start_block: u64) -> Result<()> {
+        self.handle.abort();
+
+        let (handle, recv) = start_watcher(start_block, self.config.clone())?;
+
+        self.handle = handle;
+        self.block_update_receiver = recv;
+
+        Ok(())
     }
 }
 
 impl InnerWatcher {
     fn new(
         config: Arc<Config>,
-        tx_sender: SyncSender<BatcherTransactionData>,
-        l1_info_sender: SyncSender<L1Info>,
+        block_update_sender: SyncSender<BlockUpdate>,
         start_block: u64,
     ) -> Result<Self> {
         let http =
@@ -142,42 +157,98 @@ impl InnerWatcher {
         Ok(Self {
             config,
             provider,
-            tx_sender,
-            l1_info_sender,
+            block_update_sender,
             current_block: start_block,
+            head_block: 0,
             finalized_block: 0,
+            unfinalized_blocks: Vec::new(),
             deposits: HashMap::new(),
         })
     }
 
     async fn try_ingest_block(&mut self) -> Result<()> {
-        if self.current_block <= self.finalized_block {
+        if self.current_block > self.finalized_block {
+            let finalized_block = self.get_finalized().await?;
+
+            self.finalized_block = finalized_block;
+            self.block_update_sender
+                .send(BlockUpdate::FinalityUpdate(finalized_block))?;
+
+            self.unfinalized_blocks
+                .retain(|b| b.number > self.finalized_block)
+        }
+
+        if self.current_block > self.head_block {
+            let head_block = self.get_head().await?;
+            self.head_block = head_block;
+        }
+
+        if self.current_block <= self.head_block {
             let block = self.get_block(self.current_block).await?;
             let user_deposits = self.get_deposits(self.current_block).await?;
+            let finalized = self.current_block >= self.finalized_block;
 
-            let l1_info = L1Info::new(&block, user_deposits, self.config.chain.batch_sender)?;
-            let batcher_transactions = self.get_batcher_transactions(&block);
+            let l1_info = L1Info::new(
+                &block,
+                user_deposits,
+                self.config.chain.batch_sender,
+                self.config.chain.batch_inbox,
+                finalized,
+            )?;
 
-            self.l1_info_sender.send(l1_info)?;
+            if l1_info.block_info.number >= self.finalized_block {
+                let block_info = BlockInfo {
+                    hash: l1_info.block_info.hash,
+                    number: l1_info.block_info.number,
+                    timestamp: l1_info.block_info.timestamp,
+                    parent_hash: block.parent_hash,
+                };
 
-            for tx in batcher_transactions {
-                self.tx_sender.send(tx)?;
+                self.unfinalized_blocks.push(block_info);
             }
+
+            let update = if self.check_reorg() {
+                BlockUpdate::Reorg
+            } else {
+                BlockUpdate::NewBlock(Box::new(l1_info))
+            };
+
+            self.block_update_sender.send(update)?;
 
             self.current_block += 1;
         } else {
-            let finalized_block = self.get_finalized().await?;
-            self.finalized_block = finalized_block;
             sleep(Duration::from_millis(250)).await;
         }
 
         Ok(())
     }
 
+    fn check_reorg(&self) -> bool {
+        let len = self.unfinalized_blocks.len();
+        if len >= 2 {
+            let last = self.unfinalized_blocks[len - 1];
+            let parent = self.unfinalized_blocks[len - 2];
+            last.parent_hash != parent.hash
+        } else {
+            false
+        }
+    }
+
     async fn get_finalized(&self) -> Result<u64> {
         Ok(self
             .provider
             .get_block(BlockNumber::Finalized)
+            .await?
+            .ok_or(eyre::eyre!("block not found"))?
+            .number
+            .ok_or(eyre::eyre!("block pending"))?
+            .as_u64())
+    }
+
+    async fn get_head(&self) -> Result<u64> {
+        Ok(self
+            .provider
+            .get_block(BlockNumber::Latest)
             .await?
             .ok_or(eyre::eyre!("block not found"))?
             .number
@@ -192,21 +263,6 @@ impl InnerWatcher {
             .ok_or(eyre::eyre!("block not found"))
     }
 
-    fn get_batcher_transactions(&self, block: &Block<Transaction>) -> Vec<BatcherTransactionData> {
-        block
-            .transactions
-            .iter()
-            .filter(|tx| {
-                tx.from == self.config.chain.batch_sender
-                    && tx
-                        .to
-                        .map(|to| to == self.config.chain.batch_inbox)
-                        .unwrap_or(false)
-            })
-            .map(|tx| tx.input.to_vec())
-            .collect()
-    }
-
     async fn get_deposits(&mut self, block_num: u64) -> Result<Vec<UserDeposited>> {
         match self.deposits.remove(&block_num) {
             Some(deposits) => Ok(deposits),
@@ -214,7 +270,7 @@ impl InnerWatcher {
                 let deposit_event = "TransactionDeposited(address,address,uint256,bytes)";
                 let deposit_topic = H256::from_slice(&keccak256(deposit_event));
 
-                let end_block = self.finalized_block.min(block_num + 1000);
+                let end_block = self.head_block.min(block_num + 1000);
 
                 let deposit_filter = Filter::new()
                     .address(self.config.chain.deposit_contract)
@@ -251,6 +307,8 @@ impl L1Info {
         block: &Block<Transaction>,
         user_deposits: Vec<UserDeposited>,
         batch_sender: Address,
+        batch_inbox: Address,
+        finalized: bool,
     ) -> Result<Self> {
         let block_number = block
             .number
@@ -276,34 +334,53 @@ impl L1Info {
             l1_fee_scalar: U256::from(1000000),
         };
 
+        let batcher_transactions = create_batcher_transactions(block, batch_sender, batch_inbox);
+
         Ok(L1Info {
             block_info,
             system_config,
             user_deposits,
+            batcher_transactions,
+            finalized,
         })
     }
 }
 
-fn start_watcher(start_block: u64, config: Arc<Config>) -> Result<(JoinHandle<()>, Receivers)> {
-    let (tx_sender, tx_receiver) = sync_channel(1000);
-    let (l1_info_sender, l1_info_receiver) = sync_channel(1000);
+fn create_batcher_transactions(
+    block: &Block<Transaction>,
+    batch_sender: Address,
+    batch_inbox: Address,
+) -> Vec<BatcherTransactionData> {
+    block
+        .transactions
+        .iter()
+        .filter(|tx| tx.from == batch_sender && tx.to.map(|to| to == batch_inbox).unwrap_or(false))
+        .map(|tx| tx.input.to_vec())
+        .collect()
+}
 
-    let mut watcher = InnerWatcher::new(config, tx_sender, l1_info_sender, start_block)?;
+fn start_watcher(
+    start_block: u64,
+    config: Arc<Config>,
+) -> Result<(JoinHandle<()>, Receiver<BlockUpdate>)> {
+    let (block_update_sender, block_update_receiver) = sync_channel(1000);
+
+    let mut watcher = InnerWatcher::new(config, block_update_sender, start_block)?;
 
     let handle = spawn(async move {
         loop {
             tracing::debug!("fetching L1 data for block {}", watcher.current_block);
-            if watcher.try_ingest_block().await.is_err() {
-                tracing::warn!("failed to fetch data for block {}", watcher.current_block);
+            if let Err(err) = watcher.try_ingest_block().await {
+                tracing::warn!(
+                    "failed to fetch data for block {}: {}",
+                    watcher.current_block,
+                    err
+                );
             }
         }
     });
 
-    let receivers = Receivers {
-        tx_receiver,
-        l1_info_receiver,
-    };
-    Ok((handle, receivers))
+    Ok((handle, block_update_receiver))
 }
 
 impl SystemConfig {

@@ -7,7 +7,7 @@ use magi::{
     common::RawTransaction,
     config::{ChainConfig, Config},
     derive::{state::State, Pipeline},
-    l1::ChainWatcher,
+    l1::{BlockUpdate, ChainWatcher},
     telemetry,
 };
 
@@ -26,17 +26,30 @@ async fn test_attributes_match() {
         jwt_secret: None,
     });
 
-    let mut chain_watcher =
+    let chain_watcher =
         ChainWatcher::new(config.chain.l1_start_epoch.number, config.clone()).unwrap();
-    let tx_recv = chain_watcher.take_tx_receiver().unwrap();
+
     let state = Arc::new(RwLock::new(State::new(
         config.chain.l2_genesis,
         config.chain.l1_start_epoch,
-        chain_watcher,
         config.clone(),
     )));
 
-    let mut pipeline = Pipeline::new(state, tx_recv, config.clone()).unwrap();
+    let mut pipeline = Pipeline::new(state.clone(), config.clone()).unwrap();
+
+    chain_watcher.block_update_receiver.recv().unwrap();
+    let update = chain_watcher.block_update_receiver.recv().unwrap();
+
+    let l1_info = match update {
+        BlockUpdate::NewBlock(block) => *block,
+        _ => panic!("wrong update type"),
+    };
+
+    pipeline.push_batcher_transactions(
+        l1_info.batcher_transactions.clone(),
+        l1_info.block_info.number,
+    );
+    state.write().unwrap().update_l1_info(l1_info);
 
     if let Some(payload) = pipeline.next() {
         let hashes = get_tx_hashes(&payload.transactions.unwrap());

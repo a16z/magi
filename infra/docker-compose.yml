@@ -9,7 +9,7 @@ x-logging: &logging
 
 services:
   op-geth:
-    image: ethereumoptimism/op-geth:v1.10.26-166f27c
+    image: us-docker.pkg.dev/oplabs-tools-artifacts/images/op-geth:v1.11.2-13ee9ab
     restart: unless-stopped
     stop_grace_period: 3m
     entrypoint: /scripts/start-op-geth.sh
