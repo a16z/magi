@@ -110,9 +110,7 @@ async fn main() -> Result<()> {
     tracing::info!(target: "peers", "Subcommand: {:?}", server.subcommand);
 
     match server.subcommand {
-        Some(SubCommand::Blocks {
-            block_hash,
-        }) => {
+        Some(SubCommand::Blocks { block_hash }) => {
             let block_hash = if let "latest" = block_hash.as_str() {
                 // TODO: Call client for latest block hash
                 H256::zero()
@@ -123,13 +121,12 @@ async fn main() -> Result<()> {
 
             tracing::debug!(target: "peers", "TODO: Implement blocks");
             Ok(())
-        },
+        }
         None => server.events(server_ref).await,
     }
 }
 
 impl Cli {
-
     /// Starts the server and listens for events.
     pub async fn events(&self, disc: Arc<Discv5>) -> Result<()> {
         // Listen to all incoming events

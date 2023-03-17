@@ -1,4 +1,13 @@
-use std::{iter, str::FromStr, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    iter,
+    str::FromStr,
+    sync::{
+        mpsc::{sync_channel, Receiver, SyncSender},
+        Arc,
+    },
+    time::Duration,
+};
 
 use ethers_core::{
     abi::Address,
@@ -8,12 +17,7 @@ use ethers_core::{
 use ethers_providers::{Http, HttpRateLimitRetryPolicy, Middleware, Provider, RetryClient};
 
 use eyre::Result;
-use tokio::{
-    spawn,
-    sync::mpsc::{channel, Receiver, Sender},
-    task::JoinHandle,
-    time::sleep,
-};
+use tokio::{spawn, task::JoinHandle, time::sleep};
 
 use crate::{config::Config, derive::stages::attributes::UserDeposited};
 
@@ -77,13 +81,16 @@ struct InnerWatcher {
     /// Ethers provider for L1
     provider: Provider<RetryClient<Http>>,
     /// Channel to send batch tx data
-    tx_sender: Sender<BatcherTransactionData>,
+    tx_sender: SyncSender<BatcherTransactionData>,
     /// Channel to send L1Info
-    l1_info_sender: Sender<L1Info>,
+    l1_info_sender: SyncSender<L1Info>,
     /// Most recent ingested block
     current_block: u64,
     /// Most recent finalized block
     finalized_block: u64,
+    /// Mapping from block number to user deposits. Past block deposits
+    /// are removed as they are no longer needed
+    deposits: HashMap<u64, Vec<UserDeposited>>,
 }
 
 struct Receivers {
@@ -122,8 +129,8 @@ impl ChainWatcher {
 impl InnerWatcher {
     fn new(
         config: Arc<Config>,
-        tx_sender: Sender<BatcherTransactionData>,
-        l1_info_sender: Sender<L1Info>,
+        tx_sender: SyncSender<BatcherTransactionData>,
+        l1_info_sender: SyncSender<L1Info>,
         start_block: u64,
     ) -> Result<Self> {
         let http =
@@ -139,26 +146,28 @@ impl InnerWatcher {
             l1_info_sender,
             current_block: start_block,
             finalized_block: 0,
+            deposits: HashMap::new(),
         })
     }
 
     async fn try_ingest_block(&mut self) -> Result<()> {
-        let finalized_block = self.get_finalized().await?;
-        self.finalized_block = finalized_block;
-
-        if !self.channels_full() && self.current_block <= self.finalized_block {
+        if self.current_block <= self.finalized_block {
             let block = self.get_block(self.current_block).await?;
-            let l1_info = self.get_l1_info(&block).await?;
+            let user_deposits = self.get_deposits(self.current_block).await?;
+
+            let l1_info = L1Info::new(&block, user_deposits, self.config.chain.batch_sender)?;
             let batcher_transactions = self.get_batcher_transactions(&block);
 
-            self.l1_info_sender.send(l1_info).await.unwrap();
+            self.l1_info_sender.send(l1_info)?;
 
             for tx in batcher_transactions {
-                self.tx_sender.send(tx).await?;
+                self.tx_sender.send(tx)?;
             }
 
             self.current_block += 1;
         } else {
+            let finalized_block = self.get_finalized().await?;
+            self.finalized_block = finalized_block;
             sleep(Duration::from_millis(250)).await;
         }
 
@@ -183,7 +192,66 @@ impl InnerWatcher {
             .ok_or(eyre::eyre!("block not found"))
     }
 
-    async fn get_l1_info(&self, block: &Block<Transaction>) -> Result<L1Info> {
+    fn get_batcher_transactions(&self, block: &Block<Transaction>) -> Vec<BatcherTransactionData> {
+        block
+            .transactions
+            .iter()
+            .filter(|tx| {
+                tx.from == self.config.chain.batch_sender
+                    && tx
+                        .to
+                        .map(|to| to == self.config.chain.batch_inbox)
+                        .unwrap_or(false)
+            })
+            .map(|tx| tx.input.to_vec())
+            .collect()
+    }
+
+    async fn get_deposits(&mut self, block_num: u64) -> Result<Vec<UserDeposited>> {
+        match self.deposits.remove(&block_num) {
+            Some(deposits) => Ok(deposits),
+            None => {
+                let deposit_event = "TransactionDeposited(address,address,uint256,bytes)";
+                let deposit_topic = H256::from_slice(&keccak256(deposit_event));
+
+                let end_block = self.finalized_block.min(block_num + 1000);
+
+                let deposit_filter = Filter::new()
+                    .address(self.config.chain.deposit_contract)
+                    .topic0(deposit_topic)
+                    .from_block(block_num)
+                    .to_block(end_block);
+
+                let deposit_logs = self
+                    .provider
+                    .get_logs(&deposit_filter)
+                    .await?
+                    .into_iter()
+                    .map(|log| UserDeposited::try_from(log).unwrap())
+                    .collect::<Vec<UserDeposited>>();
+
+                for num in block_num..=end_block {
+                    let deposits = deposit_logs
+                        .iter()
+                        .filter(|d| d.l1_block_num == num)
+                        .cloned()
+                        .collect();
+
+                    self.deposits.insert(num, deposits);
+                }
+
+                Ok(self.deposits.remove(&block_num).unwrap())
+            }
+        }
+    }
+}
+
+impl L1Info {
+    pub fn new(
+        block: &Block<Transaction>,
+        user_deposits: Vec<UserDeposited>,
+        batch_sender: Address,
+    ) -> Result<Self> {
         let block_number = block
             .number
             .ok_or(eyre::eyre!("block not included"))?
@@ -202,13 +270,11 @@ impl InnerWatcher {
         };
 
         let system_config = SystemConfig {
-            batch_sender: self.config.chain.batch_sender,
+            batch_sender,
             gas_limit: U256::from(25_000_000),
             l1_fee_overhead: U256::from(2100),
             l1_fee_scalar: U256::from(1000000),
         };
-
-        let user_deposits = self.get_deposits(block_number, block_hash).await?;
 
         Ok(L1Info {
             block_info,
@@ -216,48 +282,11 @@ impl InnerWatcher {
             user_deposits,
         })
     }
-
-    fn get_batcher_transactions(&self, block: &Block<Transaction>) -> Vec<BatcherTransactionData> {
-        block
-            .transactions
-            .iter()
-            .filter(|tx| {
-                tx.from == self.config.chain.batch_sender
-                    && tx
-                        .to
-                        .map(|to| to == self.config.chain.batch_inbox)
-                        .unwrap_or(false)
-            })
-            .map(|tx| tx.input.to_vec())
-            .collect()
-    }
-
-    async fn get_deposits(&self, block_num: u64, block_hash: H256) -> Result<Vec<UserDeposited>> {
-        let deposit_event = "TransactionDeposited(address,address,uint256,bytes)";
-        let deposit_topic = H256::from_slice(&keccak256(deposit_event));
-
-        let deposit_filter = Filter::new()
-            .address(self.config.chain.deposit_contract)
-            .topic0(deposit_topic)
-            .from_block(block_num)
-            .to_block(block_num);
-
-        let deposit_logs = self.provider.get_logs(&deposit_filter).await?;
-
-        Ok(deposit_logs
-            .into_iter()
-            .map(|log| UserDeposited::from_log(log, block_num, block_hash).unwrap())
-            .collect())
-    }
-
-    fn channels_full(&self) -> bool {
-        self.tx_sender.capacity() == 0 || self.l1_info_sender.capacity() == 0
-    }
 }
 
 fn start_watcher(start_block: u64, config: Arc<Config>) -> Result<(JoinHandle<()>, Receivers)> {
-    let (tx_sender, tx_receiver) = channel(1000);
-    let (l1_info_sender, l1_info_receiver) = channel(1000);
+    let (tx_sender, tx_receiver) = sync_channel(1000);
+    let (l1_info_sender, l1_info_receiver) = sync_channel(1000);
 
     let mut watcher = InnerWatcher::new(config, tx_sender, l1_info_sender, start_block)?;
 

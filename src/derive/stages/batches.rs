@@ -1,5 +1,6 @@
 use core::fmt::Debug;
 use std::cmp::Ordering;
+use std::collections::BTreeMap;
 use std::io::Read;
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -16,7 +17,8 @@ use crate::derive::state::State;
 use super::channels::{Channel, Channels};
 
 pub struct Batches {
-    batches: Vec<Batch>,
+    /// Mapping of timestamps to batches
+    batches: BTreeMap<u64, Batch>,
     prev_stage: Arc<Mutex<Channels>>,
     state: Arc<RwLock<State>>,
     config: Arc<Config>,
@@ -40,7 +42,7 @@ impl Batches {
         config: Arc<Config>,
     ) -> Arc<Mutex<Self>> {
         Arc::new(Mutex::new(Self {
-            batches: Vec::new(),
+            batches: BTreeMap::new(),
             prev_stage,
             state,
             config,
@@ -50,33 +52,38 @@ impl Batches {
     fn try_next(&mut self) -> Result<Option<Batch>> {
         let channel = self.prev_stage.lock().unwrap().next();
         if let Some(channel) = channel {
-            let mut batches = decode_batches(&channel)?;
-            self.batches.append(&mut batches);
+            let batches = decode_batches(&channel)?;
+            batches.into_iter().for_each(|batch| {
+                self.batches.insert(batch.timestamp, batch);
+            });
         }
 
-        self.batches.sort_by_key(|b| b.timestamp);
+        let batch = loop {
+            if let Some((_, batch)) = self.batches.first_key_value() {
+                match self.batch_status(batch) {
+                    BatchStatus::Accept => {
+                        let batch = batch.clone();
+                        self.batches.remove(&batch.timestamp);
+                        break Some(batch);
+                    }
+                    BatchStatus::Drop => {
+                        tracing::warn!("dropping invalid batch");
+                        let timestamp = batch.timestamp;
+                        self.batches.remove(&timestamp);
+                    }
+                    BatchStatus::Future | BatchStatus::Undecided => {
+                        break None;
+                    }
+                }
+            } else {
+                break None;
+            }
+        };
 
-        self.batches = self
-            .batches
-            .clone()
-            .into_iter()
-            .map(|b| self.set_batch_status(b))
-            .filter(|b| !b.is_dropped())
-            .collect();
-
-        let pos = self
-            .batches
-            .iter()
-            .position(|b| b.status == BatchStatus::Accept);
-
-        Ok(if let Some(pos) = pos {
-            Some(self.batches.remove(pos))
-        } else {
-            None
-        })
+        Ok(batch)
     }
 
-    fn set_batch_status(&self, mut batch: Batch) -> Batch {
+    fn batch_status(&self, batch: &Batch) -> BatchStatus {
         let state = self.state.read().unwrap();
         let epoch = state.safe_epoch;
         let next_epoch = state.epoch_by_number(epoch.number + 1);
@@ -85,21 +92,15 @@ impl Batches {
 
         // check timestamp range
         match batch.timestamp.cmp(&next_timestamp) {
-            Ordering::Greater => {
-                batch.status = BatchStatus::Future;
-                return batch;
-            }
-            Ordering::Less => {
-                batch.status = BatchStatus::Drop;
-                return batch;
-            }
+            Ordering::Greater => return BatchStatus::Future,
+            Ordering::Less => return BatchStatus::Drop,
             Ordering::Equal => (),
         }
 
         // check that block builds on existing chain
         if batch.parent_hash != head.hash {
-            batch.status = BatchStatus::Drop;
-            return batch;
+            tracing::warn!("invalid parent hash");
+            return BatchStatus::Drop;
         }
 
         // TODO: inclusion window check
@@ -110,19 +111,19 @@ impl Batches {
         } else if batch.epoch_num == epoch.number + 1 {
             next_epoch
         } else {
-            batch.status = BatchStatus::Drop;
-            return batch;
+            tracing::warn!("invalid batch origin epoch number");
+            return BatchStatus::Drop;
         };
 
         if let Some(batch_origin) = batch_origin {
             if batch.epoch_hash != batch_origin.hash {
-                batch.status = BatchStatus::Drop;
-                return batch;
+                tracing::warn!("invalid epoch hash");
+                return BatchStatus::Drop;
             }
 
             if batch.timestamp < batch_origin.timestamp {
-                batch.status = BatchStatus::Drop;
-                return batch;
+                tracing::warn!("batch too old");
+                return BatchStatus::Drop;
             }
 
             // handle sequencer drift
@@ -131,31 +132,28 @@ impl Batches {
                     if epoch.number == batch.epoch_num {
                         if let Some(next_epoch) = next_epoch {
                             if batch.timestamp >= next_epoch.timestamp {
-                                batch.status = BatchStatus::Drop;
-                                return batch;
+                                tracing::warn!("sequencer drift too large");
+                                return BatchStatus::Drop;
                             }
                         } else {
-                            batch.status = BatchStatus::Undecided;
-                            return batch;
+                            return BatchStatus::Undecided;
                         }
                     }
                 } else {
-                    batch.status = BatchStatus::Drop;
-                    return batch;
+                    tracing::warn!("sequencer drift too large");
+                    return BatchStatus::Drop;
                 }
             }
         } else {
-            batch.status = BatchStatus::Undecided;
-            return batch;
+            return BatchStatus::Undecided;
         }
 
         if batch.has_invalid_transactions() {
-            batch.status = BatchStatus::Drop;
-            return batch;
+            tracing::warn!("invalid transaction");
+            return BatchStatus::Drop;
         }
 
-        batch.status = BatchStatus::Accept;
-        batch
+        BatchStatus::Accept
     }
 }
 
@@ -193,7 +191,6 @@ pub struct Batch {
     pub epoch_hash: H256,
     pub timestamp: u64,
     pub transactions: Vec<RawTransaction>,
-    status: BatchStatus,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -218,7 +215,6 @@ impl Decodable for Batch {
             epoch_hash,
             timestamp,
             transactions,
-            status: BatchStatus::Accept,
         })
     }
 }
@@ -228,14 +224,5 @@ impl Batch {
         self.transactions
             .iter()
             .any(|tx| tx.0.is_empty() || tx.0[0] == 0x7E)
-    }
-
-    fn is_dropped(&self) -> bool {
-        let dropped = self.status == BatchStatus::Drop;
-        if dropped {
-            tracing::info!("dropped invalid batch");
-        }
-
-        dropped
     }
 }

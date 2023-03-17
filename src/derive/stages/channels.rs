@@ -105,14 +105,12 @@ impl Channels {
             return Err(eyre::eyre!("Trying to fill bank when it's not empty!"));
         }
 
-        let next_batcher_tx = self
-            .prev_stage
-            .lock()
-            .ok()
-            .and_then(|mut s| s.next())
-            .ok_or(eyre::eyre!("No batcher tx"))?;
+        let next_batcher_tx = self.prev_stage.lock().ok().and_then(|mut s| s.next());
 
-        self.frame_bank = next_batcher_tx.frames.to_vec();
+        if let Some(tx) = next_batcher_tx {
+            self.frame_bank = tx.frames.to_vec();
+        }
+
         Ok(())
     }
 
@@ -136,12 +134,14 @@ impl Channels {
             return;
         }
 
-        // Append the frame to the channel
-        let frame = self.frame_bank.remove(0);
-        let frame_channel_id = frame.channel_id;
-        self.push_frame(frame);
-        self.load_ready_channel(frame_channel_id);
-        self.prune();
+        if !self.frame_bank.is_empty() {
+            // Append the frame to the channel
+            let frame = self.frame_bank.remove(0);
+            let frame_channel_id = frame.channel_id;
+            self.push_frame(frame);
+            self.load_ready_channel(frame_channel_id);
+            self.prune();
+        }
     }
 
     /// Removes a pending channel from the bank

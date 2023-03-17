@@ -1,7 +1,6 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc::Receiver, Arc, Mutex};
 
 use eyre::Result;
-use tokio::sync::mpsc::Receiver;
 
 pub struct BatcherTransactions {
     txs: Vec<BatcherTransaction>,
@@ -31,7 +30,7 @@ impl BatcherTransactions {
     }
 
     fn pull_data(&mut self) {
-        while let Ok(data) = self.tx_recv.try_recv() {
+        for data in self.tx_recv.try_iter() {
             let res = BatcherTransaction::from_data(&data).map(|tx| {
                 self.txs.push(tx);
             });
