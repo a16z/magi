@@ -389,6 +389,7 @@ impl<E: L2EngineApi> Driver<E> {
         )?;
 
         loop {
+            self.check_shutdown().await;
             self.handle_next_block_update().await?;
             self.update_state_head()?;
 
