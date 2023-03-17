@@ -1,10 +1,12 @@
 use std::net::IpAddr;
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use clap::Parser;
 use clap::Subcommand;
 use discv5::IpMode;
+use ethers_core::types::H256;
 use eyre::Result;
 
 use discv5::{enr::*, Discv5, Discv5ConfigBuilder, Discv5Event};
@@ -105,52 +107,76 @@ async fn main() -> Result<()> {
         std::process::exit(0);
     }
 
-    // Listen to all incoming events
-    tracing::info!(target: "peers", "Listening to all incoming events...");
-    let mut event_stream = server_ref.event_stream().await.unwrap();
-    loop {
-        match event_stream.recv().await {
-            Some(Discv5Event::SocketUpdated(addr)) => {
-                tracing::info!(target: "peers", "Nodes ENR socket address has been updated to: {:?}", addr);
-            }
-            Some(Discv5Event::Discovered(enr)) => {
-                tracing::info!(target: "peers", "A peer has been discovered: {}", enr.node_id());
-            }
-            Some(discv5::Discv5Event::EnrAdded { enr, .. }) => {
-                tracing::info!(
-                    target: "peers",
-                    "A peer has been added to the routing table with enr: {}",
-                    enr
-                );
-            }
-            Some(discv5::Discv5Event::NodeInserted { node_id, .. }) => {
-                tracing::info!(
-                    target: "peers",
-                    "A peer has been added to the routing table with node_id: {}",
-                    node_id
-                );
-            }
-            Some(discv5::Discv5Event::SessionEstablished(enr, addr)) => {
-                tracing::info!(
-                    target: "peers",
-                    "A session has been established with peer: {} at address: {}",
-                    enr,
-                    addr
-                );
-            }
-            Some(discv5::Discv5Event::TalkRequest(talk_request)) => {
-                tracing::info!(
-                    target: "peers",
-                    "A talk request has been received from peer: {}",
-                    talk_request.node_id()
-                );
-            }
-            _ => {}
-        }
+    tracing::info!(target: "peers", "Subcommand: {:?}", server.subcommand);
+
+    match server.subcommand {
+        Some(SubCommand::Blocks {
+            block_hash,
+        }) => {
+            let block_hash = if let "latest" = block_hash.as_str() {
+                // TODO: Call client for latest block hash
+                H256::zero()
+            } else {
+                H256::from_str(&block_hash)?
+            };
+            tracing::debug!(target: "peers", "Block hash: {:?}", block_hash);
+
+            tracing::debug!(target: "peers", "TODO: Implement blocks");
+            Ok(())
+        },
+        None => server.events(server_ref).await,
     }
 }
 
 impl Cli {
+
+    /// Starts the server and listens for events.
+    pub async fn events(&self, disc: Arc<Discv5>) -> Result<()> {
+        // Listen to all incoming events
+        tracing::info!(target: "peers", "Listening to all incoming events...");
+        let mut event_stream = disc.event_stream().await.unwrap();
+        loop {
+            match event_stream.recv().await {
+                Some(Discv5Event::SocketUpdated(addr)) => {
+                    tracing::info!(target: "peers", "Nodes ENR socket address has been updated to: {:?}", addr);
+                }
+                Some(Discv5Event::Discovered(enr)) => {
+                    tracing::info!(target: "peers", "A peer has been discovered: {}", enr.node_id());
+                }
+                Some(discv5::Discv5Event::EnrAdded { enr, .. }) => {
+                    tracing::info!(
+                        target: "peers",
+                        "A peer has been added to the routing table with enr: {}",
+                        enr
+                    );
+                }
+                Some(discv5::Discv5Event::NodeInserted { node_id, .. }) => {
+                    tracing::info!(
+                        target: "peers",
+                        "A peer has been added to the routing table with node_id: {}",
+                        node_id
+                    );
+                }
+                Some(discv5::Discv5Event::SessionEstablished(enr, addr)) => {
+                    tracing::info!(
+                        target: "peers",
+                        "A session has been established with peer: {} at address: {}",
+                        enr,
+                        addr
+                    );
+                }
+                Some(discv5::Discv5Event::TalkRequest(talk_request)) => {
+                    tracing::info!(
+                        target: "peers",
+                        "A talk request has been received from peer: {}",
+                        talk_request.node_id()
+                    );
+                }
+                _ => {}
+            }
+        }
+    }
+
     /// Builds an [`discv5::enr::Enr`] from the peers CLI arguments and a provided [`discv5::enr::CombinedKey`].
     pub fn build(&self, enr_key: &CombinedKey) -> Result<Enr<CombinedKey>> {
         let mut builder = EnrBuilder::new("v4");
@@ -340,6 +366,10 @@ pub struct Cli {
 #[derive(Subcommand, Debug, Clone)]
 pub enum SubCommand {
     /// Fetch Blocks from through the p2p network
-    #[clap(name = "enr")]
-    Blocks,
+    #[clap(name = "blocks")]
+    Blocks {
+        /// Block Hash
+        #[clap(short = 'a', long = "block-hash", default_value = "latest")]
+        block_hash: String,
+    },
 }
