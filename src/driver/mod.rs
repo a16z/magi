@@ -141,8 +141,6 @@ impl<E: L2EngineApi> Driver<E> {
 
     /// Runs the Driver
     pub async fn start(&mut self) -> Result<()> {
-        self.reset_forkchoice().await?;
-
         loop {
             self.check_shutdown().await;
 
@@ -333,20 +331,6 @@ impl<E: L2EngineApi> Driver<E> {
 
             Ok(())
         });
-    }
-
-    async fn reset_forkchoice(&self) -> Result<()> {
-        let forkchoice = create_forkchoice_state(self.finalized_head.hash, self.finalized_head.hash);
-        let update = self.engine.forkchoice_updated(forkchoice, None).await?;
-
-        if update.payload_status.status != Status::Valid {
-            eyre::bail!(
-                "could not accept new forkchoice: {:?}",
-                update.payload_status.validation_error
-            );
-        }
-
-        Ok(())
     }
 
     fn update_head(&mut self, new_head: BlockInfo, new_epoch: Epoch) -> Result<()> {
