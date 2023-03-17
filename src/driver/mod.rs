@@ -142,21 +142,29 @@ impl<E: L2EngineApi> Driver<E> {
     /// Runs the Driver
     pub async fn start(&mut self) -> Result<()> {
         loop {
-            if let Ok(shutdown) = self.shutdown_recv.try_recv() {
-                if shutdown {
-                    self.shutdown().await?;
-                }
-            }
+            self.check_shutdown().await;
 
-            self.advance().await?;
+            if let Err(err) = self.advance().await {
+                tracing::error!(target: "magi", "fatal error: {:?}", err);
+                self.shutdown().await;
+            }
         }
     }
 
     /// Shuts down the driver
-    pub async fn shutdown(&self) -> Result<()> {
-        let size = self.db.flush_async().await?;
+    pub async fn shutdown(&self) {
+        let size = self.db.flush_async().await.expect("could not flush db");
         tracing::info!(target: "magi::driver", "flushed {} bytes to disk", size);
         process::exit(0);
+    }
+
+    /// Checks for shutdown signal and shuts down if received
+    async fn check_shutdown(&self) {
+        if let Ok(shutdown) = self.shutdown_recv.try_recv() {
+            if shutdown {
+                self.shutdown().await;
+            }
+        }
     }
 
     /// Attempts to advance the execution node forward one L1 block using derived
@@ -164,7 +172,7 @@ impl<E: L2EngineApi> Driver<E> {
     /// does not successfully advance the node
     pub async fn advance(&mut self) -> Result<()> {
         self.handle_next_block_update()?;
-        self.update_state_head();
+        self.update_state_head()?;
 
         while let Some(next_attributes) = self.pipeline.next() {
             tracing::debug!(target: "magi", "received new attributes from the pipeline");
@@ -206,14 +214,21 @@ impl<E: L2EngineApi> Driver<E> {
         Ok(())
     }
 
-    fn update_state_head(&self) {
-        let mut state = self.state.write().unwrap();
+    fn update_state_head(&self) -> Result<()> {
+        let mut state = self
+            .state
+            .write()
+            .map_err(|_| eyre::eyre!("lock poisoned"))?;
         state.update_safe_head(self.safe_head, self.safe_epoch);
+        Ok(())
     }
 
     /// Ingests the next update from the block update channel
     fn handle_next_block_update(&mut self) -> Result<()> {
-        let mut state = self.state.write().unwrap();
+        let mut state = self
+            .state
+            .write()
+            .map_err(|_| eyre::eyre!("lock poisoned"))?;
 
         if !state.is_full() {
             let next = self.chain_watcher.block_update_receiver.try_recv();
@@ -223,7 +238,7 @@ impl<E: L2EngineApi> Driver<E> {
                     BlockUpdate::NewBlock(l1_info) => {
                         let num = l1_info.block_info.number;
                         self.pipeline
-                            .push_batcher_transactions(l1_info.batcher_transactions.clone(), num);
+                            .push_batcher_transactions(l1_info.batcher_transactions.clone(), num)?;
 
                         state.update_l1_info(*l1_info);
                     }
@@ -234,7 +249,7 @@ impl<E: L2EngineApi> Driver<E> {
                         self.chain_watcher.reset(self.finalized_epoch.number)?;
 
                         state.purge(self.finalized_head, self.finalized_epoch);
-                        self.pipeline.purge();
+                        self.pipeline.purge()?;
 
                         self.safe_head = self.finalized_head;
                         self.safe_epoch = self.finalized_epoch;

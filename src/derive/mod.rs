@@ -45,17 +45,30 @@ impl Pipeline {
         })
     }
 
-    pub fn push_batcher_transactions(&self, txs: Vec<Vec<u8>>, l1_origin: u64) {
+    pub fn push_batcher_transactions(&self, txs: Vec<Vec<u8>>, l1_origin: u64) -> Result<()> {
         self.batcher_transactions
             .lock()
-            .unwrap()
+            .map_err(|_| eyre::eyre!("lock poisoned"))?
             .push_data(txs, l1_origin);
+
+        Ok(())
     }
 
-    pub fn purge(&mut self) {
-        self.batcher_transactions.lock().unwrap().purge();
-        self.channels.lock().unwrap().purge();
-        self.batches.lock().unwrap().purge();
+    pub fn purge(&mut self) -> Result<()> {
+        self.batcher_transactions
+            .lock()
+            .map_err(|_| eyre::eyre!("lock poisoned"))?
+            .purge();
+        self.channels
+            .lock()
+            .map_err(|_| eyre::eyre!("lock poisoned"))?
+            .purge();
+        self.batches
+            .lock()
+            .map_err(|_| eyre::eyre!("lock poisoned"))?
+            .purge();
         self.attributes.purge();
+
+        Ok(())
     }
 }
