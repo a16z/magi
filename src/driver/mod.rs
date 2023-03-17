@@ -4,9 +4,16 @@ use std::{
         mpsc::{channel, Receiver},
         Arc, RwLock,
     },
+    thread::sleep,
+    time::Duration,
 };
 
-use ethers_core::types::H256;
+use async_recursion::async_recursion;
+use ethers_core::{
+    types::{Block, H256},
+    utils::keccak256,
+};
+use ethers_providers::{Middleware, Provider};
 use eyre::Result;
 use tokio::spawn;
 
@@ -48,6 +55,8 @@ pub struct Driver<E: L2EngineApi> {
     chain_watcher: ChainWatcher,
     /// Channel to receive the shutdown signal from
     shutdown_recv: Receiver<bool>,
+    /// Global config
+    config: Arc<Config>,
 }
 
 impl Driver<EngineApi> {
@@ -88,7 +97,7 @@ impl Driver<EngineApi> {
             config.jwt_secret.clone(),
         ));
 
-        let pipeline = Pipeline::new(state.clone(), config)?;
+        let pipeline = Pipeline::new(state.clone(), config.clone())?;
 
         Ok(Self {
             db,
@@ -103,6 +112,7 @@ impl Driver<EngineApi> {
             state,
             chain_watcher,
             shutdown_recv,
+            config,
         })
     }
 }
@@ -118,7 +128,11 @@ impl<E: L2EngineApi> Driver<E> {
 
         let chain_watcher = ChainWatcher::new(finalized_epoch.number, config.clone())?;
 
-        let state = Arc::new(RwLock::new(State::new(safe_head, safe_epoch, config)));
+        let state = Arc::new(RwLock::new(State::new(
+            safe_head,
+            safe_epoch,
+            config.clone(),
+        )));
 
         let db = Database::default();
         let (_, shutdown_recv) = channel();
@@ -136,11 +150,14 @@ impl<E: L2EngineApi> Driver<E> {
             state,
             chain_watcher,
             shutdown_recv,
+            config,
         })
     }
 
     /// Runs the Driver
     pub async fn start(&mut self) -> Result<()> {
+        self.skip_common_blocks().await?;
+
         loop {
             self.check_shutdown().await;
 
@@ -171,45 +188,50 @@ impl<E: L2EngineApi> Driver<E> {
     /// L1 data. Errors if the most recent PayloadAttributes from the pipeline
     /// does not successfully advance the node
     pub async fn advance(&mut self) -> Result<()> {
-        self.handle_next_block_update()?;
+        self.handle_next_block_update().await?;
         self.update_state_head()?;
 
         while let Some(next_attributes) = self.pipeline.next() {
-            tracing::debug!(target: "magi", "received new attributes from the pipeline");
-
-            tracing::debug!("next attributes: {:?}", next_attributes);
-
-            let new_epoch = *next_attributes.epoch.as_ref().unwrap();
-
-            let l1_origin = next_attributes
-                .l1_origin
-                .ok_or(eyre::eyre!("attributes without origin"))?;
-
-            let seq_number = next_attributes
-                .seq_number
-                .ok_or(eyre::eyre!("attributes without sequencer number"))?;
-
-            let payload = self.build_payload(next_attributes).await?;
-
-            let new_head = BlockInfo {
-                number: payload.block_number.as_u64(),
-                hash: payload.block_hash,
-                parent_hash: payload.parent_hash,
-                timestamp: payload.timestamp.as_u64(),
-            };
-
-            self.push_payload(payload).await?;
-            self.update_forkchoice(new_head);
-
-            self.update_head(new_head, new_epoch)?;
-
-            self.unfinalized_origins
-                .push((new_head, new_epoch, l1_origin, seq_number));
-
-            self.update_finalized();
-
-            tracing::info!(target: "magi", "head updated: {} {:?}", self.safe_head.number, self.safe_head.hash);
+            self.process_attributes(next_attributes).await?;
         }
+
+        Ok(())
+    }
+
+    async fn process_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
+        tracing::debug!(target: "magi", "received new attributes from the pipeline");
+        tracing::debug!("next attributes: {:?}", attributes);
+
+        let new_epoch = *attributes.epoch.as_ref().unwrap();
+
+        let l1_origin = attributes
+            .l1_origin
+            .ok_or(eyre::eyre!("attributes without origin"))?;
+
+        let seq_number = attributes
+            .seq_number
+            .ok_or(eyre::eyre!("attributes without sequencer number"))?;
+
+        let payload = self.build_payload(attributes).await?;
+
+        let new_head = BlockInfo {
+            number: payload.block_number.as_u64(),
+            hash: payload.block_hash,
+            parent_hash: payload.parent_hash,
+            timestamp: payload.timestamp.as_u64(),
+        };
+
+        self.push_payload(payload).await?;
+        self.update_forkchoice(new_head);
+
+        self.update_head(new_head, new_epoch)?;
+
+        self.unfinalized_origins
+            .push((new_head, new_epoch, l1_origin, seq_number));
+
+        self.update_finalized();
+
+        tracing::info!(target: "magi", "head updated: {} {:?}", self.safe_head.number, self.safe_head.hash);
 
         Ok(())
     }
@@ -219,18 +241,21 @@ impl<E: L2EngineApi> Driver<E> {
             .state
             .write()
             .map_err(|_| eyre::eyre!("lock poisoned"))?;
+
         state.update_safe_head(self.safe_head, self.safe_epoch);
+
         Ok(())
     }
 
     /// Ingests the next update from the block update channel
-    fn handle_next_block_update(&mut self) -> Result<()> {
-        let mut state = self
+    async fn handle_next_block_update(&mut self) -> Result<()> {
+        let is_state_full = self
             .state
-            .write()
-            .map_err(|_| eyre::eyre!("lock poisoned"))?;
+            .read()
+            .map_err(|_| eyre::eyre!("lock poisoned"))?
+            .is_full();
 
-        if !state.is_full() {
+        if !is_state_full {
             let next = self.chain_watcher.block_update_receiver.try_recv();
 
             if let Ok(update) = next {
@@ -240,7 +265,10 @@ impl<E: L2EngineApi> Driver<E> {
                         self.pipeline
                             .push_batcher_transactions(l1_info.batcher_transactions.clone(), num)?;
 
-                        state.update_l1_info(*l1_info);
+                        self.state
+                            .write()
+                            .map_err(|_| eyre::eyre!("lock poisoned"))?
+                            .update_l1_info(*l1_info);
                     }
                     BlockUpdate::Reorg => {
                         tracing::warn!("reorg detected, purging pipeline");
@@ -248,11 +276,17 @@ impl<E: L2EngineApi> Driver<E> {
                         self.unfinalized_origins.clear();
                         self.chain_watcher.reset(self.finalized_epoch.number)?;
 
-                        state.purge(self.finalized_head, self.finalized_epoch);
+                        self.state
+                            .write()
+                            .map_err(|_| eyre::eyre!("lock poisoned"))?
+                            .purge(self.finalized_head, self.finalized_epoch);
+
                         self.pipeline.purge()?;
 
                         self.safe_head = self.finalized_head;
                         self.safe_epoch = self.finalized_epoch;
+
+                        self.skip_common_blocks().await?;
                     }
                     BlockUpdate::FinalityUpdate(num) => {
                         self.finalized_l1_block_number = num;
@@ -338,6 +372,90 @@ impl<E: L2EngineApi> Driver<E> {
             self.safe_head = new_head;
             self.safe_epoch = new_epoch;
         }
+
+        Ok(())
+    }
+
+    /// Advances the pipeline until it finds a payload attributes that the engine has not processed
+    /// in the past. This should be called whenever the pipeline starts up or reorgs. Returns once
+    /// it finds a new payload attributes.
+    #[async_recursion(?Send)]
+    async fn skip_common_blocks(&mut self) -> Result<()> {
+        let provider = Provider::try_from(
+            self.config
+                .l2_rpc_url
+                .as_ref()
+                .ok_or(eyre::eyre!("L2 RPC not found"))?,
+        )?;
+
+        loop {
+            self.check_shutdown().await;
+            self.handle_next_block_update().await?;
+            self.update_state_head()?;
+
+            let payload = self.pipeline.peak();
+            let block = provider.get_block(self.safe_head.number + 1).await?;
+
+            match (payload, block) {
+                (Some(payload), Some(block)) => {
+                    let payload_hashes = payload
+                        .transactions
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .map(|tx| H256(keccak256(&tx.0)))
+                        .collect::<Vec<_>>();
+
+                    let is_same = payload_hashes == block.transactions
+                        && payload.timestamp.as_u64() == block.timestamp.as_u64()
+                        && payload.prev_randao == block.mix_hash.unwrap()
+                        && payload.suggested_fee_recipient == block.author.unwrap()
+                        && payload.gas_limit.as_u64() == block.gas_limit.as_u64();
+
+                    if is_same {
+                        tracing::info!("skipping already processed block");
+                        if let Some(payload) = self.pipeline.next() {
+                            self.skip_attributes(payload, block)?;
+                        }
+                    } else {
+                        return Ok(());
+                    }
+                }
+                (Some(_), None) => {
+                    return Ok(());
+                }
+                _ => sleep(Duration::from_millis(250)),
+            };
+        }
+    }
+
+    fn skip_attributes(&mut self, attributes: PayloadAttributes, block: Block<H256>) -> Result<()> {
+        let new_epoch = *attributes.epoch.as_ref().unwrap();
+
+        let l1_origin = attributes
+            .l1_origin
+            .ok_or(eyre::eyre!("attributes without origin"))?;
+
+        let seq_number = attributes
+            .seq_number
+            .ok_or(eyre::eyre!("attributes without sequencer number"))?;
+
+        let new_head = BlockInfo {
+            number: block
+                .number
+                .ok_or(eyre::eyre!("block not included"))?
+                .as_u64(),
+            hash: block.hash.ok_or(eyre::eyre!("block not included"))?,
+            parent_hash: block.parent_hash,
+            timestamp: block.timestamp.as_u64(),
+        };
+
+        self.update_head(new_head, new_epoch)?;
+
+        self.unfinalized_origins
+            .push((new_head, new_epoch, l1_origin, seq_number));
+
+        self.update_finalized();
 
         Ok(())
     }
