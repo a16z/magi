@@ -1,4 +1,10 @@
-use std::{sync::{Arc, RwLock, mpsc::{Receiver, channel}}, process};
+use std::{
+    process,
+    sync::{
+        mpsc::{channel, Receiver},
+        Arc, RwLock,
+    },
+};
 
 use ethers_core::types::H256;
 use eyre::Result;
@@ -62,9 +68,6 @@ impl Driver<EngineApi> {
         let finalized_epoch = head
             .map(|h| h.l1_epoch)
             .unwrap_or(config.chain.l1_start_epoch);
-
-        println!("{:?}", finalized_head);
-        println!("{:?}", finalized_epoch);
 
         tracing::info!("syncing from: {:?}", finalized_head.hash);
 
@@ -160,7 +163,7 @@ impl<E: L2EngineApi> Driver<E> {
     /// L1 data. Errors if the most recent PayloadAttributes from the pipeline
     /// does not successfully advance the node
     pub async fn advance(&mut self) -> Result<()> {
-        self.handle_next_block_update();
+        self.handle_next_block_update()?;
         self.update_state_head();
 
         while let Some(next_attributes) = self.pipeline.next() {
@@ -192,12 +195,8 @@ impl<E: L2EngineApi> Driver<E> {
 
             self.update_head(new_head, new_epoch)?;
 
-            self.unfinalized_origins.push((
-                new_head,
-                new_epoch,
-                l1_origin,
-                seq_number,
-            ));
+            self.unfinalized_origins
+                .push((new_head, new_epoch, l1_origin, seq_number));
 
             self.update_finalized();
 
@@ -213,7 +212,7 @@ impl<E: L2EngineApi> Driver<E> {
     }
 
     /// Ingests the next update from the block update channel
-    fn handle_next_block_update(&mut self) {
+    fn handle_next_block_update(&mut self) -> Result<()> {
         let mut state = self.state.write().unwrap();
 
         if !state.is_full() {
@@ -228,24 +227,17 @@ impl<E: L2EngineApi> Driver<E> {
 
                         state.update_l1_info(l1_info);
                     }
-                    BlockUpdate::Reorg(l1_info) => {
-                        tracing::warn!("reorg detected");
+                    BlockUpdate::Reorg => {
+                        tracing::warn!("reorg detected, purging pipeline");
 
-                        let num = l1_info.block_info.number;
-                        state.reorg_l1_info(l1_info);
+                        self.unfinalized_origins.clear();
+                        self.chain_watcher.reset(self.finalized_epoch.number)?;
 
-                        self.unfinalized_origins
-                            .retain(|(_, _, origin, _)| *origin < num);
+                        state.purge(self.finalized_head, self.finalized_epoch);
+                        self.pipeline.purge();
 
-                        let (head, epoch, origin, seq) = self
-                            .unfinalized_origins
-                            .last()
-                            .expect("giant reorg fixme");
-
-                        self.pipeline.reorg(*origin, epoch.hash, *seq);
-
-                        self.safe_head = *head;
-                        self.safe_epoch = *epoch;
+                        self.safe_head = self.finalized_head;
+                        self.safe_epoch = self.finalized_epoch;
                     }
                     BlockUpdate::FinalityUpdate(num) => {
                         self.finalized_l1_block_number = num;
@@ -253,14 +245,14 @@ impl<E: L2EngineApi> Driver<E> {
                 }
             }
         }
+
+        Ok(())
     }
 
     fn update_finalized(&mut self) {
         self.unfinalized_origins
             .iter()
-            .find(|(_, _, origin, seq)| {
-                *origin <= self.finalized_l1_block_number && *seq == 0
-            })
+            .find(|(_, _, origin, seq)| *origin <= self.finalized_l1_block_number && *seq == 0)
             .map(|(head, epoch, _, _)| {
                 tracing::info!("saving new finalized head to db: {:?}", head.hash);
 
@@ -268,7 +260,7 @@ impl<E: L2EngineApi> Driver<E> {
                     l2_block_info: *head,
                     l1_epoch: *epoch,
                 });
-                
+
                 if res.is_ok() {
                     self.finalized_head = *head;
                     self.finalized_epoch = *epoch;

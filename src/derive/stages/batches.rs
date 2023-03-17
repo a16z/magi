@@ -49,8 +49,8 @@ impl Batches {
         }))
     }
 
-    pub fn reorg(&mut self, l1_ancestor: u64) {
-        self.batches.retain(|_, b| b.l1_origin <= l1_ancestor);
+    pub fn purge(&mut self) {
+        self.batches.clear();
     }
 
     fn try_next(&mut self) -> Result<Option<Batch>> {

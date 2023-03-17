@@ -51,7 +51,8 @@ pub async fn full_sync(config: Config) -> Result<()> {
     ctrlc::set_handler(move || {
         tracing::info!(target: "magi", "shutting down");
         shutdown_sender.send(true).expect("shutdown failure");
-    }).expect("could not register shutdown handler");
+    })
+    .expect("could not register shutdown handler");
 
     // Run the driver
     if let Err(err) = driver.start().await {

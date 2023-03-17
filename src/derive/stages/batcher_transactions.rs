@@ -35,7 +35,7 @@ impl BatcherTransactions {
         }
     }
 
-    pub fn reorg(&mut self) {
+    pub fn purge(&mut self) {
         self.txs.clear();
     }
 }

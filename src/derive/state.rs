@@ -69,15 +69,13 @@ impl State {
         self.prune();
     }
 
-    pub fn reorg_l1_info(&mut self, l1_info: L1Info) {
-        let new_current_epoch_num = l1_info.block_info.number;
-        for num in new_current_epoch_num..=self.current_epoch_num {
-            self.l1_hashes.remove(&num).map(|hash| {
-                self.l1_info.remove(&hash);
-            });
-        }
+    pub fn purge(&mut self, safe_head: BlockInfo, safe_epoch: Epoch) {
+        self.current_epoch_num = 0;
+        self.l1_info.clear();
+        self.l1_hashes.clear();
 
-        self.current_epoch_num = new_current_epoch_num;
+        self.safe_head = safe_head;
+        self.safe_epoch = safe_epoch;
     }
 
     pub fn update_safe_head(&mut self, safe_head: BlockInfo, safe_epoch: Epoch) {

@@ -46,15 +46,10 @@ impl Channels {
         }))
     }
 
-    pub fn reorg(&mut self, l1_ancestor: u64) {
-        if let Some(ready_channel) = &self.ready_channel {
-            if ready_channel.l1_origin > l1_ancestor {
-                self.ready_channel = None;
-            }
-        }
-
-        self.pending_channels.retain(|pc| pc.l1_origin() <= l1_ancestor);
-        self.frame_bank.retain(|f| f.l1_origin <= l1_ancestor);
+    pub fn purge(&mut self) {
+        self.ready_channel = None;
+        self.pending_channels.clear();
+        self.frame_bank.clear();
     }
 
     /// Pushes a frame into the correct pending channel

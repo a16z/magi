@@ -28,6 +28,8 @@ use crate::{common::BlockInfo, config::Config, derive::stages::attributes::UserD
 pub struct ChainWatcher {
     /// Task handle for the monitoring loop
     handle: JoinHandle<()>,
+    /// Global config
+    config: Arc<Config>,
     /// Channel for receiving block updates for each new block
     pub block_update_receiver: Receiver<BlockUpdate>,
 }
@@ -36,10 +38,10 @@ pub struct ChainWatcher {
 pub enum BlockUpdate {
     /// A new block extending the current chain
     NewBlock(L1Info),
-    /// The first new block after a reorg
-    Reorg(L1Info),
     /// Updates the most recent finalized block
     FinalityUpdate(u64),
+    /// Reorg detected
+    Reorg,
 }
 
 /// Data tied to a specific L1 block
@@ -119,12 +121,24 @@ impl ChainWatcher {
     /// Creates a new ChainWatcher and begins the monitoring task.
     /// Errors if the rpc url in the config is invalid.
     pub fn new(start_block: u64, config: Arc<Config>) -> Result<Self> {
-        let (handle, block_updates) = start_watcher(start_block, config)?;
+        let (handle, block_updates) = start_watcher(start_block, config.clone())?;
 
         Ok(Self {
             handle,
+            config,
             block_update_receiver: block_updates,
         })
+    }
+
+    pub fn reset(&mut self, start_block: u64) -> Result<()> {
+        self.handle.abort();
+
+        let (handle, recv) = start_watcher(start_block, self.config.clone())?;
+
+        self.handle = handle;
+        self.block_update_receiver = recv;
+
+        Ok(())
     }
 }
 
@@ -160,12 +174,8 @@ impl InnerWatcher {
             self.block_update_sender
                 .send(BlockUpdate::FinalityUpdate(finalized_block))?;
 
-            self.unfinalized_blocks = self
-                .unfinalized_blocks
-                .iter()
-                .filter(|b| b.number > self.finalized_block)
-                .cloned()
-                .collect();
+            self.unfinalized_blocks
+                .retain(|b| b.number > self.finalized_block)
         }
 
         if self.current_block > self.head_block {
@@ -198,9 +208,7 @@ impl InnerWatcher {
             }
 
             let update = if self.check_reorg() {
-                tracing::error!("reorg broke it");
-                panic!("reorgs aren't handled corrrectly");
-                // BlockUpdate::Reorg(l1_info)
+                BlockUpdate::Reorg
             } else {
                 BlockUpdate::NewBlock(l1_info)
             };

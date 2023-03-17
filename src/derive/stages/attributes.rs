@@ -7,7 +7,7 @@ use ethers_core::utils::{keccak256, rlp::Encodable, rlp::RlpStream};
 use eyre::Result;
 
 use crate::common::{Epoch, RawTransaction};
-use crate::config::{Config, SystemAccounts};
+use crate::config::SystemAccounts;
 use crate::derive::state::State;
 use crate::engine::PayloadAttributes;
 use crate::l1::L1Info;
@@ -33,22 +33,18 @@ impl Iterator for Attributes {
 }
 
 impl Attributes {
-    pub fn new(
-        prev_stage: Arc<Mutex<Batches>>,
-        config: Arc<Config>,
-        state: Arc<RwLock<State>>,
-    ) -> Self {
+    pub fn new(prev_stage: Arc<Mutex<Batches>>, state: Arc<RwLock<State>>) -> Self {
         Self {
             prev_stage,
             state,
             sequence_number: 0,
-            epoch_hash: config.chain.l1_start_epoch.hash,
+            epoch_hash: H256::zero(),
         }
     }
 
-    pub fn reorg(&mut self, ancestor_epoch_hash: H256, ancestor_seq_num: u64) {
-        self.epoch_hash = ancestor_epoch_hash;
-        self.sequence_number = ancestor_seq_num;
+    pub fn purge(&mut self) {
+        self.sequence_number = 0;
+        self.epoch_hash = H256::zero();
     }
 
     fn derive_attributes(&mut self, batch: Batch) -> PayloadAttributes {
