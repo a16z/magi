@@ -378,7 +378,7 @@ impl<E: L2EngineApi> Driver<E> {
 
     /// Advances the pipeline until it finds a payload attributes that the engine has not processed
     /// in the past. This should be called whenever the pipeline starts up or reorgs. Returns once
-    /// it finds a new payload attributes. For convenience, it will process this payload.
+    /// it finds a new payload attributes.
     #[async_recursion(?Send)]
     async fn skip_common_blocks(&mut self) -> Result<()> {
         let provider = Provider::try_from(
@@ -392,7 +392,7 @@ impl<E: L2EngineApi> Driver<E> {
             self.handle_next_block_update().await?;
             self.update_state_head()?;
 
-            let payload = self.pipeline.next();
+            let payload = self.pipeline.peak();
             let block = provider.get_block(self.safe_head.number + 1).await?;
 
             match (payload, block) {
@@ -411,16 +411,16 @@ impl<E: L2EngineApi> Driver<E> {
                         && payload.suggested_fee_recipient == block.author.unwrap()
                         && payload.gas_limit.as_u64() == block.gas_limit.as_u64();
 
-                    if !is_same {
-                        self.skip_attributes(payload, block)?;
-                        return Ok(());
-                    } else {
+                    if is_same {
                         tracing::info!("skipping already processed block");
-                        self.skip_attributes(payload, block)?;
+                        if let Some(payload) = self.pipeline.next() {
+                            self.skip_attributes(payload, block)?;
+                        }
+                    } else {
+                        return Ok(());
                     }
                 }
-                (Some(payload), None) => {
-                    self.process_attributes(payload).await?;
+                (Some(_), None) => {
                     return Ok(());
                 }
                 _ => sleep(Duration::from_millis(250)),

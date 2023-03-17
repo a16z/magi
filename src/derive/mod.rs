@@ -20,13 +20,18 @@ pub struct Pipeline {
     channels: Arc<Mutex<Channels>>,
     batches: Arc<Mutex<Batches>>,
     attributes: Attributes,
+    pending_attributes: Option<PayloadAttributes>,
 }
 
 impl Iterator for Pipeline {
     type Item = PayloadAttributes;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.attributes.next()
+        if self.pending_attributes.is_some() {
+            self.pending_attributes.take()
+        } else {
+            self.attributes.next()
+        }
     }
 }
 
@@ -42,6 +47,7 @@ impl Pipeline {
             channels,
             batches,
             attributes,
+            pending_attributes: None,
         })
     }
 
@@ -52,6 +58,15 @@ impl Pipeline {
             .push_data(txs, l1_origin);
 
         Ok(())
+    }
+
+    pub fn peak(&mut self) -> Option<&PayloadAttributes> {
+        if self.pending_attributes.is_none() {
+            let next_attributes = self.next();
+            self.pending_attributes = next_attributes;
+        }
+
+        self.pending_attributes.as_ref()
     }
 
     pub fn purge(&mut self) -> Result<()> {
