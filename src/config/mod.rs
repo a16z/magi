@@ -122,6 +122,8 @@ pub struct ChainConfig {
     pub seq_window_size: u64,
     /// Maximum timestamp drift
     pub max_seq_drift: u64,
+    /// Timestamp of the regolith hardfork
+    pub regolith_time: u64,
 }
 
 fn address_to_str(address: &Address) -> String {
@@ -162,6 +164,7 @@ impl ChainConfig {
             Value::from(self.seq_window_size),
         );
         dict.insert("max_seq_drift".to_string(), Value::from(self.max_seq_drift));
+        dict.insert("regolith_time".to_string(), Value::from(self.regolith_time));
         dict
     }
 }
@@ -203,6 +206,7 @@ impl ChainConfig {
             max_timeout: 100,
             seq_window_size: 3600,
             max_seq_drift: 600,
+            regolith_time: 1679079600,
         }
     }
 }

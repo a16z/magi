@@ -7,7 +7,7 @@ use ethers_core::utils::{keccak256, rlp::Encodable, rlp::RlpStream};
 use eyre::Result;
 
 use crate::common::{Epoch, RawTransaction};
-use crate::config::SystemAccounts;
+use crate::config::{Config, SystemAccounts};
 use crate::derive::state::State;
 use crate::engine::PayloadAttributes;
 use crate::l1::L1Info;
@@ -19,6 +19,7 @@ pub struct Attributes {
     state: Arc<RwLock<State>>,
     sequence_number: u64,
     epoch_hash: H256,
+    config: Arc<Config>,
 }
 
 impl Iterator for Attributes {
@@ -33,12 +34,17 @@ impl Iterator for Attributes {
 }
 
 impl Attributes {
-    pub fn new(prev_stage: Arc<Mutex<Batches>>, state: Arc<RwLock<State>>) -> Self {
+    pub fn new(
+        prev_stage: Arc<Mutex<Batches>>,
+        state: Arc<RwLock<State>>,
+        config: Arc<Config>,
+    ) -> Self {
         Self {
             prev_stage,
             state,
             sequence_number: 0,
             epoch_hash: H256::zero(),
+            config,
         }
     }
 
@@ -85,7 +91,7 @@ impl Attributes {
     fn derive_transactions(&self, batch: Batch, l1_info: &L1Info) -> Vec<RawTransaction> {
         let mut transactions = Vec::new();
 
-        let attributes_tx = self.derive_attributes_deposited(l1_info);
+        let attributes_tx = self.derive_attributes_deposited(l1_info, batch.timestamp);
         transactions.push(attributes_tx);
 
         if self.sequence_number == 0 {
@@ -99,9 +105,14 @@ impl Attributes {
         transactions
     }
 
-    fn derive_attributes_deposited(&self, l1_info: &L1Info) -> RawTransaction {
+    fn derive_attributes_deposited(
+        &self,
+        l1_info: &L1Info,
+        batch_timestamp: u64,
+    ) -> RawTransaction {
         let seq = self.sequence_number;
-        let attributes_deposited = AttributesDeposited::from_block_info(l1_info, seq);
+        let attributes_deposited =
+            AttributesDeposited::from_block_info(l1_info, seq, batch_timestamp, &self.config);
         let attributes_tx = DepositedTransaction::from(attributes_deposited);
         RawTransaction(attributes_tx.rlp_bytes().to_vec())
     }
@@ -167,8 +178,8 @@ impl From<AttributesDeposited> for DepositedTransaction {
             to,
             mint: U256::zero(),
             value: U256::zero(),
-            gas: 150_000_000,
-            is_system_tx: true,
+            gas: attributes_deposited.gas,
+            is_system_tx: attributes_deposited.is_system_tx,
             data,
         }
     }
@@ -233,10 +244,17 @@ struct AttributesDeposited {
     batcher_hash: H256,
     fee_overhead: U256,
     fee_scalar: U256,
+    gas: u64,
+    is_system_tx: bool,
 }
 
 impl AttributesDeposited {
-    fn from_block_info(l1_info: &L1Info, seq: u64) -> Self {
+    fn from_block_info(l1_info: &L1Info, seq: u64, batch_timestamp: u64, config: &Config) -> Self {
+        let is_regolith = batch_timestamp >= config.chain.regolith_time;
+        let is_system_tx = !is_regolith;
+
+        let gas = if is_regolith { 1_000_000 } else { 150_000_000 };
+
         Self {
             number: l1_info.block_info.number,
             timestamp: l1_info.block_info.timestamp,
@@ -246,6 +264,8 @@ impl AttributesDeposited {
             batcher_hash: l1_info.system_config.batcher_hash(),
             fee_overhead: l1_info.system_config.l1_fee_overhead,
             fee_scalar: l1_info.system_config.l1_fee_scalar,
+            gas,
+            is_system_tx,
         }
     }
 

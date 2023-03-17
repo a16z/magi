@@ -39,8 +39,8 @@ impl Pipeline {
     pub fn new(state: Arc<RwLock<State>>, config: Arc<Config>) -> Result<Self> {
         let batcher_transactions = BatcherTransactions::new();
         let channels = Channels::new(batcher_transactions.clone(), config.clone());
-        let batches = Batches::new(channels.clone(), state.clone(), config);
-        let attributes = Attributes::new(batches.clone(), state);
+        let batches = Batches::new(channels.clone(), state.clone(), config.clone());
+        let attributes = Attributes::new(batches.clone(), state, config);
 
         Ok(Self {
             batcher_transactions,
