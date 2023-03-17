@@ -246,12 +246,13 @@ impl<E: L2EngineApi> Driver<E> {
 
     /// Ingests the next update from the block update channel
     async fn handle_next_block_update(&mut self) -> Result<()> {
-        let mut state = self
+        let is_state_full = self
             .state
-            .write()
-            .map_err(|_| eyre::eyre!("lock poisoned"))?;
+            .read()
+            .map_err(|_| eyre::eyre!("lock poisoned"))?
+            .is_full();
 
-        if !state.is_full() {
+        if !is_state_full {
             let next = self.chain_watcher.block_update_receiver.try_recv();
 
             if let Ok(update) = next {
@@ -261,7 +262,10 @@ impl<E: L2EngineApi> Driver<E> {
                         self.pipeline
                             .push_batcher_transactions(l1_info.batcher_transactions.clone(), num)?;
 
-                        state.update_l1_info(*l1_info);
+                        self.state
+                            .write()
+                            .map_err(|_| eyre::eyre!("lock poisoned"))?
+                            .update_l1_info(*l1_info);
                     }
                     BlockUpdate::Reorg => {
                         tracing::warn!("reorg detected, purging pipeline");
@@ -269,8 +273,10 @@ impl<E: L2EngineApi> Driver<E> {
                         self.unfinalized_origins.clear();
                         self.chain_watcher.reset(self.finalized_epoch.number)?;
 
-                        state.purge(self.finalized_head, self.finalized_epoch);
-                        drop(state);
+                        self.state
+                            .write()
+                            .map_err(|_| eyre::eyre!("lock poisoned"))?
+                            .purge(self.finalized_head, self.finalized_epoch);
 
                         self.pipeline.purge()?;
 
