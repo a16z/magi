@@ -9,7 +9,10 @@ use std::{
 };
 
 use async_recursion::async_recursion;
-use ethers_core::{types::H256, utils::keccak256};
+use ethers_core::{
+    types::{Block, H256},
+    utils::keccak256,
+};
 use ethers_providers::{Middleware, Provider};
 use eyre::Result;
 use tokio::spawn;
@@ -409,11 +412,11 @@ impl<E: L2EngineApi> Driver<E> {
                         && payload.gas_limit.as_u64() == block.gas_limit.as_u64();
 
                     if !is_same {
-                        self.process_attributes(payload).await?;
+                        self.skip_attributes(payload, block)?;
                         return Ok(());
                     } else {
                         tracing::info!("skipping already processed block");
-                        self.process_attributes(payload).await?;
+                        self.skip_attributes(payload, block)?;
                     }
                 }
                 (Some(payload), None) => {
@@ -423,6 +426,37 @@ impl<E: L2EngineApi> Driver<E> {
                 _ => sleep(Duration::from_millis(250)),
             };
         }
+    }
+
+    fn skip_attributes(&mut self, attributes: PayloadAttributes, block: Block<H256>) -> Result<()> {
+        let new_epoch = *attributes.epoch.as_ref().unwrap();
+
+        let l1_origin = attributes
+            .l1_origin
+            .ok_or(eyre::eyre!("attributes without origin"))?;
+
+        let seq_number = attributes
+            .seq_number
+            .ok_or(eyre::eyre!("attributes without sequencer number"))?;
+
+        let new_head = BlockInfo {
+            number: block
+                .number
+                .ok_or(eyre::eyre!("block not included"))?
+                .as_u64(),
+            hash: block.hash.ok_or(eyre::eyre!("block not included"))?,
+            parent_hash: block.parent_hash,
+            timestamp: block.timestamp.as_u64(),
+        };
+
+        self.update_head(new_head, new_epoch)?;
+
+        self.unfinalized_origins
+            .push((new_head, new_epoch, l1_origin, seq_number));
+
+        self.update_finalized();
+
+        Ok(())
     }
 }
 
