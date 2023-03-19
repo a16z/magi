@@ -12,7 +12,7 @@
 //! use magi::backend::prelude::*;
 //!
 //! // Note: this will panic if both `/tmp/magi` and the hardcoded temporary location cannot be used.
-//! let mut db = Database::new("/tmp/magi");
+//! let mut db = Database::new("/tmp/magi", "optimism-goerli");
 //! let mut block = ConstructedBlock::default();
 //! block.hash = Some(BlockHash::from_low_u64_be(1));
 //! db.write_block(block.clone()).unwrap();

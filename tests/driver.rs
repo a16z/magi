@@ -26,7 +26,7 @@ async fn test_advance() {
 
 fn creat_config() -> Config {
     Config {
-        chain: ChainConfig::goerli(),
+        chain: ChainConfig::optimism_goerli(),
         l2_rpc_url: None,
         l1_rpc_url: "http://example.com".to_string(),
         engine_api_url: Some(String::new()),
