@@ -102,8 +102,10 @@ impl Config {
 }
 
 /// A Chain Configuration
-#[derive(Debug, Copy, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct ChainConfig {
+    /// The network name
+    pub network: String,
     /// The L1 block referenced by the L2 chain
     pub l1_start_epoch: Epoch,
     /// The L2 genesis block info
@@ -165,6 +167,7 @@ impl ChainConfig {
         );
         dict.insert("max_seq_drift".to_string(), Value::from(self.max_seq_drift));
         dict.insert("regolith_time".to_string(), Value::from(self.regolith_time));
+        dict.insert("network".to_string(), Value::from(self.network.clone()));
         dict
     }
 }
@@ -184,8 +187,9 @@ pub struct SystemAccounts {
 }
 
 impl ChainConfig {
-    pub fn goerli() -> Self {
+    pub fn optimism_goerli() -> Self {
         Self {
+            network: "optimism-goerli".to_string(),
             l1_start_epoch: Epoch {
                 hash: hash("0x6ffc1bf3754c01f6bb9fe057c1578b87a8571ce2e9be5ca14bace6eccfd336c7"),
                 number: 8300214,
@@ -207,6 +211,30 @@ impl ChainConfig {
             seq_window_size: 3600,
             max_seq_drift: 600,
             regolith_time: 1679079600,
+        }
+    }
+    pub fn base_goerli() -> Self {
+        Self {
+            network: "base-goerli".to_string(),
+            l1_start_epoch: Epoch {
+                number: 8410981,
+                hash: hash("0x73d89754a1e0387b89520d989d3be9c37c1f32495a88faf1ea05c61121ab0d19"),
+                timestamp: 1675193616,
+            },
+            l2_genesis: BlockInfo {
+                hash: hash("0xa3ab140f15ea7f7443a4702da64c10314eb04d488e72974e02e2d728096b4f76"),
+                number: 0,
+                parent_hash: H256::zero(),
+                timestamp: 1675193616,
+            },
+            batch_sender: addr("0x2d679b567db6187c0c8323fa982cfb88b74dbcc7"),
+            batch_inbox: addr("0x8453100000000000000000000000000000000000"),
+            deposit_contract: addr("0xe93c8cd0d409341205a592f8c4ac1a5fe5585cfa"),
+            max_channels: 100_000_000,
+            max_timeout: 100,
+            seq_window_size: 3600,
+            max_seq_drift: 600,
+            regolith_time: u64::MAX,
         }
     }
 }

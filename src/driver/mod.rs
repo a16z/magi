@@ -64,14 +64,14 @@ impl Driver<EngineApi> {
         let db = config
             .data_dir
             .as_ref()
-            .map(Database::new)
+            .map(|dir| Database::new(dir, &config.chain.network))
             .unwrap_or_default();
 
         let head = db.read_head();
 
         let finalized_head = head
             .as_ref()
-            .map(|h| prev_block_id(&h.l2_block_info))
+            .map(|h| h.l2_block_info)
             .unwrap_or(config.chain.l2_genesis);
 
         let finalized_epoch = head
@@ -468,14 +468,5 @@ fn create_forkchoice_state(safe_hash: H256, finalized_hash: H256) -> ForkchoiceS
         head_block_hash: safe_hash,
         safe_block_hash: safe_hash,
         finalized_block_hash: finalized_hash,
-    }
-}
-
-fn prev_block_id(block: &BlockInfo) -> BlockInfo {
-    BlockInfo {
-        number: block.number - 1,
-        hash: block.parent_hash,
-        parent_hash: H256::zero(),
-        timestamp: block.timestamp - 2,
     }
 }
