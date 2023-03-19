@@ -20,19 +20,6 @@ async fn main() -> Result<()> {
 
     telemetry::init(verbose)?;
 
-    // TODO: if we spawn slow sync in a separate thread that writes to db,
-    // TODO: and fast sync writes an invalid payload to db, we need to bubble
-    // TODO: this error up to the slow sync thread and the main thread.
-
-    // We want to spawn slow sync in a separate thread
-    // this allows the happy-path to gracefully fail without
-    // delaying slow sync.
-    // full_sync(config).await?;
-
-    // let slow_sync = std::thread::spawn(|| async move {
-    //     slow_sync(arc_config).await
-    // });
-
     match sync_mode {
         SyncMode::Fast => panic!("fast sync not implemented"),
         SyncMode::Full => full_sync(config).await?,
@@ -86,7 +73,8 @@ pub struct Cli {
 impl Cli {
     pub fn to_config(self) -> Config {
         let chain = match self.network.as_str() {
-            "optimism-goerli" => ChainConfig::goerli(),
+            "optimism-goerli" => ChainConfig::optimism_goerli(),
+            "base-goerli" => ChainConfig::base_goerli(),
             _ => panic!("network not recognized"),
         };
 

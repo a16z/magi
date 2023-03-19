@@ -40,9 +40,9 @@ impl Default for Database {
 
 impl Database {
     /// Creates a new database.
-    pub fn new<P: AsRef<Path>>(path: P) -> Self {
+    pub fn new<P: AsRef<Path>>(path: P, network: &str) -> Self {
         Self {
-            db: Self::try_construct_db(path),
+            db: Self::try_construct_db(path, network),
             ..Default::default()
         }
     }
@@ -76,14 +76,15 @@ impl Database {
         self.db.flush_async().await.map_err(|e| eyre::eyre!(e))
     }
 
-    /// Attempts to construct a database for a given location.
+    /// Attempts to construct a database for a given location. The path will have the network
+    /// appended to it to prevent conflicts between magi running on different networks.
     ///
     /// ## Panics
     ///
     /// This function will panic if neither the given file location
     /// nor a temporary location can be used to construct a database.
-    fn try_construct_db<P: AsRef<Path>>(path: P) -> sled::Db {
-        match sled::open(path) {
+    fn try_construct_db<P: AsRef<Path>>(path: P, network: &str) -> sled::Db {
+        match sled::open(path.as_ref().join(network)) {
             Ok(db) => db,
             Err(e) => {
                 tracing::error!("Failed to open database: {}", e);

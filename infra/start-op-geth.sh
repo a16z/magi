@@ -1,21 +1,37 @@
 #!/bin/sh
 set -eou
 
-if [ ! -d $BEDROCK_DATADIR ]
+if [ $NETWORK = "optimism-goerli" ]
 then
-    echo "extracting datadir"
-    mkdir $BEDROCK_DATADIR
-    wget "https://storage.googleapis.com/oplabs-goerli-data/goerli-bedrock.tar" -P $BEDROCK_DATADIR
-    tar -xvf $BEDROCK_DATADIR/goerli-bedrock.tar
+    CHAIN_ID=420
+    if [ ! -d $BEDROCK_DATADIR ]
+    then
+        mkdir $BEDROCK_DATADIR
+        wget "https://storage.googleapis.com/oplabs-goerli-data/goerli-bedrock.tar" -P $BEDROCK_DATADIR
+        tar -xvf $BEDROCK_DATADIR/goerli-bedrock.tar
+    fi
+elif [ $NETWORK = "base-goerli" ]
+then
+    CHAIN_ID=84531
+    if [ ! -d $BEDROCK_DATADIR ]
+    then
+        wget "https://raw.githubusercontent.com/base-org/node/main/goerli/genesis-l2.json"
+        exec geth init --datadir=$BEDROCK_DATADIR ./genesis-l2.json
+    fi
 else
-    echo "datadir already exists"
+    echo "Network not recognized. Available options optimism-goerli and base-goerli"
+    exit 1
 fi
+
 
 echo $JWT_SECRET > jwtsecret.txt
 
+echo "chain id"
+echo $CHAIN_ID
 
 exec geth \
   --datadir="$BEDROCK_DATADIR" \
+  --networkid="$CHAIN_ID" \
   --http \
   --http.corsdomain="*" \
   --http.vhosts="*" \
@@ -31,6 +47,5 @@ exec geth \
   --authrpc.addr=0.0.0.0 \
   --authrpc.port=8551 \
   --authrpc.jwtsecret=/jwtsecret.txt \
-  --rollup.sequencerhttp="$BEDROCK_SEQUENCER_HTTP" \
   --rollup.disabletxpoolgossip=true \
   $@

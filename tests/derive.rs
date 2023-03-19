@@ -20,7 +20,7 @@ async fn test_attributes_match() {
     let config = Arc::new(Config {
         l1_rpc_url: rpc.to_string(),
         l2_rpc_url: None,
-        chain: ChainConfig::goerli(),
+        chain: ChainConfig::optimism_goerli(),
         data_dir: None,
         engine_api_url: None,
         jwt_secret: None,
@@ -45,10 +45,13 @@ async fn test_attributes_match() {
         _ => panic!("wrong update type"),
     };
 
-    pipeline.push_batcher_transactions(
-        l1_info.batcher_transactions.clone(),
-        l1_info.block_info.number,
-    );
+    pipeline
+        .push_batcher_transactions(
+            l1_info.batcher_transactions.clone(),
+            l1_info.block_info.number,
+        )
+        .unwrap();
+
     state.write().unwrap().update_l1_info(l1_info);
 
     if let Some(payload) = pipeline.next() {
