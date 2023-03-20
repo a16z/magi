@@ -30,7 +30,7 @@ impl BatcherTransactions {
             });
 
             if res.is_err() {
-                tracing::debug!("Failed to decode batcher transaction");
+                tracing::warn!("dropping invalid batcher transaction");
             }
         }
     }
