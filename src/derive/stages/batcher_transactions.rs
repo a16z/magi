@@ -30,7 +30,7 @@ impl BatcherTransactions {
             });
 
             if res.is_err() {
-                tracing::debug!("Failed to decode batcher transaction");
+                tracing::warn!("dropping invalid batcher transaction");
             }
         }
     }
@@ -47,7 +47,7 @@ pub struct BatcherTransaction {
 }
 
 impl BatcherTransaction {
-    fn new(data: &[u8], l1_origin: u64) -> Result<Self> {
+    pub fn new(data: &[u8], l1_origin: u64) -> Result<Self> {
         let version = data[0];
         let frame_data = data.get(1..).ok_or(eyre::eyre!("No frame data"))?;
 
@@ -77,11 +77,19 @@ impl Frame {
     fn from_data(data: &[u8], offset: usize, l1_origin: u64) -> Result<(Self, usize)> {
         let data = &data[offset..];
 
+        if data.len() < 23 {
+            eyre::bail!("invalid frame size");
+        }
+
         let channel_id = u128::from_be_bytes(data[0..16].try_into()?);
         let frame_number = u16::from_be_bytes(data[16..18].try_into()?);
         let frame_data_len = u32::from_be_bytes(data[18..22].try_into()?);
 
         let frame_data_end = 22 + frame_data_len as usize;
+        if data.len() < frame_data_end {
+            eyre::bail!("invalid frame size");
+        }
+
         let frame_data = data[22..frame_data_end].to_vec();
 
         let is_last = data[frame_data_end] != 0;
