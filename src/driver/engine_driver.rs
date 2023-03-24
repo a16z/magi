@@ -162,7 +162,7 @@ fn should_skip(block: &Block<H256>, attributes: &PayloadAttributes) -> Result<bo
         && attributes.suggested_fee_recipient == block.author.unwrap()
         && attributes.gas_limit.as_u64() == block.gas_limit.as_u64();
 
-    Ok(!is_same)
+    Ok(is_same)
 }
 
 impl EngineDriver<EngineApi> {
