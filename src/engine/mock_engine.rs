@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use eyre::Result;
 
 use super::{
-    ExecutionPayload, ForkChoiceUpdate, ForkchoiceState, L2EngineApi, PayloadAttributes, PayloadId,
+    Engine, ExecutionPayload, ForkChoiceUpdate, ForkchoiceState, PayloadAttributes, PayloadId,
     PayloadStatus,
 };
 
@@ -20,7 +20,7 @@ pub struct MockEngine {
 }
 
 #[async_trait]
-impl L2EngineApi for MockEngine {
+impl Engine for MockEngine {
     async fn forkchoice_updated(
         &self,
         _forkchoice_state: ForkchoiceState,

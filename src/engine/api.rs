@@ -10,7 +10,7 @@ use crate::engine::DEFAULT_AUTH_PORT;
 use crate::engine::ENGINE_GET_PAYLOAD_V1;
 
 use super::{
-    ExecutionPayload, ForkChoiceUpdate, ForkchoiceState, JwtSecret, L2EngineApi, PayloadAttributes,
+    Engine, ExecutionPayload, ForkChoiceUpdate, ForkchoiceState, JwtSecret, PayloadAttributes,
     PayloadId, PayloadStatus, ENGINE_FORKCHOICE_UPDATED_V1, ENGINE_NEW_PAYLOAD_V1,
 };
 
@@ -175,7 +175,7 @@ pub struct ForkChoiceUpdateResponse {
 }
 
 #[async_trait::async_trait]
-impl L2EngineApi for EngineApi {
+impl Engine for EngineApi {
     async fn forkchoice_updated(
         &self,
         forkchoice_state: ForkchoiceState,

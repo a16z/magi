@@ -1,9 +1,10 @@
 use std::fmt::Debug;
 
 use ethers_core::{
-    types::H256,
+    types::{Block, H256},
     utils::rlp::{Decodable, DecoderError, Rlp},
 };
+use eyre::Result;
 use figment::value::{Dict, Tag, Value};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 
@@ -39,6 +40,26 @@ impl From<BlockInfo> for Value {
             Value::from(value.parent_hash.as_bytes()),
         );
         Value::Dict(Tag::Default, dict)
+    }
+}
+
+impl<T> TryFrom<Block<T>> for BlockInfo {
+    type Error = eyre::Report;
+
+    fn try_from(block: Block<T>) -> Result<Self> {
+        let number = block
+            .number
+            .ok_or(eyre::eyre!("block not included"))?
+            .as_u64();
+
+        let hash = block.hash.ok_or(eyre::eyre!("block not included"))?;
+
+        Ok(BlockInfo {
+            number,
+            hash,
+            parent_hash: block.parent_hash,
+            timestamp: block.timestamp.as_u64(),
+        })
     }
 }
 

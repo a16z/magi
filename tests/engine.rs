@@ -1,5 +1,5 @@
 use ethers_core::types::U64;
-use magi::engine::{EngineApi, L2EngineApi};
+use magi::engine::{Engine, EngineApi};
 
 #[tokio::test]
 async fn test_engine_api() {

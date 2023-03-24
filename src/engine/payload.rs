@@ -37,18 +37,6 @@ pub struct ExecutionPayload {
     pub transactions: Vec<RawTransaction>,
 }
 
-/// L1 PayloadAttributes
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct L1PayloadAttributes {
-    /// 64 bit value for the timestamp field of the new payload
-    pub timestamp: U64,
-    /// 32 byte value for the prevRandao field of the new payload
-    pub prev_randao: H256,
-    ///  20 bytes suggested value for the feeRecipient field of the new payload
-    pub suggested_fee_recipient: H160,
-}
-
 /// ## PayloadAttributes
 ///
 /// L2 extended payload attributes for Optimism.
