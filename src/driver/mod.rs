@@ -1,50 +1,32 @@
 use std::{
     process,
-    sync::{
-        mpsc::{channel, Receiver},
-        Arc, RwLock,
-    },
-    thread::sleep,
-    time::Duration,
+    sync::{mpsc::Receiver, Arc, RwLock},
 };
 
-use async_recursion::async_recursion;
-use ethers_core::{
-    types::{Block, H256},
-    utils::keccak256,
-};
-use ethers_providers::{Middleware, Provider};
 use eyre::Result;
-use tokio::spawn;
 
 use crate::{
     backend::{Database, HeadInfo},
     common::{BlockInfo, Epoch},
     config::Config,
     derive::{state::State, Pipeline},
-    engine::{
-        EngineApi, ExecutionPayload, ForkchoiceState, L2EngineApi, PayloadAttributes, Status,
-    },
+    engine::{EngineApi, L2EngineApi},
     l1::{BlockUpdate, ChainWatcher},
 };
+
+use self::engine_driver::EngineDriver;
+
+mod engine_driver;
 
 /// Driver is responsible for advancing the execution node by feeding
 /// the derived chain into the engine API
 pub struct Driver<E: L2EngineApi> {
     /// The derivation pipeline
     pipeline: Pipeline,
-    /// The L2 execution engine
-    engine: Arc<E>,
+    /// The engine driver
+    engine_driver: EngineDriver<E>,
     /// Database for storing progress data
     db: Database,
-    /// Most recent block hash that can be derived from L1 data
-    pub safe_head: BlockInfo,
-    /// Batch epoch of the safe head
-    safe_epoch: Epoch,
-    /// Most recent block hash that can be derived from finalized L1 data
-    pub finalized_head: BlockInfo,
-    /// Batch epoch of the finalized head
-    finalized_epoch: Epoch,
     /// List of unfinalized L2 blocks with their epochs, L1 origin, and sequence numbers
     unfinalized_origins: Vec<(BlockInfo, Epoch, u64, u64)>,
     /// Current finalized L1 block number
@@ -55,8 +37,6 @@ pub struct Driver<E: L2EngineApi> {
     chain_watcher: ChainWatcher,
     /// Channel to receive the shutdown signal from
     shutdown_recv: Receiver<bool>,
-    /// Global config
-    config: Arc<Config>,
 }
 
 impl Driver<EngineApi> {
@@ -83,81 +63,31 @@ impl Driver<EngineApi> {
         let config = Arc::new(config);
         let chain_watcher = ChainWatcher::new(finalized_epoch.number, config.clone())?;
 
-        let safe_head = finalized_head;
-        let safe_epoch = finalized_epoch;
-
         let state = Arc::new(RwLock::new(State::new(
-            safe_head,
-            safe_epoch,
+            finalized_head,
+            finalized_epoch,
             config.clone(),
         )));
 
-        let engine = Arc::new(EngineApi::new(
-            config.engine_api_url.clone().unwrap_or_default(),
-            config.jwt_secret.clone(),
-        ));
-
-        let pipeline = Pipeline::new(state.clone(), config.clone())?;
+        let engine_driver = EngineDriver::new(finalized_head, finalized_epoch, &config)?;
+        let pipeline = Pipeline::new(state.clone(), config)?;
 
         Ok(Self {
             db,
-            engine,
+            engine_driver,
             pipeline,
-            safe_head,
-            safe_epoch,
-            finalized_head,
-            finalized_epoch,
             unfinalized_origins: Vec::new(),
             finalized_l1_block_number: 0,
             state,
             chain_watcher,
             shutdown_recv,
-            config,
         })
     }
 }
 
 impl<E: L2EngineApi> Driver<E> {
-    /// Creates a new Driver instance
-    pub fn from_internals(engine: E, pipeline: Pipeline, config: Arc<Config>) -> Result<Self> {
-        let finalized_head = config.chain.l2_genesis;
-        let finalized_epoch = config.chain.l1_start_epoch;
-
-        let safe_head = finalized_head;
-        let safe_epoch = finalized_epoch;
-
-        let chain_watcher = ChainWatcher::new(finalized_epoch.number, config.clone())?;
-
-        let state = Arc::new(RwLock::new(State::new(
-            safe_head,
-            safe_epoch,
-            config.clone(),
-        )));
-
-        let db = Database::default();
-        let (_, shutdown_recv) = channel();
-
-        Ok(Self {
-            pipeline,
-            engine: Arc::new(engine),
-            db,
-            safe_head,
-            safe_epoch,
-            finalized_head,
-            finalized_epoch,
-            unfinalized_origins: Vec::new(),
-            finalized_l1_block_number: 0,
-            state,
-            chain_watcher,
-            shutdown_recv,
-            config,
-        })
-    }
-
     /// Runs the Driver
     pub async fn start(&mut self) -> Result<()> {
-        self.skip_common_blocks().await?;
-
         loop {
             self.check_shutdown().await;
 
@@ -192,46 +122,32 @@ impl<E: L2EngineApi> Driver<E> {
         self.update_state_head()?;
 
         while let Some(next_attributes) = self.pipeline.next() {
-            self.process_attributes(next_attributes).await?;
+            let l1_origin = next_attributes
+                .l1_origin
+                .ok_or(eyre::eyre!("attributes without origin"))?;
+
+            let seq_number = next_attributes
+                .seq_number
+                .ok_or(eyre::eyre!("attributes without seq number"))?;
+
+            self.engine_driver
+                .handle_attributes(next_attributes)
+                .await?;
+
+            tracing::info!(
+                target: "magi",
+                "head updated: {} {:?}",
+                self.engine_driver.safe_head.number,
+                self.engine_driver.safe_head.hash
+            );
+
+            let new_safe_head = self.engine_driver.safe_head;
+            let new_safe_epoch = self.engine_driver.safe_epoch;
+
+            let unfinalized_entry = (new_safe_head, new_safe_epoch, l1_origin, seq_number);
+            self.unfinalized_origins.push(unfinalized_entry);
+            self.update_finalized();
         }
-
-        Ok(())
-    }
-
-    async fn process_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
-        tracing::debug!(target: "magi", "received new attributes from the pipeline");
-        tracing::debug!("next attributes: {:?}", attributes);
-
-        let new_epoch = *attributes.epoch.as_ref().unwrap();
-
-        let l1_origin = attributes
-            .l1_origin
-            .ok_or(eyre::eyre!("attributes without origin"))?;
-
-        let seq_number = attributes
-            .seq_number
-            .ok_or(eyre::eyre!("attributes without sequencer number"))?;
-
-        let payload = self.build_payload(attributes).await?;
-
-        let new_head = BlockInfo {
-            number: payload.block_number.as_u64(),
-            hash: payload.block_hash,
-            parent_hash: payload.parent_hash,
-            timestamp: payload.timestamp.as_u64(),
-        };
-
-        self.push_payload(payload).await?;
-        self.update_forkchoice(new_head);
-
-        self.update_head(new_head, new_epoch)?;
-
-        self.unfinalized_origins
-            .push((new_head, new_epoch, l1_origin, seq_number));
-
-        self.update_finalized();
-
-        tracing::info!(target: "magi", "head updated: {} {:?}", self.safe_head.number, self.safe_head.hash);
 
         Ok(())
     }
@@ -242,7 +158,7 @@ impl<E: L2EngineApi> Driver<E> {
             .write()
             .map_err(|_| eyre::eyre!("lock poisoned"))?;
 
-        state.update_safe_head(self.safe_head, self.safe_epoch);
+        state.update_safe_head(self.engine_driver.safe_head, self.engine_driver.safe_epoch);
 
         Ok(())
     }
@@ -274,19 +190,19 @@ impl<E: L2EngineApi> Driver<E> {
                         tracing::warn!("reorg detected, purging pipeline");
 
                         self.unfinalized_origins.clear();
-                        self.chain_watcher.reset(self.finalized_epoch.number)?;
+                        self.chain_watcher
+                            .reset(self.engine_driver.finalized_epoch.number)?;
 
                         self.state
                             .write()
                             .map_err(|_| eyre::eyre!("lock poisoned"))?
-                            .purge(self.finalized_head, self.finalized_epoch);
+                            .purge(
+                                self.engine_driver.finalized_head,
+                                self.engine_driver.finalized_epoch,
+                            );
 
                         self.pipeline.purge()?;
-
-                        self.safe_head = self.finalized_head;
-                        self.safe_epoch = self.finalized_epoch;
-
-                        self.skip_common_blocks().await?;
+                        self.engine_driver.reorg();
                     }
                     BlockUpdate::FinalityUpdate(num) => {
                         self.finalized_l1_block_number = num;
@@ -302,7 +218,8 @@ impl<E: L2EngineApi> Driver<E> {
         let new_finalized = self
             .unfinalized_origins
             .iter()
-            .find(|(_, _, origin, seq)| *origin <= self.finalized_l1_block_number && *seq == 0);
+            .filter(|(_, _, origin, seq)| *origin <= self.finalized_l1_block_number && *seq == 0)
+            .last();
 
         if let Some((head, epoch, _, _)) = new_finalized {
             tracing::info!("saving new finalized head to db: {:?}", head.hash);
@@ -313,160 +230,11 @@ impl<E: L2EngineApi> Driver<E> {
             });
 
             if res.is_ok() {
-                self.finalized_head = *head;
-                self.finalized_epoch = *epoch;
+                self.engine_driver.update_finalized(*head, *epoch);
             }
         }
 
         self.unfinalized_origins
             .retain(|(_, _, origin, _)| *origin > self.finalized_l1_block_number);
-    }
-
-    async fn build_payload(&self, attributes: PayloadAttributes) -> Result<ExecutionPayload> {
-        let forkchoice = create_forkchoice_state(self.safe_head.hash, self.finalized_head.hash);
-
-        let update = self
-            .engine
-            .forkchoice_updated(forkchoice, Some(attributes))
-            .await?;
-
-        if update.payload_status.status != Status::Valid {
-            eyre::bail!("invalid payload attributes");
-        }
-
-        let id = update
-            .payload_id
-            .ok_or(eyre::eyre!("engine did not return payload id"))?;
-
-        self.engine.get_payload(id).await
-    }
-
-    async fn push_payload(&self, payload: ExecutionPayload) -> Result<()> {
-        let status = self.engine.new_payload(payload).await?;
-        if status.status != Status::Valid && status.status != Status::Accepted {
-            eyre::bail!("invalid execution payload");
-        }
-
-        Ok(())
-    }
-
-    fn update_forkchoice(&self, new_head: BlockInfo) {
-        let forkchoice = create_forkchoice_state(new_head.hash, self.finalized_head.hash);
-        let engine = self.engine.clone();
-
-        spawn(async move {
-            let update = engine.forkchoice_updated(forkchoice, None).await?;
-            if update.payload_status.status != Status::Valid {
-                eyre::bail!(
-                    "could not accept new forkchoice: {:?}",
-                    update.payload_status.validation_error
-                );
-            }
-
-            Ok(())
-        });
-    }
-
-    fn update_head(&mut self, new_head: BlockInfo, new_epoch: Epoch) -> Result<()> {
-        if self.safe_head != new_head {
-            self.safe_head = new_head;
-            self.safe_epoch = new_epoch;
-        }
-
-        Ok(())
-    }
-
-    /// Advances the pipeline until it finds a payload attributes that the engine has not processed
-    /// in the past. This should be called whenever the pipeline starts up or reorgs. Returns once
-    /// it finds a new payload attributes.
-    #[async_recursion(?Send)]
-    async fn skip_common_blocks(&mut self) -> Result<()> {
-        let provider = Provider::try_from(
-            self.config
-                .l2_rpc_url
-                .as_ref()
-                .ok_or(eyre::eyre!("L2 RPC not found"))?,
-        )?;
-
-        loop {
-            self.check_shutdown().await;
-            self.handle_next_block_update().await?;
-            self.update_state_head()?;
-
-            let payload = self.pipeline.peak();
-            let block = provider.get_block(self.safe_head.number + 1).await?;
-
-            match (payload, block) {
-                (Some(payload), Some(block)) => {
-                    let payload_hashes = payload
-                        .transactions
-                        .as_ref()
-                        .unwrap()
-                        .iter()
-                        .map(|tx| H256(keccak256(&tx.0)))
-                        .collect::<Vec<_>>();
-
-                    let is_same = payload_hashes == block.transactions
-                        && payload.timestamp.as_u64() == block.timestamp.as_u64()
-                        && payload.prev_randao == block.mix_hash.unwrap()
-                        && payload.suggested_fee_recipient == block.author.unwrap()
-                        && payload.gas_limit.as_u64() == block.gas_limit.as_u64();
-
-                    if is_same {
-                        tracing::info!("skipping already processed block");
-                        if let Some(payload) = self.pipeline.next() {
-                            self.skip_attributes(payload, block)?;
-                        }
-                    } else {
-                        return Ok(());
-                    }
-                }
-                (Some(_), None) => {
-                    return Ok(());
-                }
-                _ => sleep(Duration::from_millis(100)),
-            };
-        }
-    }
-
-    fn skip_attributes(&mut self, attributes: PayloadAttributes, block: Block<H256>) -> Result<()> {
-        let new_epoch = *attributes.epoch.as_ref().unwrap();
-
-        let l1_origin = attributes
-            .l1_origin
-            .ok_or(eyre::eyre!("attributes without origin"))?;
-
-        let seq_number = attributes
-            .seq_number
-            .ok_or(eyre::eyre!("attributes without sequencer number"))?;
-
-        let new_head = BlockInfo {
-            number: block
-                .number
-                .ok_or(eyre::eyre!("block not included"))?
-                .as_u64(),
-            hash: block.hash.ok_or(eyre::eyre!("block not included"))?,
-            parent_hash: block.parent_hash,
-            timestamp: block.timestamp.as_u64(),
-        };
-
-        self.update_head(new_head, new_epoch)?;
-
-        self.unfinalized_origins
-            .push((new_head, new_epoch, l1_origin, seq_number));
-
-        self.update_finalized();
-
-        tracing::info!(target: "magi", "head updated: {} {:?}", self.safe_head.number, self.safe_head.hash);
-
-        Ok(())
-    }
-}
-
-fn create_forkchoice_state(safe_hash: H256, finalized_hash: H256) -> ForkchoiceState {
-    ForkchoiceState {
-        head_block_hash: safe_hash,
-        safe_block_hash: safe_hash,
-        finalized_block_hash: finalized_hash,
     }
 }
