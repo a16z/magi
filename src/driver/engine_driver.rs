@@ -11,12 +11,10 @@ use tokio::spawn;
 use crate::{
     common::{BlockInfo, Epoch},
     config::Config,
-    engine::{
-        EngineApi, ExecutionPayload, ForkchoiceState, L2EngineApi, PayloadAttributes, Status,
-    },
+    engine::{Engine, EngineApi, ExecutionPayload, ForkchoiceState, PayloadAttributes, Status},
 };
 
-pub struct EngineDriver<E: L2EngineApi> {
+pub struct EngineDriver<E: Engine> {
     /// The L2 execution engine
     engine: Arc<E>,
     /// Provider for the local L2 execution RPC
@@ -31,7 +29,7 @@ pub struct EngineDriver<E: L2EngineApi> {
     pub finalized_epoch: Epoch,
 }
 
-impl<E: L2EngineApi> EngineDriver<E> {
+impl<E: Engine> EngineDriver<E> {
     pub async fn handle_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
         let block: Option<Block<H256>> = self.provider.get_block(self.safe_head.number + 1).await?;
 

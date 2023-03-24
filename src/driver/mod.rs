@@ -10,7 +10,7 @@ use crate::{
     common::{BlockInfo, Epoch},
     config::Config,
     derive::{state::State, Pipeline},
-    engine::{EngineApi, L2EngineApi},
+    engine::{Engine, EngineApi},
     l1::{BlockUpdate, ChainWatcher},
 };
 
@@ -20,7 +20,7 @@ mod engine_driver;
 
 /// Driver is responsible for advancing the execution node by feeding
 /// the derived chain into the engine API
-pub struct Driver<E: L2EngineApi> {
+pub struct Driver<E: Engine> {
     /// The derivation pipeline
     pipeline: Pipeline,
     /// The engine driver
@@ -85,7 +85,7 @@ impl Driver<EngineApi> {
     }
 }
 
-impl<E: L2EngineApi> Driver<E> {
+impl<E: Engine> Driver<E> {
     /// Runs the Driver
     pub async fn start(&mut self) -> Result<()> {
         loop {
