@@ -29,7 +29,7 @@ fn creat_config() -> Config {
         chain: ChainConfig::optimism_goerli(),
         l2_rpc_url: None,
         l1_rpc_url: "http://example.com".to_string(),
-        engine_api_url: Some(String::new()),
+        l2_engine_url: Some(String::new()),
         data_dir: None,
         jwt_secret: None,
     }
