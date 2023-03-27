@@ -170,7 +170,7 @@ impl EngineDriver<EngineApi> {
         config: &Arc<Config>,
     ) -> Result<Self> {
         let engine = Arc::new(EngineApi::new(
-            config.engine_api_url.clone().unwrap_or_default(),
+            config.l2_engine_url.clone().unwrap_or_default(),
             config.jwt_secret.clone(),
         ));
 

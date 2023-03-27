@@ -46,8 +46,8 @@ pub struct Config {
     pub l1_rpc_url: String,
     /// The L2 engine RPC URL
     pub l2_rpc_url: Option<String>,
-    /// Engine API URL
-    pub engine_api_url: Option<String>,
+    /// The L2 engine API URL
+    pub l2_engine_url: Option<String>,
     /// The base chain config
     pub chain: ChainConfig,
     /// Location of the database folder
@@ -61,7 +61,7 @@ pub struct CliConfig {}
 
 impl Config {
     pub fn get_engine_api_url(&self) -> String {
-        self.engine_api_url
+        self.l2_engine_url
             .clone()
             .unwrap_or("http://localhost:8551".to_string())
     }
