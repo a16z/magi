@@ -22,7 +22,7 @@ async fn test_attributes_match() {
         l2_rpc_url: None,
         chain: ChainConfig::optimism_goerli(),
         data_dir: None,
-        engine_api_url: None,
+        l2_engine_url: None,
         jwt_secret: None,
     });
 

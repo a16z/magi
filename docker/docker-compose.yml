@@ -10,11 +10,13 @@ x-logging: &logging
 services:
   op-geth:
     image: us-docker.pkg.dev/oplabs-tools-artifacts/images/op-geth:v1.11.2-13ee9ab
+    profiles:
+      - default
+      - no-magi
     restart: unless-stopped
     stop_grace_period: 3m
     entrypoint: /scripts/start-op-geth.sh
     env_file:
-      - ./op-geth.env
       - .env
     ports:
       - 8551:8551
@@ -22,7 +24,26 @@ services:
       - 8546:8546
     volumes:
       - ./:/scripts
+      - data:/data
+    <<: *logging
+
+  magi:
+    image: noah7545/magi:latest
+    build:
+      dockerfile: Dockerfile
+      context: ../
+    profiles:
+      - default
+    restart: unless-stopped
+    stop_grace_period: 3m
+    entrypoint: /scripts/start-magi.sh
+    env_file:
+      - .env
+    volumes:
+      - ./:/scripts
+      - data:/data
     <<: *logging
 
 volumes:
   scripts:
+  data:

@@ -63,7 +63,7 @@ pub struct Cli {
     #[clap(short = 'm', long, default_value = "fast")]
     sync_mode: SyncMode,
     #[clap(short = 'e', long)]
-    engine_api_url: Option<String>,
+    l2_engine_url: Option<String>,
     #[clap(short = 'j', long)]
     jwt_secret: Option<String>,
     #[clap(short = 'v', long)]
@@ -95,8 +95,8 @@ impl Cli {
             user_dict.insert("l2_rpc_url", Value::from(l2_rpc.clone()));
         }
 
-        if let Some(engine_api_url) = &self.engine_api_url {
-            user_dict.insert("engine_api_url", Value::from(engine_api_url.clone()));
+        if let Some(l2_engine_url) = &self.l2_engine_url {
+            user_dict.insert("l2_engine_url", Value::from(l2_engine_url.clone()));
         }
 
         if let Some(jwt_secret) = &self.jwt_secret {
