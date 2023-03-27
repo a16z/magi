@@ -28,6 +28,7 @@ services:
     <<: *logging
 
   magi:
+    image: noah7545/magi:latest
     build:
       dockerfile: Dockerfile
       context: ../

@@ -10,7 +10,7 @@ then
     then
         mkdir $DATADIR
         wget "https://storage.googleapis.com/oplabs-goerli-data/goerli-bedrock.tar" -P $DATADIR
-        tar -xvf $DATADIR/goerli-bedrock.tar
+        tar -xvf $DATADIR/goerli-bedrock.tar -C $DATADIR
     fi
 elif [ $NETWORK = "base-goerli" ]
 then
