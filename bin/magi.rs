@@ -8,7 +8,7 @@ use figment::{providers::Serialized, value::Value};
 use magi::{
     config::{ChainConfig, Config, SyncMode},
     driver::Driver,
-    telemetry,
+    telemetry::{self, metrics},
 };
 
 #[tokio::main]
@@ -19,6 +19,7 @@ async fn main() -> Result<()> {
     let config = cli.to_config();
 
     telemetry::init(verbose)?;
+    metrics::init()?;
 
     match sync_mode {
         SyncMode::Fast => panic!("fast sync not implemented"),

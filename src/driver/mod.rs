@@ -12,6 +12,7 @@ use crate::{
     derive::{state::State, Pipeline},
     engine::{Engine, EngineApi},
     l1::{BlockUpdate, ChainWatcher},
+    telemetry::metrics,
 };
 
 use self::engine_driver::EngineDriver;
@@ -147,6 +148,8 @@ impl<E: Engine> Driver<E> {
             let unfinalized_entry = (new_safe_head, new_safe_epoch, l1_origin, seq_number);
             self.unfinalized_origins.push(unfinalized_entry);
             self.update_finalized();
+
+            self.update_metrics();
         }
 
         Ok(())
@@ -236,5 +239,10 @@ impl<E: Engine> Driver<E> {
 
         self.unfinalized_origins
             .retain(|(_, _, origin, _)| *origin > self.finalized_l1_block_number);
+    }
+
+    fn update_metrics(&self) {
+        metrics::FINALIZED_HEAD.set(self.engine_driver.finalized_head.number as i64);
+        metrics::SAFE_HEAD.set(self.engine_driver.safe_head.number as i64)
     }
 }
