@@ -10,6 +10,7 @@ x-logging: &logging
 services:
   op-geth:
     image: us-docker.pkg.dev/oplabs-tools-artifacts/images/op-geth:v1.11.2-13ee9ab
+    container_name: op-geth
     profiles:
       - default
       - no-magi
@@ -29,6 +30,7 @@ services:
 
   magi:
     image: noah7545/magi:latest
+    container_name: magi
     build:
       dockerfile: Dockerfile
       context: ../
@@ -43,6 +45,45 @@ services:
       - ./:/scripts
       - data:/data
     <<: *logging
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - 9090:9090
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    <<: *logging
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - --path.procfs=/host/proc
+      - --path.rootfs=/rootfs
+      - --path.sysfs=/host/sys
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    expose:
+      - 9100
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./grafana/provisioning/:/etc/grafana/provisioning/:ro
+    environment:
+      - GF_SECURITY_ADMIN_USER=magi
+      - GF_SECURITY_ADMIN_PASSWORD=op
+      - GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH=/etc/grafana/provisioning/dashboards/dashboard.json
 
 volumes:
   scripts:
