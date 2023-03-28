@@ -243,6 +243,11 @@ impl<E: Engine> Driver<E> {
 
     fn update_metrics(&self) {
         metrics::FINALIZED_HEAD.set(self.engine_driver.finalized_head.number as i64);
-        metrics::SAFE_HEAD.set(self.engine_driver.safe_head.number as i64)
+        metrics::SAFE_HEAD.set(self.engine_driver.safe_head.number as i64);
+        metrics::SYNCED.set(if self.unfinalized_origins.is_empty() {
+            0
+        } else {
+            1
+        });
     }
 }
