@@ -10,6 +10,7 @@ lazy_static! {
         register_int_gauge!("finalized_head", "finalized head number").unwrap();
     pub static ref SAFE_HEAD: IntGauge =
         register_int_gauge!("safe_head", "safe head number").unwrap();
+    pub static ref SYNCED: IntGauge = register_int_gauge!("synced", "synced flag").unwrap();
 }
 
 pub fn init() -> Result<()> {
