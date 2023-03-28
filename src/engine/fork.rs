@@ -18,7 +18,7 @@ pub struct ForkChoiceUpdate {
 ///
 /// Note: [ForkchoiceState.safe_block_hash] and [ForkchoiceState.finalized_block_hash]fields are allowed to have
 /// 0x0000000000000000000000000000000000000000000000000000000000000000 value unless transition block is finalized.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Copy)]
 #[serde(rename_all = "camelCase")]
 pub struct ForkchoiceState {
     /// 32 byte block hash of the head of the canonical chain

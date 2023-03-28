@@ -89,6 +89,8 @@ impl Driver<EngineApi> {
 impl<E: Engine> Driver<E> {
     /// Runs the Driver
     pub async fn start(&mut self) -> Result<()> {
+        self.engine_driver.wait_engine_ready().await;
+
         loop {
             self.check_shutdown().await;
 

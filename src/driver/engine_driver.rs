@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use ethers_core::{
     types::{Block, H256},
@@ -6,7 +6,7 @@ use ethers_core::{
 };
 use ethers_providers::{Http, Middleware, Provider};
 use eyre::Result;
-use tokio::spawn;
+use tokio::{spawn, time::sleep};
 
 use crate::{
     common::{BlockInfo, Epoch},
@@ -52,6 +52,18 @@ impl<E: Engine> EngineDriver<E> {
     pub fn reorg(&mut self) {
         self.safe_head = self.finalized_head;
         self.safe_epoch = self.finalized_epoch;
+    }
+
+    pub async fn wait_engine_ready(&self) {
+        let forkchoice = create_forkchoice_state(self.safe_head.hash, self.finalized_head.hash);
+        while self
+            .engine
+            .forkchoice_updated(forkchoice, None)
+            .await
+            .is_err()
+        {
+            sleep(Duration::from_secs(2)).await;
+        }
     }
 
     async fn process_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
