@@ -1,4 +1,4 @@
-#![deny(missing_docs, missing_debug_implementations)]
+#![deny(missing_debug_implementations)]
 
 //! Telemetry module
 //!
@@ -16,6 +16,9 @@
 
 /// The Logging Module
 pub mod logging;
+
+/// Prometheus metrics
+pub mod metrics;
 
 // Re-export inner modules
 pub use logging::*;

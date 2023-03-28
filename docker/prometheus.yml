@@ -4,3 +4,9 @@ scrape_configs:
   static_configs:
   - targets:
     - node-exporter:9100
+
+- job_name: magi
+  scrape_interval: 5s
+  static_configs:
+  - targets:
+    - magi:9200

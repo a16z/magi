@@ -41,6 +41,8 @@ services:
     entrypoint: /scripts/start-magi.sh
     env_file:
       - .env
+    ports:
+      - 9200:9200
     volumes:
       - ./:/scripts
       - data:/data
