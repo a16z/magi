@@ -89,6 +89,8 @@ impl Driver<EngineApi> {
 impl<E: Engine> Driver<E> {
     /// Runs the Driver
     pub async fn start(&mut self) -> Result<()> {
+        self.engine_driver.wait_engine_ready().await;
+
         loop {
             self.check_shutdown().await;
 
@@ -244,10 +246,6 @@ impl<E: Engine> Driver<E> {
     fn update_metrics(&self) {
         metrics::FINALIZED_HEAD.set(self.engine_driver.finalized_head.number as i64);
         metrics::SAFE_HEAD.set(self.engine_driver.safe_head.number as i64);
-        metrics::SYNCED.set(if self.unfinalized_origins.is_empty() {
-            0
-        } else {
-            1
-        });
+        metrics::SYNCED.set(!self.unfinalized_origins.is_empty() as i64);
     }
 }

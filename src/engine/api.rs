@@ -185,7 +185,7 @@ impl Engine for EngineApi {
             Some(payload_attributes) => serde_json::to_value(payload_attributes)?,
             None => Value::Null,
         };
-        let forkchoice_state_param = serde_json::to_value(&forkchoice_state)?;
+        let forkchoice_state_param = serde_json::to_value(forkchoice_state)?;
         let params = vec![forkchoice_state_param, payload_attributes_param];
         let res = self.post(ENGINE_FORKCHOICE_UPDATED_V1, params).await?;
         let res = res.json::<ForkChoiceUpdateResponse>().await?;
