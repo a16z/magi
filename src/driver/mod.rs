@@ -11,7 +11,8 @@ use crate::{
     config::Config,
     derive::{state::State, Pipeline},
     engine::{Engine, EngineApi},
-    l1::{BlockUpdate, ChainWatcher}, telemetry::metrics,
+    l1::{BlockUpdate, ChainWatcher},
+    telemetry::metrics,
 };
 
 use self::engine_driver::EngineDriver;
