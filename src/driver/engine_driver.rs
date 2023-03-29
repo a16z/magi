@@ -192,6 +192,9 @@ fn should_skip(block: &Block<H256>, attributes: &PayloadAttributes) -> Result<bo
         .map(|tx| H256(keccak256(&tx.0)))
         .collect::<Vec<_>>();
 
+    tracing::debug!("{:?}", attributes);
+    tracing::debug!("{:?}", block);
+
     let is_same = attributes_hashes == block.transactions
         && attributes.timestamp.as_u64() == block.timestamp.as_u64()
         && attributes.prev_randao == block.mix_hash.unwrap()
