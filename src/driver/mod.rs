@@ -259,7 +259,7 @@ impl<E: Engine> Driver<E> {
                         self.finalized_l1_block_number = num;
                     }
                     BlockUpdate::HeadReached => {
-                        self.syncing = true;
+                        self.syncing = false;
                     }
                 }
             }

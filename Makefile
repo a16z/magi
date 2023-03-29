@@ -6,6 +6,12 @@ build-all:
 build-local:
 	docker buildx build -t noah7545/magi --load .
 
+build-amd:
+	docker buildx build --platform linux/amd64 -t noah7545/magi --push .
+
+build-arm:
+	docker buildx build --platform linux/arm64 -t noah7545/magi --push .
+
 run:
 	make build-local && cd docker && docker compose up
 
