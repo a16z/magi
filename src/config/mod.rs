@@ -170,6 +170,7 @@ impl ChainConfig {
         dict.insert("max_seq_drift".to_string(), Value::from(self.max_seq_drift));
         dict.insert("regolith_time".to_string(), Value::from(self.regolith_time));
         dict.insert("network".to_string(), Value::from(self.network.clone()));
+        dict.insert("sequencer_rpc".to_string(), Value::from(self.sequencer_rpc.clone()));
         dict
     }
 }
