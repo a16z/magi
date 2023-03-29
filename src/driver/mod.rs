@@ -186,6 +186,8 @@ impl<E: Engine> Driver<E> {
         
         for attributes in unsafe_attributes {
             let parent_hash = attributes.parent_hash.ok_or(eyre::eyre!("no parent hash for payload"))?;
+            tracing::debug!("{:?}", parent_hash);
+            tracing::debug!("{:?}", self.engine_driver.unsafe_head.parent_hash);
 
             if parent_hash == self.engine_driver.unsafe_head.parent_hash {
                 self.engine_driver.handle_unsafe_attributes(attributes).await?;
