@@ -1,17 +1,21 @@
-use ethers_providers::{Provider, Http};
-use ethers_core::{utils::serialize, types::{H256, U64, H160}};
-use serde::{Deserialize, Serialize};
+use std::str::FromStr;
+
+use ethers_providers::{Provider, Http, Middleware, RetryClient, HttpRateLimitRetryPolicy};
 use eyre::Result;
 
 use crate::{engine::PayloadAttributes, common::RawTransaction};
 
 pub struct UnsafeWatcher {
-    provider: Provider<Http>,
+    provider: Provider<RetryClient<Http>>,
 }
 
 impl UnsafeWatcher {
-    pub fn new(sequencer_url: &str) -> Result<Self> {
-        let provider = Provider::try_from(sequencer_url.clone())?;
+    pub fn new(unsafe_l2_url: &str) -> Result<Self> {
+        let http = Http::from_str(&unsafe_l2_url).map_err(|_| eyre::eyre!("invalid RPC URL"))?;
+        let policy = Box::new(HttpRateLimitRetryPolicy);
+        let client = RetryClient::new(http, policy, 100, 50);
+        let provider = Provider::new(client);
+
         Ok(Self { provider })
     }
 
@@ -28,36 +32,21 @@ impl UnsafeWatcher {
     }
 
     async fn attributes_at(&self, num: u64) -> Option<PayloadAttributes> {
-        let block: Option<Block> = self
-            .provider
-            .request("eth_getBlockByNumber", [serialize(&U64::from(num)), serialize(&true)])
-            .await
-            .unwrap();
+        let block = self.provider.get_block_with_txs(num).await.unwrap()?;
+        let transactions = block.transactions.iter().map(|tx| RawTransaction(tx.rlp().to_vec())).collect();
 
-        block.map(|block| {
-            PayloadAttributes {
-                timestamp: block.timestamp,
-                prev_randao: block.prev_randao,
-                suggested_fee_recipient: block.suggested_fee_recipient,
-                gas_limit: block.gas_limit,
-                transactions: Some(block.transactions),
-                no_tx_pool: true,
-                l1_origin: None,
-                seq_number: None,
-                epoch: None,
-                parent_hash: Some(block.parent_hash),
-            }
-        })
+         Some(PayloadAttributes {
+             timestamp: block.timestamp.as_u64().into(),
+             prev_randao: block.mix_hash?,
+             suggested_fee_recipient: block.author?,
+             gas_limit: block.gas_limit.as_u64().into(),
+             transactions: Some(transactions),
+             no_tx_pool: true,
+             l1_origin: None,
+             seq_number: None,
+             epoch: None,
+             parent_hash: Some(block.parent_hash),
+         })
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct Block {
-    parent_hash: H256,
-    timestamp: U64,
-    prev_randao: H256,
-    suggested_fee_recipient: H160,
-    gas_limit: U64,
-    transactions: Vec<RawTransaction>,
-}

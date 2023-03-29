@@ -12,10 +12,10 @@ path = "./bin/magi.rs"
 tokio = { version = "1.25.0", features = ["full"] }
 async-trait = "0.1.64"
 async-recursion = "1.0.2"
-futures = "0.3.26"
+futures = "0.3.27"
 eyre = "0.6.8"
-ethers-core = "1.0.2"
-ethers-providers = "1.0.2"
+ethers-core = { git = "https://github.com/ncitron/ethers-rs", branch = "optimism-support" }
+ethers-providers = { git = "https://github.com/ncitron/ethers-rs", branch = "optimism-support" }
 hex = "0.4.3"
 libflate = "1.2.0"
 openssl = { version = "0.10", features = ["vendored"] }
