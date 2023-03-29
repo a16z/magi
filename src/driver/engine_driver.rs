@@ -193,6 +193,7 @@ fn should_skip(block: &Block<H256>, attributes: &PayloadAttributes) -> Result<bo
         .collect::<Vec<_>>();
 
     tracing::debug!("{:?}", attributes);
+    tracing::debug!("{:?}", attributes_hashes);
     tracing::debug!("{:?}", block);
 
     let is_same = attributes_hashes == block.transactions
