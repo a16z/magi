@@ -28,7 +28,11 @@ impl UnsafeWatcher {
     }
 
     async fn attributes_at(&self, num: u64) -> Option<PayloadAttributes> {
-        let block: Option<Block> = self.provider.request("eth_getBlockByNumber", [serialize(&U64::from(num)), serialize(&true)]).await.ok()?;
+        let block: Option<Block> = self
+            .provider
+            .request("eth_getBlockByNumber", [serialize(&U64::from(num)), serialize(&true)])
+            .await
+            .unwrap();
 
         block.map(|block| {
             PayloadAttributes {
