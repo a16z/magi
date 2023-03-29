@@ -79,7 +79,7 @@ impl Driver<EngineApi> {
         let engine_driver = EngineDriver::new(finalized_head, finalized_epoch, &config)?;
         let pipeline = Pipeline::new(state.clone(), config.clone())?;
 
-        let unsafe_watcher = UnsafeWatcher::new(&config.chain.sequencer_rpc)?;
+        let unsafe_watcher = UnsafeWatcher::new(&config.chain.unsafe_l2_rpc)?;
 
         Ok(Self {
             db,

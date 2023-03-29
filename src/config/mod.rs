@@ -126,8 +126,8 @@ pub struct ChainConfig {
     pub max_seq_drift: u64,
     /// Timestamp of the regolith hardfork
     pub regolith_time: u64,
-    /// RPC URL of the sequencer
-    pub sequencer_rpc: String,
+    /// RPC URL for fetching unsafe blocks
+    pub unsafe_l2_rpc: String,
 }
 
 fn address_to_str(address: &Address) -> String {
@@ -170,7 +170,7 @@ impl ChainConfig {
         dict.insert("max_seq_drift".to_string(), Value::from(self.max_seq_drift));
         dict.insert("regolith_time".to_string(), Value::from(self.regolith_time));
         dict.insert("network".to_string(), Value::from(self.network.clone()));
-        dict.insert("sequencer_rpc".to_string(), Value::from(self.sequencer_rpc.clone()));
+        dict.insert("unsafe_l2_rpc".to_string(), Value::from(self.unsafe_l2_rpc.clone()));
         dict
     }
 }
@@ -214,7 +214,7 @@ impl ChainConfig {
             seq_window_size: 3600,
             max_seq_drift: 600,
             regolith_time: 1679079600,
-            sequencer_rpc: "https://goerli-sequencer.optimism.io".to_string(),
+            unsafe_l2_rpc: "https://goerli.optimism.io".to_string(),
         }
     }
     pub fn base_goerli() -> Self {
@@ -239,7 +239,7 @@ impl ChainConfig {
             seq_window_size: 3600,
             max_seq_drift: 600,
             regolith_time: u64::MAX,
-            sequencer_rpc: "https://goerli.base.org".to_string(),
+            unsafe_l2_rpc: "https://goerli.base.org".to_string(),
         }
     }
 }
