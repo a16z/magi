@@ -133,9 +133,11 @@ impl<E: Engine> Driver<E> {
         self.handle_next_block_update().await?;
         self.update_state_head()?;
 
+        tracing::debug!("advancing safe head");
         self.advance_safe_head().await?;
 
         if !self.syncing {
+            tracing::debug!("advancing unsafe head");
             self.advance_unsafe_head().await?;
         }
 
