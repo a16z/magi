@@ -194,7 +194,6 @@ fn should_skip(block: &Block<H256>, attributes: &PayloadAttributes) -> Result<bo
 
     tracing::debug!("{:?}", attributes);
     tracing::debug!("{:?}", attributes_hashes);
-    tracing::debug!("{:?}", block);
 
     let is_same = attributes_hashes == block.transactions
         && attributes.timestamp.as_u64() == block.timestamp.as_u64()
