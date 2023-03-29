@@ -71,6 +71,10 @@ pub struct PayloadAttributes {
     /// skipped during serialization and deserialization.
     #[serde(skip)]
     pub seq_number: Option<u64>,
+    /// The parent block hash of the L2 block. This value is not expected by the engine and is
+    /// skipped during serialization and deserialization.
+    #[serde(skip)]
+    pub parent_hash: Option<H256>,
 }
 
 /// ## PayloadId

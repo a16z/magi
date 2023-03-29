@@ -15,9 +15,10 @@ use crate::{
     telemetry::metrics,
 };
 
-use self::engine_driver::EngineDriver;
+use self::{engine_driver::EngineDriver, unsafe_watcher::UnsafeWatcher};
 
 mod engine_driver;
+mod unsafe_watcher;
 
 /// Driver is responsible for advancing the execution node by feeding
 /// the derived chain into the engine API
@@ -29,6 +30,7 @@ pub struct Driver<E: Engine> {
     /// Database for storing progress data
     db: Database,
     /// List of unfinalized L2 blocks with their epochs, L1 origin, and sequence numbers
+    /// that have been applied to the engine
     unfinalized_origins: Vec<(BlockInfo, Epoch, u64, u64)>,
     /// Current finalized L1 block number
     finalized_l1_block_number: u64,
@@ -36,8 +38,12 @@ pub struct Driver<E: Engine> {
     state: Arc<RwLock<State>>,
     /// L1 chain watcher
     chain_watcher: ChainWatcher,
+    /// Watcher for unsafe blocks
+    unsafe_watcher: UnsafeWatcher,
     /// Channel to receive the shutdown signal from
     shutdown_recv: Receiver<bool>,
+    /// Whether initial sync is ongoing
+    syncing: bool,
 }
 
 impl Driver<EngineApi> {
@@ -71,7 +77,9 @@ impl Driver<EngineApi> {
         )));
 
         let engine_driver = EngineDriver::new(finalized_head, finalized_epoch, &config)?;
-        let pipeline = Pipeline::new(state.clone(), config)?;
+        let pipeline = Pipeline::new(state.clone(), config.clone())?;
+
+        let unsafe_watcher = UnsafeWatcher::new(&config.chain.sequencer_rpc)?;
 
         Ok(Self {
             db,
@@ -81,7 +89,9 @@ impl Driver<EngineApi> {
             finalized_l1_block_number: 0,
             state,
             chain_watcher,
+            unsafe_watcher,
             shutdown_recv,
+            syncing: true,
         })
     }
 }
@@ -117,13 +127,25 @@ impl<E: Engine> Driver<E> {
         }
     }
 
-    /// Attempts to advance the execution node forward one L1 block using derived
-    /// L1 data. Errors if the most recent PayloadAttributes from the pipeline
-    /// does not successfully advance the node
+    /// Attempts to advance the execution node forward. Errors if the most recent 
+    /// PayloadAttributes from the pipeline does not successfully advance the node.
     pub async fn advance(&mut self) -> Result<()> {
         self.handle_next_block_update().await?;
         self.update_state_head()?;
 
+        self.advance_safe_head().await?;
+
+        if !self.syncing {
+            self.advance_unsafe_head().await?;
+        }
+
+        Ok(())
+    }
+
+    /// Attempts to advance the execution node forward one L1 block using derived
+    /// L1 data. Errors if the most recent PayloadAttributes from the pipeline
+    /// does not successfully advance the node
+    async fn advance_safe_head(&mut self) -> Result<()> {
         while let Some(next_attributes) = self.pipeline.next() {
             let l1_origin = next_attributes
                 .l1_origin
@@ -139,7 +161,7 @@ impl<E: Engine> Driver<E> {
 
             tracing::info!(
                 target: "magi",
-                "head updated: {} {:?}",
+                "safe head updated: {} {:?}",
                 self.engine_driver.safe_head.number,
                 self.engine_driver.safe_head.hash
             );
@@ -152,6 +174,30 @@ impl<E: Engine> Driver<E> {
             self.update_finalized();
 
             self.update_metrics();
+        }
+
+        Ok(())
+    }
+
+    async fn advance_unsafe_head(&mut self) -> Result<()> {
+        let unsafe_attributes = self.unsafe_watcher.get_attributes(self.engine_driver.unsafe_head.number + 1).await;                
+        
+        for attributes in unsafe_attributes {
+            let parent_hash = attributes.parent_hash.ok_or(eyre::eyre!("no parent hash for payload"))?;
+
+            if parent_hash == self.engine_driver.unsafe_head.parent_hash {
+                self.engine_driver.handle_unsafe_attributes(attributes).await?;
+
+                tracing::info!(
+                    target: "magi",
+                    "unsafe head updated: {} {:?}",
+                    self.engine_driver.safe_head.number,
+                    self.engine_driver.safe_head.hash
+                );
+            } else {
+                self.engine_driver.reorg_unsafe_head();
+                break;
+            }
         }
 
         Ok(())
@@ -211,6 +257,9 @@ impl<E: Engine> Driver<E> {
                     }
                     BlockUpdate::FinalityUpdate(num) => {
                         self.finalized_l1_block_number = num;
+                    }
+                    BlockUpdate::HeadReached => {
+                        self.syncing = true;
                     }
                 }
             }

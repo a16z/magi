@@ -19,6 +19,8 @@ pub struct EngineDriver<E: Engine> {
     engine: Arc<E>,
     /// Provider for the local L2 execution RPC
     provider: Provider<Http>,
+    /// Most recent block from the sequencer that is not necessarily derived from L1 data
+    pub unsafe_head: BlockInfo,
     /// Most recent block hash that can be derived from L1 data
     pub safe_head: BlockInfo,
     /// Batch epoch of the safe head
@@ -37,11 +39,15 @@ impl<E: Engine> EngineDriver<E> {
             if should_skip(&block, &attributes)? {
                 self.skip_attributes(attributes, block)
             } else {
-                self.process_attributes(attributes).await
+                self.process_attributes(attributes, true).await
             }
         } else {
-            self.process_attributes(attributes).await
+            self.process_attributes(attributes, true).await
         }
+    }
+
+    pub async fn handle_unsafe_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
+        self.process_attributes(attributes, false).await
     }
 
     pub fn update_finalized(&mut self, head: BlockInfo, epoch: Epoch) {
@@ -50,12 +56,17 @@ impl<E: Engine> EngineDriver<E> {
     }
 
     pub fn reorg(&mut self) {
+        self.unsafe_head = self.finalized_head;
         self.safe_head = self.finalized_head;
         self.safe_epoch = self.finalized_epoch;
     }
 
+    pub fn reorg_unsafe_head(&mut self) {
+        self.unsafe_head = self.safe_head;
+    }
+
     pub async fn wait_engine_ready(&self) {
-        let forkchoice = create_forkchoice_state(self.safe_head.hash, self.finalized_head.hash);
+        let forkchoice = self.create_forkchoice_state();
         while self
             .engine
             .forkchoice_updated(forkchoice, None)
@@ -66,7 +77,7 @@ impl<E: Engine> EngineDriver<E> {
         }
     }
 
-    async fn process_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
+    async fn process_attributes(&mut self, attributes: PayloadAttributes, safe: bool) -> Result<()> {
         let new_epoch = *attributes.epoch.as_ref().unwrap();
 
         let payload = self.build_payload(attributes).await?;
@@ -79,9 +90,14 @@ impl<E: Engine> EngineDriver<E> {
         };
 
         self.push_payload(payload).await?;
-        self.update_forkchoice(new_head);
-
-        self.update_safe_head(new_head, new_epoch)?;
+        
+        if safe {
+            self.update_safe_head(new_head, new_epoch);
+        } else {
+            self.update_unsafe_head(new_head);
+        }
+        
+        self.update_forkchoice();
 
         Ok(())
     }
@@ -89,13 +105,13 @@ impl<E: Engine> EngineDriver<E> {
     fn skip_attributes(&mut self, attributes: PayloadAttributes, block: Block<H256>) -> Result<()> {
         let new_epoch = *attributes.epoch.as_ref().unwrap();
         let new_head = BlockInfo::try_from(block)?;
-        self.update_safe_head(new_head, new_epoch)?;
+        self.update_safe_head(new_head, new_epoch);
 
         Ok(())
     }
 
     async fn build_payload(&self, attributes: PayloadAttributes) -> Result<ExecutionPayload> {
-        let forkchoice = create_forkchoice_state(self.safe_head.hash, self.finalized_head.hash);
+        let forkchoice = self.create_forkchoice_state();
 
         let update = self
             .engine
@@ -122,8 +138,8 @@ impl<E: Engine> EngineDriver<E> {
         Ok(())
     }
 
-    fn update_forkchoice(&self, new_head: BlockInfo) {
-        let forkchoice = create_forkchoice_state(new_head.hash, self.finalized_head.hash);
+    fn update_forkchoice(&self) {
+        let forkchoice = self.create_forkchoice_state();
         let engine = self.engine.clone();
 
         spawn(async move {
@@ -139,21 +155,29 @@ impl<E: Engine> EngineDriver<E> {
         });
     }
 
-    fn update_safe_head(&mut self, new_head: BlockInfo, new_epoch: Epoch) -> Result<()> {
+    fn update_safe_head(&mut self, new_head: BlockInfo, new_epoch: Epoch) {
         if self.safe_head != new_head {
             self.safe_head = new_head;
             self.safe_epoch = new_epoch;
         }
 
-        Ok(())
+        if new_head.number >= self.unsafe_head.number {
+            self.unsafe_head = new_head;
+        }
     }
-}
 
-fn create_forkchoice_state(safe_hash: H256, finalized_hash: H256) -> ForkchoiceState {
-    ForkchoiceState {
-        head_block_hash: safe_hash,
-        safe_block_hash: safe_hash,
-        finalized_block_hash: finalized_hash,
+    fn update_unsafe_head(&mut self, new_head: BlockInfo) {
+        if self.unsafe_head != new_head {
+            self.unsafe_head = new_head;
+        }
+    }
+
+    fn create_forkchoice_state(&self) -> ForkchoiceState {
+        ForkchoiceState {
+            head_block_hash: self.unsafe_head.hash,
+            safe_block_hash: self.safe_head.hash,
+            finalized_block_hash: self.finalized_head.hash,
+        }
     }
 }
 
@@ -191,6 +215,7 @@ impl EngineDriver<EngineApi> {
         Ok(Self {
             engine,
             provider,
+            unsafe_head: finalized_head,
             safe_head: finalized_head,
             safe_epoch: finalized_epoch,
             finalized_head,

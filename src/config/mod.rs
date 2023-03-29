@@ -126,6 +126,8 @@ pub struct ChainConfig {
     pub max_seq_drift: u64,
     /// Timestamp of the regolith hardfork
     pub regolith_time: u64,
+    /// RPC URL of the sequencer
+    pub sequencer_rpc: String,
 }
 
 fn address_to_str(address: &Address) -> String {
@@ -211,6 +213,7 @@ impl ChainConfig {
             seq_window_size: 3600,
             max_seq_drift: 600,
             regolith_time: 1679079600,
+            sequencer_rpc: "https://goerli-sequencer.optimism.io".to_string(),
         }
     }
     pub fn base_goerli() -> Self {
@@ -235,6 +238,7 @@ impl ChainConfig {
             seq_window_size: 3600,
             max_seq_drift: 600,
             regolith_time: u64::MAX,
+            sequencer_rpc: "https://goerli.base.org".to_string(),
         }
     }
 }

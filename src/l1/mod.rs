@@ -42,6 +42,8 @@ pub enum BlockUpdate {
     FinalityUpdate(u64),
     /// Reorg detected
     Reorg,
+    /// Reached the chain head
+    HeadReached,
 }
 
 /// Data tied to a specific L1 block
@@ -217,6 +219,7 @@ impl InnerWatcher {
 
             self.current_block += 1;
         } else {
+            self.block_update_sender.send(BlockUpdate::HeadReached)?;
             sleep(Duration::from_millis(250)).await;
         }
 

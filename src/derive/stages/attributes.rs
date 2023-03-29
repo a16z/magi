@@ -71,6 +71,7 @@ impl Attributes {
         let timestamp = U64([batch.timestamp]);
         let l1_origin = Some(batch.l1_origin);
         let seq_number = Some(self.sequence_number);
+        let parent_hash = Some(batch.parent_hash);
         let prev_randao = l1_info.block_info.mix_hash;
         let transactions = Some(self.derive_transactions(batch, l1_info));
         let suggested_fee_recipient = SystemAccounts::default().fee_vault;
@@ -85,6 +86,7 @@ impl Attributes {
             epoch,
             l1_origin,
             seq_number,
+            parent_hash,
         }
     }
 
