@@ -38,6 +38,7 @@ impl<E: Engine> EngineDriver<E> {
 
         if let Some(block) = block {
             if should_skip(&block, &attributes)? {
+                tracing::debug!("skipping block");
                 self.skip_attributes(attributes, block)
             } else {
                 self.process_attributes(attributes, true).await
