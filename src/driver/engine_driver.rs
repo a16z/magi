@@ -34,6 +34,7 @@ pub struct EngineDriver<E: Engine> {
 impl<E: Engine> EngineDriver<E> {
     pub async fn handle_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
         let block: Option<Block<H256>> = self.provider.get_block(self.safe_head.number + 1).await?;
+        tracing::debug!("block received: {}", block.is_some());
 
         if let Some(block) = block {
             if should_skip(&block, &attributes)? {
