@@ -219,6 +219,7 @@ impl InnerWatcher {
 
             self.current_block += 1;
         } else {
+            tracing::debug!("L1 head reached");
             self.block_update_sender.send(BlockUpdate::HeadReached)?;
             sleep(Duration::from_millis(250)).await;
         }
