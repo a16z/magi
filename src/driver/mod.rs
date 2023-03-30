@@ -1,6 +1,7 @@
 use std::{
     process,
-    sync::{mpsc::Receiver, Arc, RwLock}, time::Duration,
+    sync::{mpsc::Receiver, Arc, RwLock},
+    time::Duration,
 };
 
 use eyre::Result;
