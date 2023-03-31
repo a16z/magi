@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use ethers_core::{
     types::{Block, H256},
@@ -6,7 +6,7 @@ use ethers_core::{
 };
 use ethers_providers::{Http, Middleware, Provider};
 use eyre::Result;
-use tokio::{spawn, time::sleep};
+use tokio::spawn;
 
 use crate::{
     common::{BlockInfo, Epoch},
@@ -54,16 +54,12 @@ impl<E: Engine> EngineDriver<E> {
         self.safe_epoch = self.finalized_epoch;
     }
 
-    pub async fn wait_engine_ready(&self) {
-        let forkchoice = create_forkchoice_state(self.safe_head.hash, self.finalized_head.hash);
-        while self
-            .engine
+    pub async fn engine_ready(&self) -> bool {
+        let forkchoice = self.create_forkchoice_state();
+        self.engine
             .forkchoice_updated(forkchoice, None)
             .await
-            .is_err()
-        {
-            sleep(Duration::from_secs(2)).await;
-        }
+            .is_ok()
     }
 
     async fn process_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
@@ -79,9 +75,8 @@ impl<E: Engine> EngineDriver<E> {
         };
 
         self.push_payload(payload).await?;
-        self.update_forkchoice(new_head);
-
         self.update_safe_head(new_head, new_epoch)?;
+        self.update_forkchoice();
 
         Ok(())
     }
@@ -95,7 +90,7 @@ impl<E: Engine> EngineDriver<E> {
     }
 
     async fn build_payload(&self, attributes: PayloadAttributes) -> Result<ExecutionPayload> {
-        let forkchoice = create_forkchoice_state(self.safe_head.hash, self.finalized_head.hash);
+        let forkchoice = self.create_forkchoice_state();
 
         let update = self
             .engine
@@ -122,8 +117,8 @@ impl<E: Engine> EngineDriver<E> {
         Ok(())
     }
 
-    fn update_forkchoice(&self, new_head: BlockInfo) {
-        let forkchoice = create_forkchoice_state(new_head.hash, self.finalized_head.hash);
+    fn update_forkchoice(&self) {
+        let forkchoice = self.create_forkchoice_state();
         let engine = self.engine.clone();
 
         spawn(async move {
@@ -147,13 +142,13 @@ impl<E: Engine> EngineDriver<E> {
 
         Ok(())
     }
-}
 
-fn create_forkchoice_state(safe_hash: H256, finalized_hash: H256) -> ForkchoiceState {
-    ForkchoiceState {
-        head_block_hash: safe_hash,
-        safe_block_hash: safe_hash,
-        finalized_block_hash: finalized_hash,
+    fn create_forkchoice_state(&self) -> ForkchoiceState {
+        ForkchoiceState {
+            head_block_hash: self.safe_head.hash,
+            safe_block_hash: self.safe_head.hash,
+            finalized_block_hash: self.finalized_head.hash,
+        }
     }
 }
 

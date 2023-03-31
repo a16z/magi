@@ -61,7 +61,7 @@ pub struct Cli {
     l1_rpc_url: Option<String>,
     #[clap(long)]
     l2_rpc_url: Option<String>,
-    #[clap(short = 'm', long, default_value = "fast")]
+    #[clap(short = 'm', long, default_value = "full")]
     sync_mode: SyncMode,
     #[clap(short = 'e', long)]
     l2_engine_url: Option<String>,

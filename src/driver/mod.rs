@@ -1,9 +1,11 @@
 use std::{
     process,
     sync::{mpsc::Receiver, Arc, RwLock},
+    time::Duration,
 };
 
 use eyre::Result;
+use tokio::time::sleep;
 
 use crate::{
     backend::{Database, HeadInfo},
@@ -89,7 +91,7 @@ impl Driver<EngineApi> {
 impl<E: Engine> Driver<E> {
     /// Runs the Driver
     pub async fn start(&mut self) -> Result<()> {
-        self.engine_driver.wait_engine_ready().await;
+        self.await_engine_ready().await;
 
         loop {
             self.check_shutdown().await;
@@ -117,10 +119,17 @@ impl<E: Engine> Driver<E> {
         }
     }
 
+    async fn await_engine_ready(&self) {
+        while !self.engine_driver.engine_ready().await {
+            self.check_shutdown().await;
+            sleep(Duration::from_secs(1)).await;
+        }
+    }
+
     /// Attempts to advance the execution node forward one L1 block using derived
     /// L1 data. Errors if the most recent PayloadAttributes from the pipeline
     /// does not successfully advance the node
-    pub async fn advance(&mut self) -> Result<()> {
+    async fn advance(&mut self) -> Result<()> {
         self.handle_next_block_update().await?;
         self.update_state_head()?;
 

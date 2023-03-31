@@ -51,6 +51,8 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
+    profiles:
+      - default
     ports:
       - 9090:9090
     command:
@@ -62,6 +64,8 @@ services:
   node-exporter:
     image: prom/node-exporter:latest
     container_name: node-exporter
+    profiles:
+      - default
     restart: unless-stopped
     volumes:
       - /proc:/host/proc:ro
@@ -78,6 +82,8 @@ services:
   grafana:
     image: grafana/grafana
     container_name: grafana
+    profiles:
+      - default
     ports:
       - "3000:3000"
     volumes:
