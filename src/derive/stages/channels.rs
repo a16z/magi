@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use ethers_core::types::H256;
+use ethers::types::H256;
 use eyre::Result;
 
 use super::batcher_transactions::{BatcherTransactions, Frame};

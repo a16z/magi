@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use ethers_core::{
+use ethers::{
     types::{Block, H256},
     utils::rlp::{Decodable, DecoderError, Rlp},
 };

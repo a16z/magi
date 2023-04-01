@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    iter,
     str::FromStr,
     sync::{
         mpsc::{sync_channel, Receiver, SyncSender},
@@ -9,17 +8,20 @@ use std::{
     time::Duration,
 };
 
-use ethers_core::{
-    abi::Address,
-    types::{Block, BlockNumber, Filter, Transaction, H256, U256},
+use ethers::providers::{Http, HttpRateLimitRetryPolicy, Middleware, Provider, RetryClient};
+use ethers::{
+    types::{Address, Block, BlockNumber, Filter, Transaction, H256, U256},
     utils::keccak256,
 };
-use ethers_providers::{Http, HttpRateLimitRetryPolicy, Middleware, Provider, RetryClient};
 
 use eyre::Result;
 use tokio::{spawn, task::JoinHandle, time::sleep};
 
-use crate::{common::BlockInfo, config::Config, derive::stages::attributes::UserDeposited};
+use crate::{
+    common::BlockInfo,
+    config::{Config, SystemConfig},
+    derive::stages::attributes::UserDeposited,
+};
 
 /// Handles watching the L1 chain and monitoring for new blocks, deposits,
 /// and batcher transactions. The monitoring loop is spawned in a seperate
@@ -74,19 +76,6 @@ pub struct L1BlockInfo {
     pub mix_hash: H256,
 }
 
-#[derive(Debug)]
-/// Optimism system config contract values
-pub struct SystemConfig {
-    /// Batch sender address
-    pub batch_sender: Address,
-    /// L2 gas limit
-    pub gas_limit: U256,
-    /// Fee overhead
-    pub l1_fee_overhead: U256,
-    /// Fee scalar
-    pub l1_fee_scalar: U256,
-}
-
 /// Watcher actually ingests the L1 blocks. Should be run in another
 /// thread and called periodically to keep updating channels
 struct InnerWatcher {
@@ -107,6 +96,10 @@ struct InnerWatcher {
     /// Mapping from block number to user deposits. Past block deposits
     /// are removed as they are no longer needed
     deposits: HashMap<u64, Vec<UserDeposited>>,
+    /// Current system config value
+    system_config: SystemConfig,
+    /// Next system config if it exists and the L1 block number it activates
+    system_config_update: (u64, Option<SystemConfig>),
 }
 
 type BatcherTransactionData = Vec<u8>;
@@ -120,8 +113,9 @@ impl Drop for ChainWatcher {
 impl ChainWatcher {
     /// Creates a new ChainWatcher and begins the monitoring task.
     /// Errors if the rpc url in the config is invalid.
-    pub fn new(start_block: u64, config: Arc<Config>) -> Result<Self> {
-        let (handle, block_updates) = start_watcher(start_block, config.clone())?;
+    pub fn new(l1_start_block: u64, l2_start_block: u64, config: Arc<Config>) -> Result<Self> {
+        let (handle, block_updates) =
+            start_watcher(l1_start_block, l2_start_block, config.clone())?;
 
         Ok(Self {
             handle,
@@ -130,10 +124,10 @@ impl ChainWatcher {
         })
     }
 
-    pub fn reset(&mut self, start_block: u64) -> Result<()> {
+    pub fn reset(&mut self, l1_start_block: u64, l2_start_block: u64) -> Result<()> {
         self.handle.abort();
 
-        let (handle, recv) = start_watcher(start_block, self.config.clone())?;
+        let (handle, recv) = start_watcher(l1_start_block, l2_start_block, self.config.clone())?;
 
         self.handle = handle;
         self.block_update_receiver = recv;
@@ -143,27 +137,55 @@ impl ChainWatcher {
 }
 
 impl InnerWatcher {
-    fn new(
+    async fn new(
         config: Arc<Config>,
         block_update_sender: SyncSender<BlockUpdate>,
-        start_block: u64,
-    ) -> Result<Self> {
-        let http =
-            Http::from_str(&config.l1_rpc_url).map_err(|_| eyre::eyre!("invalid L1 RPC URL"))?;
+        l1_start_block: u64,
+        l2_start_block: u64,
+    ) -> Self {
+        let http = Http::from_str(&config.l1_rpc_url).expect("invalid L1 RPC URL");
         let policy = Box::new(HttpRateLimitRetryPolicy);
         let client = RetryClient::new(http, policy, 100, 50);
         let provider = Provider::new(client);
 
-        Ok(Self {
+        let system_config = if l2_start_block == config.chain.l2_genesis.number {
+            config.chain.system_config
+        } else {
+            let l2_provider = Provider::try_from(&config.l2_rpc_url.clone().unwrap())
+                .expect("invalid L2 RPC url");
+
+            let block = l2_provider
+                .get_block_with_txs(l2_start_block - 1)
+                .await
+                .unwrap()
+                .unwrap();
+
+            let input = &block.transactions[0].input;
+
+            let batch_sender = Address::from_slice(&input[176..196]);
+            let l1_fee_overhead = U256::from(H256::from_slice(&input[196..228]).as_bytes());
+            let l1_fee_scalar = U256::from(H256::from_slice(&input[228..260]).as_bytes());
+
+            SystemConfig {
+                batch_sender,
+                l1_fee_overhead,
+                l1_fee_scalar,
+                gas_limit: block.gas_limit,
+            }
+        };
+
+        Self {
             config,
             provider,
             block_update_sender,
-            current_block: start_block,
+            current_block: l1_start_block,
             head_block: 0,
             finalized_block: 0,
             unfinalized_blocks: Vec::new(),
             deposits: HashMap::new(),
-        })
+            system_config,
+            system_config_update: (l1_start_block, None),
+        }
     }
 
     async fn try_ingest_block(&mut self) -> Result<()> {
@@ -191,9 +213,9 @@ impl InnerWatcher {
             let l1_info = L1Info::new(
                 &block,
                 user_deposits,
-                self.config.chain.batch_sender,
                 self.config.chain.batch_inbox,
                 finalized,
+                self.system_config,
             )?;
 
             if l1_info.block_info.number >= self.finalized_block {
@@ -306,9 +328,9 @@ impl L1Info {
     pub fn new(
         block: &Block<Transaction>,
         user_deposits: Vec<UserDeposited>,
-        batch_sender: Address,
         batch_inbox: Address,
         finalized: bool,
+        system_config: SystemConfig,
     ) -> Result<Self> {
         let block_number = block
             .number
@@ -327,14 +349,8 @@ impl L1Info {
             mix_hash: block.mix_hash.ok_or(eyre::eyre!("block not included"))?,
         };
 
-        let system_config = SystemConfig {
-            batch_sender,
-            gas_limit: U256::from(25_000_000),
-            l1_fee_overhead: U256::from(2100),
-            l1_fee_scalar: U256::from(1000000),
-        };
-
-        let batcher_transactions = create_batcher_transactions(block, batch_sender, batch_inbox);
+        let batcher_transactions =
+            create_batcher_transactions(block, system_config.batch_sender, batch_inbox);
 
         Ok(L1Info {
             block_info,
@@ -360,14 +376,16 @@ fn create_batcher_transactions(
 }
 
 fn start_watcher(
-    start_block: u64,
+    l1_start_block: u64,
+    l2_start_block: u64,
     config: Arc<Config>,
 ) -> Result<(JoinHandle<()>, Receiver<BlockUpdate>)> {
     let (block_update_sender, block_update_receiver) = sync_channel(1000);
 
-    let mut watcher = InnerWatcher::new(config, block_update_sender, start_block)?;
-
     let handle = spawn(async move {
+        let mut watcher =
+            InnerWatcher::new(config, block_update_sender, l1_start_block, l2_start_block).await;
+
         loop {
             tracing::debug!("fetching L1 data for block {}", watcher.current_block);
             if let Err(err) = watcher.try_ingest_block().await {
@@ -381,14 +399,4 @@ fn start_watcher(
     });
 
     Ok((handle, block_update_receiver))
-}
-
-impl SystemConfig {
-    /// Encoded batch sender as a H256
-    pub fn batcher_hash(&self) -> H256 {
-        let mut batch_sender_bytes = self.batch_sender.as_bytes().to_vec();
-        let mut batcher_hash = iter::repeat(0).take(12).collect::<Vec<_>>();
-        batcher_hash.append(&mut batch_sender_bytes);
-        H256::from_slice(&batcher_hash)
-    }
 }

@@ -4,8 +4,8 @@ use std::collections::BTreeMap;
 use std::io::Read;
 use std::sync::{Arc, Mutex, RwLock};
 
-use ethers_core::types::H256;
-use ethers_core::utils::rlp::{DecoderError, Rlp};
+use ethers::types::H256;
+use ethers::utils::rlp::{DecoderError, Rlp};
 
 use eyre::Result;
 use libflate::zlib::Decoder;

@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
-use ethers_core::{
+use ethers::providers::{Http, Middleware, Provider};
+use ethers::{
     types::{Block, H256},
     utils::keccak256,
 };
-use ethers_providers::{Http, Middleware, Provider};
 use eyre::Result;
 use tokio::spawn;
 

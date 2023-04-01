@@ -1,4 +1,4 @@
-use ethers_core::types::H256;
+use ethers::types::H256;
 use serde::{Deserialize, Serialize};
 
 use super::{PayloadId, PayloadStatus};

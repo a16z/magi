@@ -1,11 +1,6 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    path::PathBuf,
-    process::exit,
-    str::FromStr,
-};
+use std::{collections::HashMap, iter, path::PathBuf, process::exit, str::FromStr};
 
-use ethers_core::types::{Address, H256};
+use ethers::types::{Address, H256, U256};
 use figment::{
     providers::{Format, Serialized, Toml},
     value::Value,
@@ -73,7 +68,7 @@ impl Config {
         cli_provider: Serialized<HashMap<&str, Value>>,
         chain: ChainConfig,
     ) -> Self {
-        let chain_provider = chain.as_provider();
+        let chain_provider: Serialized<ChainProvider> = chain.into();
         let toml_provider = Toml::file(config_path).nested();
 
         let config_res = Figment::new()
@@ -102,7 +97,7 @@ impl Config {
 }
 
 /// A Chain Configuration
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChainConfig {
     /// The network name
     pub network: String,
@@ -110,8 +105,8 @@ pub struct ChainConfig {
     pub l1_start_epoch: Epoch,
     /// The L2 genesis block info
     pub l2_genesis: BlockInfo,
-    /// The batch sender address
-    pub batch_sender: Address,
+    /// The initial system config value
+    pub system_config: SystemConfig,
     /// The batch inbox address
     pub batch_inbox: Address,
     /// The deposit contract address
@@ -128,53 +123,26 @@ pub struct ChainConfig {
     pub regolith_time: u64,
 }
 
-fn address_to_str(address: &Address) -> String {
-    format!("0x{}", hex::encode(address.as_bytes()))
+/// Optimism system config contract values
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct SystemConfig {
+    /// Batch sender address
+    pub batch_sender: Address,
+    /// L2 gas limit
+    pub gas_limit: U256,
+    /// Fee overhead
+    pub l1_fee_overhead: U256,
+    /// Fee scalar
+    pub l1_fee_scalar: U256,
 }
 
-impl ChainConfig {
-    pub fn as_provider(&self) -> Serialized<HashMap<&str, Value>> {
-        let mut dict = HashMap::new();
-        let value = Value::from(self);
-        dict.insert("chain", value);
-        Serialized::from(dict, "default".to_string())
-    }
-
-    fn as_dict(&self) -> BTreeMap<String, Value> {
-        let mut dict = BTreeMap::new();
-        dict.insert(
-            "l1_start_epoch".to_string(),
-            Value::from(self.l1_start_epoch),
-        );
-        dict.insert("l2_genesis".to_string(), Value::from(self.l2_genesis));
-        dict.insert(
-            "batch_sender".to_string(),
-            Value::from(address_to_str(&self.batch_sender)),
-        );
-        dict.insert(
-            "batch_inbox".to_string(),
-            Value::from(address_to_str(&self.batch_inbox)),
-        );
-        dict.insert(
-            "deposit_contract".to_string(),
-            Value::from(address_to_str(&self.deposit_contract)),
-        );
-        dict.insert("max_channels".to_string(), Value::from(self.max_channels));
-        dict.insert("max_timeout".to_string(), Value::from(self.max_timeout));
-        dict.insert(
-            "seq_window_size".to_string(),
-            Value::from(self.seq_window_size),
-        );
-        dict.insert("max_seq_drift".to_string(), Value::from(self.max_seq_drift));
-        dict.insert("regolith_time".to_string(), Value::from(self.regolith_time));
-        dict.insert("network".to_string(), Value::from(self.network.clone()));
-        dict
-    }
-}
-
-impl From<&ChainConfig> for Value {
-    fn from(value: &ChainConfig) -> Self {
-        Value::from(value.as_dict())
+impl SystemConfig {
+    /// Encoded batch sender as a H256
+    pub fn batcher_hash(&self) -> H256 {
+        let mut batch_sender_bytes = self.batch_sender.as_bytes().to_vec();
+        let mut batcher_hash = iter::repeat(0).take(12).collect::<Vec<_>>();
+        batcher_hash.append(&mut batch_sender_bytes);
+        H256::from_slice(&batcher_hash)
     }
 }
 
@@ -184,6 +152,17 @@ pub struct SystemAccounts {
     pub attributes_depositor: Address,
     pub attributes_predeploy: Address,
     pub fee_vault: Address,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ChainProvider {
+    chain: ChainConfig,
+}
+
+impl From<ChainConfig> for Serialized<ChainProvider> {
+    fn from(value: ChainConfig) -> Self {
+        Serialized::defaults(ChainProvider { chain: value })
+    }
 }
 
 impl ChainConfig {
@@ -203,7 +182,12 @@ impl ChainConfig {
                 ),
                 timestamp: 1673550516,
             },
-            batch_sender: addr("0x7431310e026b69bfc676c0013e12a1a11411eec9"),
+            system_config: SystemConfig {
+                batch_sender: addr("0x7431310e026b69bfc676c0013e12a1a11411eec9"),
+                gas_limit: U256::from(25_000_000),
+                l1_fee_overhead: U256::from(2100),
+                l1_fee_scalar: U256::from(1000000),
+            },
             batch_inbox: addr("0xff00000000000000000000000000000000000420"),
             deposit_contract: addr("0x5b47E1A08Ea6d985D6649300584e6722Ec4B1383"),
             max_channels: 100_000_000,
@@ -227,7 +211,12 @@ impl ChainConfig {
                 parent_hash: H256::zero(),
                 timestamp: 1675193616,
             },
-            batch_sender: addr("0x2d679b567db6187c0c8323fa982cfb88b74dbcc7"),
+            system_config: SystemConfig {
+                batch_sender: addr("0x2d679b567db6187c0c8323fa982cfb88b74dbcc7"),
+                gas_limit: U256::from(25_000_000),
+                l1_fee_overhead: U256::from(2100),
+                l1_fee_scalar: U256::from(1000000),
+            },
             batch_inbox: addr("0x8453100000000000000000000000000000000000"),
             deposit_contract: addr("0xe93c8cd0d409341205a592f8c4ac1a5fe5585cfa"),
             max_channels: 100_000_000,

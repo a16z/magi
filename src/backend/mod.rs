@@ -4,32 +4,26 @@
 //! # Minimal Block Database
 //!
 //! This exposes a minimal block database that can be used to store and retrieve
-//! [ConstructedBlock](crate::types::ConstructedBlock) to persistent storage.
+//! [HeadInfo](crate::types::HeadInfo) to persistent storage.
 //!
 //! ## Example
 //!
 //! ```rust
-//! use magi::backend::prelude::*;
+//! use magi::backend::{Database, HeadInfo};
 //!
 //! // Note: this will panic if both `/tmp/magi` and the hardcoded temporary location cannot be used.
 //! let mut db = Database::new("/tmp/magi", "optimism-goerli");
-//! let mut block = ConstructedBlock::default();
-//! block.hash = Some(BlockHash::from_low_u64_be(1));
-//! db.write_block(block.clone()).unwrap();
-//! let read_block = db.read_block(block.hash.unwrap()).unwrap();
-//! assert_eq!(block, read_block);
+//! let head = HeadInfo::default();
+//! db.write_head(head.clone()).unwrap();
+//! let read_head = db.read_head().unwrap();
+//! assert_eq!(head, read_head);
 //! db.clear().unwrap();
 //! ```
 
 /// Core Backend Types
 mod types;
-pub use types::{BlockHash, BlockNumber, ConstructedBlock, HeadInfo};
+pub use types::HeadInfo;
 
 /// Core Backend Database
 mod database;
 pub use database::Database;
-
-pub mod prelude {
-    pub use super::types::{BlockHash, BlockNumber, ConstructedBlock};
-    pub use super::Database;
-}
