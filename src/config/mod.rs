@@ -113,10 +113,10 @@ pub struct ChainConfig {
     pub deposit_contract: Address,
     /// The L1 system config contract
     pub system_config_contract: Address,
-    /// The maximum number of intermediate pending channels
-    pub max_channels: usize,
+    /// The maximum byte size of all pending channels
+    pub max_channel_size: u64,
     /// The max timeout for a channel (as measured by the frame L1 block number)
-    pub max_timeout: u64,
+    pub channel_timeout: u64,
     /// Number of L1 blocks in a sequence window
     pub seq_window_size: u64,
     /// Maximum timestamp drift
@@ -193,8 +193,8 @@ impl ChainConfig {
             system_config_contract: addr("0xAe851f927Ee40dE99aaBb7461C00f9622ab91d60"),
             batch_inbox: addr("0xff00000000000000000000000000000000000420"),
             deposit_contract: addr("0x5b47E1A08Ea6d985D6649300584e6722Ec4B1383"),
-            max_channels: 100_000_000,
-            max_timeout: 100,
+            max_channel_size: 100_000_000,
+            channel_timeout: 300,
             seq_window_size: 3600,
             max_seq_drift: 600,
             regolith_time: 1679079600,
@@ -223,8 +223,8 @@ impl ChainConfig {
             system_config_contract: addr("0xb15eea247ece011c68a614e4a77ad648ff495bc1"),
             batch_inbox: addr("0x8453100000000000000000000000000000000000"),
             deposit_contract: addr("0xe93c8cd0d409341205a592f8c4ac1a5fe5585cfa"),
-            max_channels: 100_000_000,
-            max_timeout: 100,
+            max_channel_size: 100_000_000,
+            channel_timeout: 100,
             seq_window_size: 3600,
             max_seq_drift: 600,
             regolith_time: u64::MAX,
