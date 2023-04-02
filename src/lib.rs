@@ -4,9 +4,6 @@ pub mod l1;
 /// Common types and functions
 pub mod common;
 
-/// Contract types
-pub mod contracts;
-
 /// Configuration management
 pub mod config;
 

@@ -8,7 +8,10 @@ use std::{
     time::Duration,
 };
 
-use ethers::providers::{Http, HttpRateLimitRetryPolicy, Middleware, Provider, RetryClient};
+use ethers::{
+    providers::{Http, HttpRateLimitRetryPolicy, Middleware, Provider, RetryClient},
+    types::Log,
+};
 use ethers::{
     types::{Address, Block, BlockNumber, Filter, Transaction, H256, U256},
     utils::keccak256,
@@ -82,7 +85,7 @@ struct InnerWatcher {
     /// Global Config
     config: Arc<Config>,
     /// Ethers provider for L1
-    provider: Provider<RetryClient<Http>>,
+    provider: Arc<Provider<RetryClient<Http>>>,
     /// Channel to send block updates
     block_update_sender: SyncSender<BlockUpdate>,
     /// Most recent ingested block
@@ -146,7 +149,7 @@ impl InnerWatcher {
         let http = Http::from_str(&config.l1_rpc_url).expect("invalid L1 RPC URL");
         let policy = Box::new(HttpRateLimitRetryPolicy);
         let client = RetryClient::new(http, policy, 100, 50);
-        let provider = Provider::new(client);
+        let provider = Arc::new(Provider::new(client));
 
         let system_config = if l2_start_block == config.chain.l2_genesis.number {
             config.chain.system_config
@@ -184,7 +187,7 @@ impl InnerWatcher {
             unfinalized_blocks: Vec::new(),
             deposits: HashMap::new(),
             system_config,
-            system_config_update: (l1_start_block, None),
+            system_config_update: (0, None),
         }
     }
 
@@ -206,6 +209,8 @@ impl InnerWatcher {
         }
 
         if self.current_block <= self.head_block {
+            self.update_system_config().await?;
+
             let block = self.get_block(self.current_block).await?;
             let user_deposits = self.get_deposits(self.current_block).await?;
             let finalized = self.current_block >= self.finalized_block;
@@ -240,6 +245,52 @@ impl InnerWatcher {
             self.current_block += 1;
         } else {
             sleep(Duration::from_millis(250)).await;
+        }
+
+        Ok(())
+    }
+
+    async fn update_system_config(&mut self) -> Result<()> {
+        let (last_update_block, next_config) = self.system_config_update;
+
+        if last_update_block >= self.current_block {
+            if let Some(next_config) = next_config {
+                self.system_config = next_config;
+            }
+
+            let to_block = last_update_block + 1000;
+            let update_event = "ConfigUpdate(uint256,uint256,bytes)";
+            let update_topic = H256::from_slice(&keccak256(update_event));
+            let filter = Filter::new()
+                .topic0(update_topic)
+                .from_block(last_update_block + 1)
+                .to_block(to_block);
+
+            let updates = self.provider.get_logs(&filter).await?;
+            let update = updates.into_iter().next();
+
+            let update_block = update.as_ref().and_then(|update| update.block_number);
+            let update = update.and_then(|update| SystemConfigUpdate::try_from(update).ok());
+
+            if let Some((update_block, update)) = update_block.zip(update) {
+                let mut config = self.system_config;
+                match update {
+                    SystemConfigUpdate::BatchSender(addr) => {
+                        config.batch_sender = addr;
+                    }
+                    SystemConfigUpdate::Fees(overhead, scalar) => {
+                        config.l1_fee_overhead = overhead;
+                        config.l1_fee_scalar = scalar;
+                    }
+                    SystemConfigUpdate::Gas(gas) => {
+                        config.gas_limit = gas;
+                    }
+                }
+
+                self.system_config_update = (update_block.as_u64(), Some(config));
+            } else {
+                self.system_config_update = (to_block, None);
+            }
         }
 
         Ok(())
@@ -399,4 +450,70 @@ fn start_watcher(
     });
 
     Ok((handle, block_update_receiver))
+}
+
+enum SystemConfigUpdate {
+    BatchSender(Address),
+    Fees(U256, U256),
+    Gas(U256),
+}
+
+impl TryFrom<Log> for SystemConfigUpdate {
+    type Error = eyre::Report;
+
+    fn try_from(log: Log) -> Result<Self> {
+        let version = log
+            .topics
+            .get(1)
+            .ok_or(eyre::eyre!("invalid system config update"))?
+            .to_low_u64_be();
+
+        if version != 0 {
+            return Err(eyre::eyre!("invalid system config update"));
+        }
+
+        let update_type = log
+            .topics
+            .get(2)
+            .ok_or(eyre::eyre!("invalid system config update"))?
+            .to_low_u64_be();
+
+        match update_type {
+            0 => {
+                let addr_bytes = log
+                    .data
+                    .get(12..32)
+                    .ok_or(eyre::eyre!("invalid system config update"))?;
+
+                let addr = Address::from_slice(addr_bytes);
+                Ok(Self::BatchSender(addr))
+            }
+            1 => {
+                let fee_overhead = log
+                    .data
+                    .get(0..32)
+                    .ok_or(eyre::eyre!("invalid system config update"))?;
+
+                let fee_scalar = log
+                    .data
+                    .get(32..64)
+                    .ok_or(eyre::eyre!("invalid system config update"))?;
+
+                let fee_overhead = U256::from_big_endian(fee_overhead);
+                let fee_scalar = U256::from_big_endian(fee_scalar);
+
+                Ok(Self::Fees(fee_overhead, fee_scalar))
+            }
+            2 => {
+                let gas_bytes = log
+                    .data
+                    .get(0..32)
+                    .ok_or(eyre::eyre!("invalid system config update"))?;
+
+                let gas = U256::from_big_endian(gas_bytes);
+                Ok(Self::Gas(gas))
+            }
+            _ => Err(eyre::eyre!("invalid system config update")),
+        }
+    }
 }

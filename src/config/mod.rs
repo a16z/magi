@@ -111,6 +111,8 @@ pub struct ChainConfig {
     pub batch_inbox: Address,
     /// The deposit contract address
     pub deposit_contract: Address,
+    /// The L1 system config contract
+    pub system_config_contract: Address,
     /// The maximum number of intermediate pending channels
     pub max_channels: usize,
     /// The max timeout for a channel (as measured by the frame L1 block number)
@@ -188,6 +190,7 @@ impl ChainConfig {
                 l1_fee_overhead: U256::from(2100),
                 l1_fee_scalar: U256::from(1000000),
             },
+            system_config_contract: addr("0xAe851f927Ee40dE99aaBb7461C00f9622ab91d60"),
             batch_inbox: addr("0xff00000000000000000000000000000000000420"),
             deposit_contract: addr("0x5b47E1A08Ea6d985D6649300584e6722Ec4B1383"),
             max_channels: 100_000_000,
@@ -217,6 +220,7 @@ impl ChainConfig {
                 l1_fee_overhead: U256::from(2100),
                 l1_fee_scalar: U256::from(1000000),
             },
+            system_config_contract: addr("0xb15eea247ece011c68a614e4a77ad648ff495bc1"),
             batch_inbox: addr("0x8453100000000000000000000000000000000000"),
             deposit_contract: addr("0xe93c8cd0d409341205a592f8c4ac1a5fe5585cfa"),
             max_channels: 100_000_000,
