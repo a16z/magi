@@ -1,6 +1,6 @@
 use std::{sync::Arc, vec::IntoIter};
 
-use ethers_core::types::{H256, U64};
+use ethers::types::{H256, U64};
 use magi::{
     common::Epoch,
     config::{ChainConfig, Config},

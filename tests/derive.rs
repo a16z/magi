@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 
-use ethers_core::{types::H256, utils::keccak256};
-use ethers_providers::{Middleware, Provider};
+use ethers::providers::{Middleware, Provider};
+use ethers::{types::H256, utils::keccak256};
 
 use magi::{
     common::RawTransaction,
@@ -16,18 +16,25 @@ async fn test_attributes_match() {
     telemetry::init(true).unwrap();
 
     let rpc = "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc";
+    let l2_rpc = "https://opt-goerli.g.alchemy.com/v2/Olu7jiUDhtHf1iWldKzbBXGB6ImGs0XM";
 
     let config = Arc::new(Config {
         l1_rpc_url: rpc.to_string(),
-        l2_rpc_url: None,
+        l2_rpc_url: Some(l2_rpc.to_string()),
         chain: ChainConfig::optimism_goerli(),
         data_dir: None,
         l2_engine_url: None,
         jwt_secret: None,
     });
 
-    let chain_watcher =
-        ChainWatcher::new(config.chain.l1_start_epoch.number, config.clone()).unwrap();
+    let mut chain_watcher = ChainWatcher::new(
+        config.chain.l1_start_epoch.number,
+        config.chain.l2_genesis.number,
+        config.clone(),
+    )
+    .unwrap();
+
+    chain_watcher.start().unwrap();
 
     let state = Arc::new(RwLock::new(State::new(
         config.chain.l2_genesis,

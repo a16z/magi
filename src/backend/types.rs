@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::common::{BlockInfo, Epoch};
 
 /// Block info for the current head of the chain
-#[derive(Debug, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct HeadInfo {
     /// L2 BlockInfo value
     pub l2_block_info: BlockInfo,
