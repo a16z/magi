@@ -2,7 +2,7 @@ use std::{
     collections::HashMap,
     str::FromStr,
     sync::{
-        mpsc::{sync_channel, Receiver, SyncSender},
+        mpsc::{channel, sync_channel, Receiver, SyncSender},
         Arc,
     },
     time::Duration,
@@ -32,9 +32,13 @@ use crate::{
 /// is dropped, the monitoring task is automatically aborted.
 pub struct ChainWatcher {
     /// Task handle for the monitoring loop
-    handle: JoinHandle<()>,
+    handle: Option<JoinHandle<()>>,
     /// Global config
     config: Arc<Config>,
+    /// The L1 starting block
+    l1_start_block: u64,
+    /// The L2 starting block
+    l2_start_block: u64,
     /// Channel for receiving block updates for each new block
     pub block_update_receiver: Receiver<BlockUpdate>,
 }
@@ -109,7 +113,9 @@ type BatcherTransactionData = Vec<u8>;
 
 impl Drop for ChainWatcher {
     fn drop(&mut self) {
-        self.handle.abort();
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
     }
 }
 
@@ -117,23 +123,47 @@ impl ChainWatcher {
     /// Creates a new ChainWatcher and begins the monitoring task.
     /// Errors if the rpc url in the config is invalid.
     pub fn new(l1_start_block: u64, l2_start_block: u64, config: Arc<Config>) -> Result<Self> {
-        let (handle, block_updates) =
-            start_watcher(l1_start_block, l2_start_block, config.clone())?;
+        let (_, block_updates) = channel();
 
         Ok(Self {
-            handle,
+            handle: None,
             config,
+            l1_start_block,
+            l2_start_block,
             block_update_receiver: block_updates,
         })
     }
 
-    pub fn reset(&mut self, l1_start_block: u64, l2_start_block: u64) -> Result<()> {
-        self.handle.abort();
+    /// Starts the chain watcher at the given block numbers
+    pub fn start(&mut self) -> Result<()> {
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
+
+        let (handle, recv) = start_watcher(
+            self.l1_start_block,
+            self.l2_start_block,
+            self.config.clone(),
+        )?;
+
+        self.handle = Some(handle);
+        self.block_update_receiver = recv;
+
+        Ok(())
+    }
+
+    /// Resets the chain watcher at the given block numbers
+    pub fn restart(&mut self, l1_start_block: u64, l2_start_block: u64) -> Result<()> {
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
 
         let (handle, recv) = start_watcher(l1_start_block, l2_start_block, self.config.clone())?;
 
-        self.handle = handle;
+        self.handle = Some(handle);
         self.block_update_receiver = recv;
+        self.l1_start_block = l1_start_block;
+        self.l2_start_block = l2_start_block;
 
         Ok(())
     }

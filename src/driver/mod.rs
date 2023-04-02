@@ -96,6 +96,7 @@ impl<E: Engine> Driver<E> {
     /// Runs the Driver
     pub async fn start(&mut self) -> Result<()> {
         self.await_engine_ready().await;
+        self.chain_watcher.start()?;
 
         loop {
             self.check_shutdown().await;
@@ -208,7 +209,7 @@ impl<E: Engine> Driver<E> {
                         tracing::warn!("reorg detected, purging pipeline");
 
                         self.unfinalized_origins.clear();
-                        self.chain_watcher.reset(
+                        self.chain_watcher.restart(
                             self.engine_driver.finalized_epoch.number,
                             self.engine_driver.finalized_head.number,
                         )?;
