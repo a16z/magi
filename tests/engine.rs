@@ -1,4 +1,4 @@
-use ethers_core::types::U64;
+use ethers::types::U64;
 use magi::engine::{Engine, EngineApi};
 
 #[tokio::test]

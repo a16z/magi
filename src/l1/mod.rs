@@ -1,25 +1,30 @@
 use std::{
     collections::HashMap,
-    iter,
     str::FromStr,
     sync::{
-        mpsc::{sync_channel, Receiver, SyncSender},
+        mpsc::{channel, sync_channel, Receiver, SyncSender},
         Arc,
     },
     time::Duration,
 };
 
-use ethers_core::{
-    abi::Address,
-    types::{Block, BlockNumber, Filter, Transaction, H256, U256},
+use ethers::{
+    providers::{Http, HttpRateLimitRetryPolicy, Middleware, Provider, RetryClient},
+    types::Log,
+};
+use ethers::{
+    types::{Address, Block, BlockNumber, Filter, Transaction, H256, U256},
     utils::keccak256,
 };
-use ethers_providers::{Http, HttpRateLimitRetryPolicy, Middleware, Provider, RetryClient};
 
 use eyre::Result;
 use tokio::{spawn, task::JoinHandle, time::sleep};
 
-use crate::{common::BlockInfo, config::Config, derive::stages::attributes::UserDeposited};
+use crate::{
+    common::BlockInfo,
+    config::{Config, SystemConfig},
+    derive::stages::attributes::UserDeposited,
+};
 
 /// Handles watching the L1 chain and monitoring for new blocks, deposits,
 /// and batcher transactions. The monitoring loop is spawned in a seperate
@@ -27,9 +32,13 @@ use crate::{common::BlockInfo, config::Config, derive::stages::attributes::UserD
 /// is dropped, the monitoring task is automatically aborted.
 pub struct ChainWatcher {
     /// Task handle for the monitoring loop
-    handle: JoinHandle<()>,
+    handle: Option<JoinHandle<()>>,
     /// Global config
     config: Arc<Config>,
+    /// The L1 starting block
+    l1_start_block: u64,
+    /// The L2 starting block
+    l2_start_block: u64,
     /// Channel for receiving block updates for each new block
     pub block_update_receiver: Receiver<BlockUpdate>,
 }
@@ -74,26 +83,13 @@ pub struct L1BlockInfo {
     pub mix_hash: H256,
 }
 
-#[derive(Debug)]
-/// Optimism system config contract values
-pub struct SystemConfig {
-    /// Batch sender address
-    pub batch_sender: Address,
-    /// L2 gas limit
-    pub gas_limit: U256,
-    /// Fee overhead
-    pub l1_fee_overhead: U256,
-    /// Fee scalar
-    pub l1_fee_scalar: U256,
-}
-
 /// Watcher actually ingests the L1 blocks. Should be run in another
 /// thread and called periodically to keep updating channels
 struct InnerWatcher {
     /// Global Config
     config: Arc<Config>,
     /// Ethers provider for L1
-    provider: Provider<RetryClient<Http>>,
+    provider: Arc<Provider<RetryClient<Http>>>,
     /// Channel to send block updates
     block_update_sender: SyncSender<BlockUpdate>,
     /// Most recent ingested block
@@ -107,63 +103,122 @@ struct InnerWatcher {
     /// Mapping from block number to user deposits. Past block deposits
     /// are removed as they are no longer needed
     deposits: HashMap<u64, Vec<UserDeposited>>,
+    /// Current system config value
+    system_config: SystemConfig,
+    /// Next system config if it exists and the L1 block number it activates
+    system_config_update: (u64, Option<SystemConfig>),
 }
 
 type BatcherTransactionData = Vec<u8>;
 
 impl Drop for ChainWatcher {
     fn drop(&mut self) {
-        self.handle.abort();
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
     }
 }
 
 impl ChainWatcher {
     /// Creates a new ChainWatcher and begins the monitoring task.
     /// Errors if the rpc url in the config is invalid.
-    pub fn new(start_block: u64, config: Arc<Config>) -> Result<Self> {
-        let (handle, block_updates) = start_watcher(start_block, config.clone())?;
+    pub fn new(l1_start_block: u64, l2_start_block: u64, config: Arc<Config>) -> Result<Self> {
+        let (_, block_updates) = channel();
 
         Ok(Self {
-            handle,
+            handle: None,
             config,
+            l1_start_block,
+            l2_start_block,
             block_update_receiver: block_updates,
         })
     }
 
-    pub fn reset(&mut self, start_block: u64) -> Result<()> {
-        self.handle.abort();
+    /// Starts the chain watcher at the given block numbers
+    pub fn start(&mut self) -> Result<()> {
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
 
-        let (handle, recv) = start_watcher(start_block, self.config.clone())?;
+        let (handle, recv) = start_watcher(
+            self.l1_start_block,
+            self.l2_start_block,
+            self.config.clone(),
+        )?;
 
-        self.handle = handle;
+        self.handle = Some(handle);
         self.block_update_receiver = recv;
+
+        Ok(())
+    }
+
+    /// Resets the chain watcher at the given block numbers
+    pub fn restart(&mut self, l1_start_block: u64, l2_start_block: u64) -> Result<()> {
+        if let Some(handle) = self.handle.take() {
+            handle.abort();
+        }
+
+        let (handle, recv) = start_watcher(l1_start_block, l2_start_block, self.config.clone())?;
+
+        self.handle = Some(handle);
+        self.block_update_receiver = recv;
+        self.l1_start_block = l1_start_block;
+        self.l2_start_block = l2_start_block;
 
         Ok(())
     }
 }
 
 impl InnerWatcher {
-    fn new(
+    async fn new(
         config: Arc<Config>,
         block_update_sender: SyncSender<BlockUpdate>,
-        start_block: u64,
-    ) -> Result<Self> {
-        let http =
-            Http::from_str(&config.l1_rpc_url).map_err(|_| eyre::eyre!("invalid L1 RPC URL"))?;
+        l1_start_block: u64,
+        l2_start_block: u64,
+    ) -> Self {
+        let http = Http::from_str(&config.l1_rpc_url).expect("invalid L1 RPC URL");
         let policy = Box::new(HttpRateLimitRetryPolicy);
         let client = RetryClient::new(http, policy, 100, 50);
-        let provider = Provider::new(client);
+        let provider = Arc::new(Provider::new(client));
 
-        Ok(Self {
+        let system_config = if l2_start_block == config.chain.l2_genesis.number {
+            config.chain.system_config
+        } else {
+            let l2_provider = Provider::try_from(&config.l2_rpc_url.clone().unwrap())
+                .expect("invalid L2 RPC url");
+
+            let block = l2_provider
+                .get_block_with_txs(l2_start_block - 1)
+                .await
+                .unwrap()
+                .unwrap();
+
+            let input = &block.transactions[0].input;
+
+            let batch_sender = Address::from_slice(&input[176..196]);
+            let l1_fee_overhead = U256::from(H256::from_slice(&input[196..228]).as_bytes());
+            let l1_fee_scalar = U256::from(H256::from_slice(&input[228..260]).as_bytes());
+
+            SystemConfig {
+                batch_sender,
+                l1_fee_overhead,
+                l1_fee_scalar,
+                gas_limit: block.gas_limit,
+            }
+        };
+
+        Self {
             config,
             provider,
             block_update_sender,
-            current_block: start_block,
+            current_block: l1_start_block,
             head_block: 0,
             finalized_block: 0,
             unfinalized_blocks: Vec::new(),
             deposits: HashMap::new(),
-        })
+            system_config,
+            system_config_update: (0, None),
+        }
     }
 
     async fn try_ingest_block(&mut self) -> Result<()> {
@@ -184,6 +239,8 @@ impl InnerWatcher {
         }
 
         if self.current_block <= self.head_block {
+            self.update_system_config().await?;
+
             let block = self.get_block(self.current_block).await?;
             let user_deposits = self.get_deposits(self.current_block).await?;
             let finalized = self.current_block >= self.finalized_block;
@@ -191,9 +248,9 @@ impl InnerWatcher {
             let l1_info = L1Info::new(
                 &block,
                 user_deposits,
-                self.config.chain.batch_sender,
                 self.config.chain.batch_inbox,
                 finalized,
+                self.system_config,
             )?;
 
             if l1_info.block_info.number >= self.finalized_block {
@@ -218,6 +275,52 @@ impl InnerWatcher {
             self.current_block += 1;
         } else {
             sleep(Duration::from_millis(250)).await;
+        }
+
+        Ok(())
+    }
+
+    async fn update_system_config(&mut self) -> Result<()> {
+        let (last_update_block, next_config) = self.system_config_update;
+
+        if last_update_block >= self.current_block {
+            if let Some(next_config) = next_config {
+                self.system_config = next_config;
+            }
+
+            let to_block = last_update_block + 1000;
+            let update_event = "ConfigUpdate(uint256,uint256,bytes)";
+            let update_topic = H256::from_slice(&keccak256(update_event));
+            let filter = Filter::new()
+                .topic0(update_topic)
+                .from_block(last_update_block + 1)
+                .to_block(to_block);
+
+            let updates = self.provider.get_logs(&filter).await?;
+            let update = updates.into_iter().next();
+
+            let update_block = update.as_ref().and_then(|update| update.block_number);
+            let update = update.and_then(|update| SystemConfigUpdate::try_from(update).ok());
+
+            if let Some((update_block, update)) = update_block.zip(update) {
+                let mut config = self.system_config;
+                match update {
+                    SystemConfigUpdate::BatchSender(addr) => {
+                        config.batch_sender = addr;
+                    }
+                    SystemConfigUpdate::Fees(overhead, scalar) => {
+                        config.l1_fee_overhead = overhead;
+                        config.l1_fee_scalar = scalar;
+                    }
+                    SystemConfigUpdate::Gas(gas) => {
+                        config.gas_limit = gas;
+                    }
+                }
+
+                self.system_config_update = (update_block.as_u64(), Some(config));
+            } else {
+                self.system_config_update = (to_block, None);
+            }
         }
 
         Ok(())
@@ -306,9 +409,9 @@ impl L1Info {
     pub fn new(
         block: &Block<Transaction>,
         user_deposits: Vec<UserDeposited>,
-        batch_sender: Address,
         batch_inbox: Address,
         finalized: bool,
+        system_config: SystemConfig,
     ) -> Result<Self> {
         let block_number = block
             .number
@@ -327,14 +430,8 @@ impl L1Info {
             mix_hash: block.mix_hash.ok_or(eyre::eyre!("block not included"))?,
         };
 
-        let system_config = SystemConfig {
-            batch_sender,
-            gas_limit: U256::from(25_000_000),
-            l1_fee_overhead: U256::from(2100),
-            l1_fee_scalar: U256::from(1000000),
-        };
-
-        let batcher_transactions = create_batcher_transactions(block, batch_sender, batch_inbox);
+        let batcher_transactions =
+            create_batcher_transactions(block, system_config.batch_sender, batch_inbox);
 
         Ok(L1Info {
             block_info,
@@ -360,14 +457,16 @@ fn create_batcher_transactions(
 }
 
 fn start_watcher(
-    start_block: u64,
+    l1_start_block: u64,
+    l2_start_block: u64,
     config: Arc<Config>,
 ) -> Result<(JoinHandle<()>, Receiver<BlockUpdate>)> {
     let (block_update_sender, block_update_receiver) = sync_channel(1000);
 
-    let mut watcher = InnerWatcher::new(config, block_update_sender, start_block)?;
-
     let handle = spawn(async move {
+        let mut watcher =
+            InnerWatcher::new(config, block_update_sender, l1_start_block, l2_start_block).await;
+
         loop {
             tracing::debug!("fetching L1 data for block {}", watcher.current_block);
             if let Err(err) = watcher.try_ingest_block().await {
@@ -383,12 +482,68 @@ fn start_watcher(
     Ok((handle, block_update_receiver))
 }
 
-impl SystemConfig {
-    /// Encoded batch sender as a H256
-    pub fn batcher_hash(&self) -> H256 {
-        let mut batch_sender_bytes = self.batch_sender.as_bytes().to_vec();
-        let mut batcher_hash = iter::repeat(0).take(12).collect::<Vec<_>>();
-        batcher_hash.append(&mut batch_sender_bytes);
-        H256::from_slice(&batcher_hash)
+enum SystemConfigUpdate {
+    BatchSender(Address),
+    Fees(U256, U256),
+    Gas(U256),
+}
+
+impl TryFrom<Log> for SystemConfigUpdate {
+    type Error = eyre::Report;
+
+    fn try_from(log: Log) -> Result<Self> {
+        let version = log
+            .topics
+            .get(1)
+            .ok_or(eyre::eyre!("invalid system config update"))?
+            .to_low_u64_be();
+
+        if version != 0 {
+            return Err(eyre::eyre!("invalid system config update"));
+        }
+
+        let update_type = log
+            .topics
+            .get(2)
+            .ok_or(eyre::eyre!("invalid system config update"))?
+            .to_low_u64_be();
+
+        match update_type {
+            0 => {
+                let addr_bytes = log
+                    .data
+                    .get(12..32)
+                    .ok_or(eyre::eyre!("invalid system config update"))?;
+
+                let addr = Address::from_slice(addr_bytes);
+                Ok(Self::BatchSender(addr))
+            }
+            1 => {
+                let fee_overhead = log
+                    .data
+                    .get(0..32)
+                    .ok_or(eyre::eyre!("invalid system config update"))?;
+
+                let fee_scalar = log
+                    .data
+                    .get(32..64)
+                    .ok_or(eyre::eyre!("invalid system config update"))?;
+
+                let fee_overhead = U256::from_big_endian(fee_overhead);
+                let fee_scalar = U256::from_big_endian(fee_scalar);
+
+                Ok(Self::Fees(fee_overhead, fee_scalar))
+            }
+            2 => {
+                let gas_bytes = log
+                    .data
+                    .get(0..32)
+                    .ok_or(eyre::eyre!("invalid system config update"))?;
+
+                let gas = U256::from_big_endian(gas_bytes);
+                Ok(Self::Gas(gas))
+            }
+            _ => Err(eyre::eyre!("invalid system config update")),
+        }
     }
 }

@@ -1,4 +1,4 @@
-use ethers_core::types::{Bytes, H160, H256, U64};
+use ethers::types::{Bytes, H160, H256, U64};
 use serde::{Deserialize, Serialize};
 
 use crate::common::{Epoch, RawTransaction};

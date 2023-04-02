@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, sync::Arc};
 
-use ethers_core::types::H256;
+use ethers::types::H256;
 
 use crate::{
     common::{BlockInfo, Epoch},

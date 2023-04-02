@@ -64,7 +64,11 @@ impl Driver<EngineApi> {
         tracing::info!("syncing from: {:?}", finalized_head.hash);
 
         let config = Arc::new(config);
-        let chain_watcher = ChainWatcher::new(finalized_epoch.number, config.clone())?;
+        let chain_watcher = ChainWatcher::new(
+            finalized_epoch.number,
+            finalized_head.number,
+            config.clone(),
+        )?;
 
         let state = Arc::new(RwLock::new(State::new(
             finalized_head,
@@ -92,6 +96,7 @@ impl<E: Engine> Driver<E> {
     /// Runs the Driver
     pub async fn start(&mut self) -> Result<()> {
         self.await_engine_ready().await;
+        self.chain_watcher.start()?;
 
         loop {
             self.check_shutdown().await;
@@ -204,8 +209,10 @@ impl<E: Engine> Driver<E> {
                         tracing::warn!("reorg detected, purging pipeline");
 
                         self.unfinalized_origins.clear();
-                        self.chain_watcher
-                            .reset(self.engine_driver.finalized_epoch.number)?;
+                        self.chain_watcher.restart(
+                            self.engine_driver.finalized_epoch.number,
+                            self.engine_driver.finalized_head.number,
+                        )?;
 
                         self.state
                             .write()

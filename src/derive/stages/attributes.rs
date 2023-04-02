@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex, RwLock};
 
-use ethers_core::abi::{decode, encode, ParamType, Token};
-use ethers_core::types::{Address, Log, H256, U256, U64};
-use ethers_core::utils::{keccak256, rlp::Encodable, rlp::RlpStream};
+use ethers::abi::{decode, encode, ParamType, Token};
+use ethers::types::{Address, Log, H256, U256, U64};
+use ethers::utils::{keccak256, rlp::Encodable, rlp::RlpStream};
 
 use eyre::Result;
 
