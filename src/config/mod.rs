@@ -180,13 +180,10 @@ struct DefaultsProvider {
 
 impl Default for DefaultsProvider {
     fn default() -> Self {
-        let magi_dir = home_dir().unwrap().join(".magi/data");
-        let data_dir = magi_dir.to_str().unwrap().to_string();
-
         Self {
             l2_rpc_url: "http://127.0.0.1:8545".to_string(),
             l2_engine_url: "http://127.0.0.1:8551".to_string(),
-            data_dir: PathBuf::from(data_dir),
+            data_dir: home_dir().unwrap().join(".magi/data"),
         }
     }
 }
