@@ -1,4 +1,4 @@
-use std::{sync::Arc, vec::IntoIter};
+use std::{sync::Arc, vec::IntoIter, path::PathBuf};
 
 use ethers::types::{H256, U64};
 use magi::{
@@ -27,11 +27,11 @@ async fn test_advance() {
 fn creat_config() -> Config {
     Config {
         chain: ChainConfig::optimism_goerli(),
-        l2_rpc_url: None,
+        l2_rpc_url: "http://example.com".to_string(),
         l1_rpc_url: "http://example.com".to_string(),
-        l2_engine_url: Some(String::new()),
-        data_dir: None,
-        jwt_secret: None,
+        l2_engine_url: String::new(),
+        data_dir: PathBuf::default(),
+        jwt_secret: String::new(),
     }
 }
 
