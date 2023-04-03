@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 use ethers::providers::{Middleware, Provider};
@@ -20,11 +21,11 @@ async fn test_attributes_match() {
 
     let config = Arc::new(Config {
         l1_rpc_url: rpc.to_string(),
-        l2_rpc_url: Some(l2_rpc.to_string()),
+        l2_rpc_url: l2_rpc.to_string(),
         chain: ChainConfig::optimism_goerli(),
-        data_dir: None,
-        l2_engine_url: None,
-        jwt_secret: None,
+        data_dir: PathBuf::default(),
+        l2_engine_url: String::new(),
+        jwt_secret: String::new(),
     });
 
     let mut chain_watcher = ChainWatcher::new(

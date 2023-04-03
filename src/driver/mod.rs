@@ -44,12 +44,7 @@ pub struct Driver<E: Engine> {
 
 impl Driver<EngineApi> {
     pub fn from_config(config: Config, shutdown_recv: Receiver<bool>) -> Result<Self> {
-        let db = config
-            .data_dir
-            .as_ref()
-            .map(|dir| Database::new(dir, &config.chain.network))
-            .unwrap_or_default();
-
+        let db = Database::new(&config.data_dir, &config.chain.network);
         let head = db.read_head();
 
         let finalized_head = head

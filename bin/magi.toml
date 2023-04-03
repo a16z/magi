@@ -1,7 +1,0 @@
-[default]
-network="optimism-goerli"
-l1_rpc_url="https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc"
-l2_rpc_url="http://127.0.0.1:8545"
-engine_api_url="http://127.0.0.1:8551"
-jwt_secret="bf549f5188556ce0951048ef467ec93067bc4ea21acebe46ef675cd4e8e015ff"
-

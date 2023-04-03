@@ -1,15 +1,15 @@
-use std::{collections::HashMap, sync::mpsc::channel};
+use std::{path::PathBuf, sync::mpsc::channel};
 
 use clap::Parser;
 use dirs::home_dir;
 use eyre::Result;
-use figment::{providers::Serialized, value::Value};
 
 use magi::{
-    config::{ChainConfig, Config, SyncMode},
+    config::{ChainConfig, CliConfig, Config, SyncMode},
     driver::Driver,
     telemetry::{self, metrics},
 };
+use serde::Serialize;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -51,21 +51,21 @@ pub async fn full_sync(config: Config) -> Result<()> {
     Ok(())
 }
 
-#[derive(Parser)]
+#[derive(Parser, Serialize)]
 pub struct Cli {
     #[clap(short, long, default_value = "optimism-goerli")]
     network: String,
-    #[clap(long, default_value_t = default_data_dir())]
-    data_dir: String,
+    #[clap(long)]
+    data_dir: Option<String>,
     #[clap(long)]
     l1_rpc_url: Option<String>,
     #[clap(long)]
     l2_rpc_url: Option<String>,
     #[clap(short = 'm', long, default_value = "full")]
     sync_mode: SyncMode,
-    #[clap(short = 'e', long)]
+    #[clap(long)]
     l2_engine_url: Option<String>,
-    #[clap(short = 'j', long)]
+    #[clap(long)]
     jwt_secret: Option<String>,
     #[clap(short = 'v', long)]
     verbose: bool,
@@ -80,35 +80,19 @@ impl Cli {
         };
 
         let config_path = home_dir().unwrap().join(".magi/magi.toml");
-        Config::new(&config_path, self.as_provider(), chain)
-    }
-
-    pub fn as_provider(&self) -> Serialized<HashMap<&str, Value>> {
-        let mut user_dict = HashMap::new();
-
-        user_dict.insert("data_dir", Value::from(self.data_dir.clone()));
-
-        if let Some(l1_rpc) = &self.l1_rpc_url {
-            user_dict.insert("l1_rpc_url", Value::from(l1_rpc.clone()));
-        }
-
-        if let Some(l2_rpc) = &self.l2_rpc_url {
-            user_dict.insert("l2_rpc_url", Value::from(l2_rpc.clone()));
-        }
-
-        if let Some(l2_engine_url) = &self.l2_engine_url {
-            user_dict.insert("l2_engine_url", Value::from(l2_engine_url.clone()));
-        }
-
-        if let Some(jwt_secret) = &self.jwt_secret {
-            user_dict.insert("jwt_secret", Value::from(jwt_secret.clone()));
-        }
-
-        Serialized::from(user_dict, "default".to_string())
+        let cli_config = CliConfig::from(self);
+        Config::new(&config_path, cli_config, chain)
     }
 }
 
-fn default_data_dir() -> String {
-    let dir = home_dir().unwrap().join(".magi/data");
-    dir.to_str().unwrap().to_string()
+impl From<Cli> for CliConfig {
+    fn from(value: Cli) -> Self {
+        Self {
+            l1_rpc_url: value.l1_rpc_url,
+            l2_rpc_url: value.l2_rpc_url,
+            l2_engine_url: value.l2_engine_url,
+            jwt_secret: value.jwt_secret,
+            data_dir: value.data_dir.map(PathBuf::from),
+        }
+    }
 }
