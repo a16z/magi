@@ -6,7 +6,7 @@ Magi is an Optimism rollup node written in Rust. It is intended to perform the s
 
 ## Running
 
-For convenience, we have provides simple docker setup to run Magi and op-geth together. This guide assumes you have both `docker` and `git` installed on your machine.
+For convenience, we provide a simple docker setup to run Magi and op-geth together. This guide assumes you have both `docker` and `git` installed on your machine.
 
 Start by cloning the Magi repository and entering the docker subdirectory
 ```sh

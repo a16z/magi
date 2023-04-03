@@ -24,9 +24,9 @@ Additionally, the [EngineApi](./src/engine/mod.rs) exposes a [get_payload](./src
 
 ### Derivation Pipeline
 
-Although briefly touched upon in the [Driver](#driver) section, the [Derivation Pipeline](./src/derive/mod.rs) is responsible for much of `magi`'s functionality. It is used by the [Driver](#driver) to construct a [PayloadAttributes](./src/engine/payload.rs) from only an L1 RPC URL, passed through a [Config](#config) object.
+As we mention in the [Driver](#driver) section, the [Derivation Pipeline](./src/derive/mod.rs) is responsible for much of `magi`'s functionality. It is used by the [Driver](#driver) to construct a [PayloadAttributes](./src/engine/payload.rs) from only an L1 RPC URL, passed through a [Config](#config) object.
 
-When constructed, the [Pipeline](./src/derive/mod.rs) spawns a [L1 Chain Watcher](#l1-chain-watcher) and listens to the returned channel receivers for new L1 blocks and Deposit Transactions. It then uses it's [stages](./src/derive/stages/mod.rs) as iterators to sequentially construct a [PayloadAttributes](./src/engine/payload.rs) from the L1 blocks and Deposit Transactions.
+When constructed, the [Pipeline](./src/derive/mod.rs) spawns an [L1 Chain Watcher](#l1-chain-watcher) and listens to the returned channel receivers for new L1 blocks and Deposit Transactions. It then uses its [stages](./src/derive/stages/mod.rs) as iterators to sequentially construct a [PayloadAttributes](./src/engine/payload.rs) from the L1 blocks and Deposit Transactions.
 
 The Pipeline is broken up into [stages](./src/derive/stages/mod.rs) as follows.
 
@@ -34,7 +34,7 @@ The Pipeline is broken up into [stages](./src/derive/stages/mod.rs) as follows.
 
 ##### Batcher Transactions
 
-The [Batcher Transactions](./src/derive/stages/batcher.rs) stage pulls transactions from it's configured channel receiver, passed down from the [Pipeline](./src/derive/mod.rs) parent. To construct a [BatcherTransaction](./src/derive/stages/batcher_transactions.rs) from the raw transaction data, it constructs [Frames](./src/derive/stages/batcher_transactions.rs) following the [Batch Submission Wire Format](https://github.com/ethereum-optimism/optimism/blob/develop/specs/derivation.md#batch-submission-wire-format) documented in the [Optimism Specs](https://github.com/ethereum-optimism/optimism/blob/develop/specs/README.md).
+The [Batcher Transactions](./src/derive/stages/batcher.rs) stage pulls transactions from its configured channel receiver, passed down from the [Pipeline](./src/derive/mod.rs) parent. To construct a [BatcherTransaction](./src/derive/stages/batcher_transactions.rs) from the raw transaction data, it constructs [Frames](./src/derive/stages/batcher_transactions.rs) following the [Batch Submission Wire Format](https://github.com/ethereum-optimism/optimism/blob/develop/specs/derivation.md#batch-submission-wire-format) documented in the [Optimism Specs](https://github.com/ethereum-optimism/optimism/blob/develop/specs/README.md).
 
 ##### Channels
 
@@ -64,7 +64,7 @@ In this encoding,
 
 Lastly, the [Pipeline](./src/derive/mod.rs) applies the [Attributes](./src/derive/stages/attributes.rs) stage to the previous [Batch](./src/derive/stages/batches.rs) stage, iterating over [Attributes](./src/derive/stages/attributes.rs).
 
-In this step, the final [PayloadAttributes](./src/derive/stages/attributes.rs) object is constructed by combining the [Batch](./src/derive/stages/batches.rs) object data with it's corresponding L1 Block, as well as applying system configuration values like the `suggested_fee_recipient`, `no_tx_pool`, and `gas_limit`.
+In this step, the final [PayloadAttributes](./src/derive/stages/attributes.rs) object is constructed by combining the [Batch](./src/derive/stages/batches.rs) object data with its corresponding L1 Block, as well as applying system configuration values like the `suggested_fee_recipient`, `no_tx_pool`, and `gas_limit`.
 
 ### L1 Chain Watcher
 
@@ -102,7 +102,7 @@ db.clear().unwrap();
 
 Notice, we can use the `Database::new` method to create a new database at a given path. If the path is `None`, then the database will be created in a temporary location. We can also use the `Database::clear` method to clear the database.
 
-Importantly, if the `ConstructedBlock` does not have it's `hash` set, the block `number` will be used as it's unique identifier.
+Importantly, if the `ConstructedBlock` does not have its `hash` set, the block `number` will be used as its unique identifier.
 
 ### Config
 
