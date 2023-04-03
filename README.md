@@ -27,7 +27,7 @@ Start the docker containers
 docker compose up -d
 ```
 
-If the previous step yields an error mentionign permissions. Try running the command with `sudo`.
+If the previous step fails with a permission denied error. Try running the command with `sudo`.
 
 The docker setup contains a Grafana dashboard. To view sync progress, you can check the dashboard at `http://localhost:3000`. Alternatively, you can view Magi's logs by running `docker logs magi --follow`.
 
