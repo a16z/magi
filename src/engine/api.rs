@@ -31,17 +31,9 @@ pub struct EngineApi {
 
 impl EngineApi {
     /// Creates a new [`EngineApi`] with a base url and secret.
-    /// If the secret is not provided, a random secret will be generated.
-    pub fn new(base_url: String, secret_str: Option<String>) -> Self {
-        let secret = match secret_str {
-            Some(secret_str) => JwtSecret::from_hex(secret_str).unwrap(),
-            None => {
-                tracing::warn!(
-                    "No JWT secret provided to the engine api. Generating a random secret..."
-                );
-                JwtSecret::random()
-            }
-        };
+    pub fn new(base_url: &str, secret_str: &str) -> Self {
+        let secret = JwtSecret::from_hex(secret_str).unwrap();
+
         // Gracefully parse the port from the base url
         let parts: Vec<&str> = base_url.split(':').collect();
         let port = parts[parts.len() - 1]
@@ -89,7 +81,7 @@ impl EngineApi {
             )
         });
         let base_url = EngineApi::auth_url_from_addr(&base_url, None);
-        Self::new(base_url, Some(secret_key))
+        Self::new(&base_url, &secret_key)
     }
 
     /// Construct base body
@@ -226,7 +218,7 @@ mod tests {
         // Construct the engine api client
         let base_url = EngineApi::auth_url_from_addr(AUTH_ADDR, Some(8551));
         assert_eq!(base_url, "http://0.0.0.0:8551");
-        let engine_api = EngineApi::new(base_url, Some(SECRET.to_string()));
+        let engine_api = EngineApi::new(&base_url, SECRET);
         assert_eq!(engine_api.base_url, "http://0.0.0.0:8551");
         assert_eq!(engine_api.port, 8551);
 

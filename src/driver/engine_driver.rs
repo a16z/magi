@@ -176,12 +176,8 @@ impl EngineDriver<EngineApi> {
         finalized_epoch: Epoch,
         config: &Arc<Config>,
     ) -> Result<Self> {
-        let engine = Arc::new(EngineApi::new(
-            config.l2_engine_url.clone().unwrap_or_default(),
-            config.jwt_secret.clone(),
-        ));
-
-        let provider = Provider::try_from(config.l2_rpc_url.clone().unwrap())?;
+        let engine = Arc::new(EngineApi::new(&config.l2_engine_url, &config.jwt_secret));
+        let provider = Provider::try_from(&config.l2_rpc_url)?;
 
         Ok(Self {
             engine,

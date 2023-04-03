@@ -1,9 +1,9 @@
-use std::{collections::HashMap, iter, path::PathBuf, process::exit, str::FromStr};
+use std::{iter, path::PathBuf, process::exit, str::FromStr};
 
+use dirs::home_dir;
 use ethers::types::{Address, H256, U256};
 use figment::{
     providers::{Format, Serialized, Toml},
-    value::Value,
     Figment,
 };
 use serde::{Deserialize, Serialize};
@@ -40,38 +40,27 @@ pub struct Config {
     /// The base chain RPC URL
     pub l1_rpc_url: String,
     /// The L2 engine RPC URL
-    pub l2_rpc_url: Option<String>,
+    pub l2_rpc_url: String,
     /// The L2 engine API URL
-    pub l2_engine_url: Option<String>,
+    pub l2_engine_url: String,
     /// The base chain config
     pub chain: ChainConfig,
     /// Location of the database folder
-    pub data_dir: Option<PathBuf>,
+    pub data_dir: PathBuf,
     /// Engine API JWT Secret
     /// This is used to authenticate with the engine API
-    pub jwt_secret: Option<String>,
-}
-
-pub struct CliConfig {}
-
-impl Config {
-    pub fn get_engine_api_url(&self) -> String {
-        self.l2_engine_url
-            .clone()
-            .unwrap_or("http://localhost:8551".to_string())
-    }
+    pub jwt_secret: String,
 }
 
 impl Config {
-    pub fn new(
-        config_path: &PathBuf,
-        cli_provider: Serialized<HashMap<&str, Value>>,
-        chain: ChainConfig,
-    ) -> Self {
+    pub fn new(config_path: &PathBuf, cli_config: CliConfig, chain: ChainConfig) -> Self {
+        let defaults_provider = Serialized::defaults(DefaultsProvider::default());
         let chain_provider: Serialized<ChainProvider> = chain.into();
         let toml_provider = Toml::file(config_path).nested();
+        let cli_provider = Serialized::defaults(cli_config);
 
         let config_res = Figment::new()
+            .merge(defaults_provider)
             .merge(chain_provider)
             .merge(toml_provider)
             .merge(cli_provider)
@@ -94,6 +83,21 @@ impl Config {
             }
         }
     }
+}
+
+/// Chain config items derived from the CLI
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CliConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data_dir: Option<PathBuf>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub l1_rpc_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub l2_rpc_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub l2_engine_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub jwt_secret: Option<String>,
 }
 
 /// A Chain Configuration
@@ -164,6 +168,26 @@ struct ChainProvider {
 impl From<ChainConfig> for Serialized<ChainProvider> {
     fn from(value: ChainConfig) -> Self {
         Serialized::defaults(ChainProvider { chain: value })
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct DefaultsProvider {
+    l2_rpc_url: String,
+    l2_engine_url: String,
+    data_dir: PathBuf,
+}
+
+impl Default for DefaultsProvider {
+    fn default() -> Self {
+        let magi_dir = home_dir().unwrap().join(".magi/data");
+        let data_dir = magi_dir.to_str().unwrap().to_string();
+
+        Self {
+            l2_rpc_url: "http://127.0.0.1:8545".to_string(),
+            l2_engine_url: "http://127.0.0.1:8551".to_string(),
+            data_dir: PathBuf::from(data_dir),
+        }
     }
 }
 

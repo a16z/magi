@@ -184,8 +184,7 @@ impl InnerWatcher {
         let system_config = if l2_start_block == config.chain.l2_genesis.number {
             config.chain.system_config
         } else {
-            let l2_provider = Provider::try_from(&config.l2_rpc_url.clone().unwrap())
-                .expect("invalid L2 RPC url");
+            let l2_provider = Provider::try_from(&config.l2_rpc_url).expect("invalid L2 RPC url");
 
             let block = l2_provider
                 .get_block_with_txs(l2_start_block - 1)
