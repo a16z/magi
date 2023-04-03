@@ -2,9 +2,9 @@
 
 [![build](https://github.com/a16z/magi/actions/workflows/test.yml/badge.svg)](https://github.com/a16z/magi/actions/workflows/test.yml) [![license: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://opensource.org/license/agpl-v3/) [![chat](https://img.shields.io/badge/chat-telegram-blue)](https://t.me/+6zrIsnaLO0hjNmZh)
 
-Magi is an Optimism client written in Rust.
+Magi is an Optimism rollup node written in Rust. It is intended to perform the same functionality as op-node, and works with execution clients such as op-geth. As an independent implementation of the rollup node, we hope to increase the safety and liveliness of the entire op-stack ecosystem. Magi is still new, so we expect to find some bugs in the coming months. For criticial infrastructure, we recommend using op-node.
 
-## Quickstart
+## Running
 
 For convenience, we have provides simple docker setup to run Magi and op-geth together. This guide assumes you have both `docker` and `git` installed on your machine.
 
@@ -27,13 +27,13 @@ Start the docker containers
 docker compose up -d
 ```
 
-The docker setup contains a Grafana dashboard. To view sync progress, you can check the dashboard at `http://localhost:3000`. Alternatively, you can view Magi's logs by running `docker logs magi --follow`.
-
 If the previous step yields an error mentionign permissions. Try running the command with `sudo`.
+
+The docker setup contains a Grafana dashboard. To view sync progress, you can check the dashboard at `http://localhost:3000`. Alternatively, you can view Magi's logs by running `docker logs magi --follow`.
 
 ## Contributing
 
-All contributions to Magi are welcome. Before opening a PR, please submit an issue detailing the bug or feature. When opening a PR, please ensure that your contribution builds on the nightly rust toolchain, has been linted with `cargo fmt`, passes `cargo clippy` and contains tests when applicable.
+All contributions to Magi are welcome. Before opening a PR, please submit an issue detailing the bug or feature. When opening a PR, please ensure that your contribution builds on the nightly rust toolchain, has been linted with `cargo fmt`, passes `cargo clippy`, and contains tests when applicable.
 
 ## Disclaimer
 
