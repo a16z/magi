@@ -13,7 +13,7 @@ pub struct State {
     l1_hashes: BTreeMap<u64, H256>,
     pub safe_head: BlockInfo,
     pub safe_epoch: Epoch,
-    current_epoch_num: u64,
+    pub current_epoch_num: u64,
     config: Arc<Config>,
 }
 

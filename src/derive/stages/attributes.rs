@@ -69,7 +69,7 @@ impl Attributes {
         });
 
         let timestamp = U64([batch.timestamp]);
-        let l1_origin = Some(batch.l1_origin);
+        let l1_inclusion_block = Some(batch.l1_inclusion_block);
         let seq_number = Some(self.sequence_number);
         let prev_randao = l1_info.block_info.mix_hash;
         let transactions = Some(self.derive_transactions(batch, l1_info));
@@ -83,7 +83,7 @@ impl Attributes {
             no_tx_pool: true,
             gas_limit: U64([l1_info.system_config.gas_limit.as_u64()]),
             epoch,
-            l1_origin,
+            l1_inclusion_block,
             seq_number,
         }
     }
@@ -326,6 +326,7 @@ impl TryFrom<Log> for UserDeposited {
             .block_number
             .ok_or(eyre::eyre!("block num not found"))?
             .as_u64();
+
         let l1_block_hash = log.block_hash.ok_or(eyre::eyre!("block hash not found"))?;
         let log_index = log.log_index.unwrap();
 
