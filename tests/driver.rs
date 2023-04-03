@@ -1,4 +1,4 @@
-use std::{sync::Arc, vec::IntoIter, path::PathBuf};
+use std::{path::PathBuf, sync::Arc, vec::IntoIter};
 
 use ethers::types::{H256, U64};
 use magi::{
