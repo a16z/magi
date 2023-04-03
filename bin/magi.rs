@@ -63,9 +63,9 @@ pub struct Cli {
     l2_rpc_url: Option<String>,
     #[clap(short = 'm', long, default_value = "full")]
     sync_mode: SyncMode,
-    #[clap(short = 'e', long)]
+    #[clap(long)]
     l2_engine_url: Option<String>,
-    #[clap(short = 'j', long)]
+    #[clap(long)]
     jwt_secret: Option<String>,
     #[clap(short = 'v', long)]
     verbose: bool,
