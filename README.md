@@ -2,7 +2,7 @@
 
 [![build](https://github.com/a16z/magi/actions/workflows/test.yml/badge.svg)](https://github.com/a16z/magi/actions/workflows/test.yml) [![license: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://opensource.org/license/agpl-v3/) [![chat](https://img.shields.io/badge/chat-telegram-blue)](https://t.me/+6zrIsnaLO0hjNmZh)
 
-Magi is an Optimism rollup node written in Rust. It is intended to perform the same functionality as op-node, and works with execution clients such as op-geth. As an independent implementation of the rollup node, we hope to increase the safety and liveliness of the entire op-stack ecosystem. Magi is still new, so we expect to find some bugs in the coming months. For criticial infrastructure, we recommend using op-node.
+Magi is an Optimism rollup node written in Rust. It is intended to perform the same functionality as op-node, and works with execution clients such as op-geth. As an independent implementation of the rollup node, we hope to increase the safety and liveliness of the entire OP Stack ecosystem. Magi is still new, so we expect to find some bugs in the coming months. For criticial infrastructure, we recommend using op-node.
 
 ## Running
 
