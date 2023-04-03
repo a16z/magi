@@ -9,12 +9,12 @@ Magi is an Optimism client written in Rust.
 For convenience, we have provides simple docker setup to run Magi and op-geth together. This guide assumes you have both `docker` and `git` installed on your machine.
 
 Start by cloning the Magi repository and entering the docker subdirectory
-```bash
+```console
 git clone git@github.com:a16z/magi.git && cd magi/docker
 ```
 
 Next copy `.env.default` to `.env`
-```bash
+```console
 cp .env.default .env
 ```
 
@@ -23,7 +23,7 @@ In the `.env` file, modify the `L1_RPC_URL` field to contain a valid Ethereum RP
 By default, the `NETWORK` field in `.env` is `optimism-goerli`, however `base-goerli` is also supported.
 
 Start the docker containers
-```bash
+```console
 docker compose up -d
 ```
 
