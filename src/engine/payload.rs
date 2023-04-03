@@ -66,7 +66,7 @@ pub struct PayloadAttributes {
     /// The L1 block number when this batch was first fully derived. This value is not expected by
     /// the engine and is skipped during serialization and deserialization.
     #[serde(skip)]
-    pub l1_origin: Option<u64>,
+    pub l1_inclusion_block: Option<u64>,
     /// The L2 sequence number of the block. This value is not expected by the engine and is
     /// skipped during serialization and deserialization.
     #[serde(skip)]

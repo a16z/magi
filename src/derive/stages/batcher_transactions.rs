@@ -70,11 +70,11 @@ pub struct Frame {
     pub frame_data_len: u32,
     pub frame_data: Vec<u8>,
     pub is_last: bool,
-    pub l1_origin: u64,
+    pub l1_inclusion_block: u64,
 }
 
 impl Frame {
-    fn from_data(data: &[u8], offset: usize, l1_origin: u64) -> Result<(Self, usize)> {
+    fn from_data(data: &[u8], offset: usize, l1_inclusion_block: u64) -> Result<(Self, usize)> {
         let data = &data[offset..];
 
         if data.len() < 23 {
@@ -100,7 +100,7 @@ impl Frame {
             frame_data_len,
             frame_data,
             is_last,
-            l1_origin,
+            l1_inclusion_block,
         };
 
         Ok((frame, offset + data.len()))

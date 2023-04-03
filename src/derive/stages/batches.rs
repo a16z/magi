@@ -62,7 +62,7 @@ impl Batches {
             });
         }
 
-        let batch = loop {
+        let derived_batch = loop {
             if let Some((_, batch)) = self.batches.first_key_value() {
                 match self.batch_status(batch) {
                     BatchStatus::Accept => {
@@ -82,6 +82,42 @@ impl Batches {
             } else {
                 break None;
             }
+        };
+
+        let batch = if derived_batch.is_none() {
+            let state = self.state.read().unwrap();
+
+            let current_l1_block = state.current_epoch_num;
+            let safe_head = state.safe_head;
+            let epoch = state.safe_epoch;
+            let next_epoch = state.epoch_by_number(epoch.number + 1);
+            let seq_window_size = self.config.chain.seq_window_size;
+
+            if let Some(next_epoch) = next_epoch {
+                if current_l1_block > epoch.number + seq_window_size {
+                    let next_timestamp = safe_head.timestamp + 2;
+                    let epoch = if next_timestamp < next_epoch.timestamp {
+                        epoch
+                    } else {
+                        next_epoch
+                    };
+
+                    Some(Batch {
+                        epoch_num: epoch.number,
+                        epoch_hash: epoch.hash,
+                        parent_hash: safe_head.parent_hash,
+                        timestamp: next_timestamp,
+                        transactions: Vec::new(),
+                        l1_inclusion_block: current_l1_block,
+                    })
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            derived_batch
         };
 
         Ok(batch)
@@ -107,7 +143,11 @@ impl Batches {
             return BatchStatus::Drop;
         }
 
-        // TODO: inclusion window check
+        // check the inclusion delay
+        if batch.epoch_num + self.config.chain.seq_window_size < batch.l1_inclusion_block {
+            tracing::warn!("inclusion window elapsed");
+            return BatchStatus::Drop;
+        }
 
         // check and set batch origin epoch
         let batch_origin = if batch.epoch_num == epoch.number {
@@ -179,7 +219,7 @@ fn decode_batches(channel: &Channel) -> Result<Vec<Batch>> {
         let rlp = Rlp::new(batch_content);
         let size = rlp.payload_info()?.total();
 
-        let batch = Batch::decode(&rlp, channel.l1_origin)?;
+        let batch = Batch::decode(&rlp, channel.l1_inclusion_block)?;
         batches.push(batch);
 
         offset += size + batch_info.header_len + 1;
@@ -195,7 +235,7 @@ pub struct Batch {
     pub epoch_hash: H256,
     pub timestamp: u64,
     pub transactions: Vec<RawTransaction>,
-    pub l1_origin: u64,
+    pub l1_inclusion_block: u64,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -207,7 +247,7 @@ enum BatchStatus {
 }
 
 impl Batch {
-    fn decode(rlp: &Rlp, l1_origin: u64) -> Result<Self, DecoderError> {
+    fn decode(rlp: &Rlp, l1_inclusion_block: u64) -> Result<Self, DecoderError> {
         let parent_hash = rlp.val_at(0)?;
         let epoch_num = rlp.val_at(1)?;
         let epoch_hash = rlp.val_at(2)?;
@@ -220,7 +260,7 @@ impl Batch {
             epoch_hash,
             timestamp,
             transactions,
-            l1_origin,
+            l1_inclusion_block,
         })
     }
 

@@ -30,8 +30,8 @@ pub struct Driver<E: Engine> {
     engine_driver: EngineDriver<E>,
     /// Database for storing progress data
     db: Database,
-    /// List of unfinalized L2 blocks with their epochs, L1 origin, and sequence numbers
-    unfinalized_origins: Vec<(BlockInfo, Epoch, u64, u64)>,
+    /// List of unfinalized L2 blocks with their epochs, L1 inclusions, and sequence numbers
+    unfinalized_blocks: Vec<(BlockInfo, Epoch, u64, u64)>,
     /// Current finalized L1 block number
     finalized_l1_block_number: u64,
     /// State struct to keep track of global state
@@ -83,7 +83,7 @@ impl Driver<EngineApi> {
             db,
             engine_driver,
             pipeline,
-            unfinalized_origins: Vec::new(),
+            unfinalized_blocks: Vec::new(),
             finalized_l1_block_number: 0,
             state,
             chain_watcher,
@@ -139,9 +139,9 @@ impl<E: Engine> Driver<E> {
         self.update_state_head()?;
 
         while let Some(next_attributes) = self.pipeline.next() {
-            let l1_origin = next_attributes
-                .l1_origin
-                .ok_or(eyre::eyre!("attributes without origin"))?;
+            let l1_inclusion_block = next_attributes
+                .l1_inclusion_block
+                .ok_or(eyre::eyre!("attributes without inclusion block"))?;
 
             let seq_number = next_attributes
                 .seq_number
@@ -161,8 +161,13 @@ impl<E: Engine> Driver<E> {
             let new_safe_head = self.engine_driver.safe_head;
             let new_safe_epoch = self.engine_driver.safe_epoch;
 
-            let unfinalized_entry = (new_safe_head, new_safe_epoch, l1_origin, seq_number);
-            self.unfinalized_origins.push(unfinalized_entry);
+            let unfinalized_entry = (
+                new_safe_head,
+                new_safe_epoch,
+                l1_inclusion_block,
+                seq_number,
+            );
+            self.unfinalized_blocks.push(unfinalized_entry);
             self.update_finalized();
 
             self.update_metrics();
@@ -208,7 +213,7 @@ impl<E: Engine> Driver<E> {
                     BlockUpdate::Reorg => {
                         tracing::warn!("reorg detected, purging pipeline");
 
-                        self.unfinalized_origins.clear();
+                        self.unfinalized_blocks.clear();
                         self.chain_watcher.restart(
                             self.engine_driver.finalized_epoch.number,
                             self.engine_driver.finalized_head.number,
@@ -237,9 +242,11 @@ impl<E: Engine> Driver<E> {
 
     fn update_finalized(&mut self) {
         let new_finalized = self
-            .unfinalized_origins
+            .unfinalized_blocks
             .iter()
-            .filter(|(_, _, origin, seq)| *origin <= self.finalized_l1_block_number && *seq == 0)
+            .filter(|(_, _, inclusion, seq)| {
+                *inclusion <= self.finalized_l1_block_number && *seq == 0
+            })
             .last();
 
         if let Some((head, epoch, _, _)) = new_finalized {
@@ -255,13 +262,13 @@ impl<E: Engine> Driver<E> {
             }
         }
 
-        self.unfinalized_origins
-            .retain(|(_, _, origin, _)| *origin > self.finalized_l1_block_number);
+        self.unfinalized_blocks
+            .retain(|(_, _, inclusion, _)| *inclusion > self.finalized_l1_block_number);
     }
 
     fn update_metrics(&self) {
         metrics::FINALIZED_HEAD.set(self.engine_driver.finalized_head.number as i64);
         metrics::SAFE_HEAD.set(self.engine_driver.safe_head.number as i64);
-        metrics::SYNCED.set(!self.unfinalized_origins.is_empty() as i64);
+        metrics::SYNCED.set(!self.unfinalized_blocks.is_empty() as i64);
     }
 }

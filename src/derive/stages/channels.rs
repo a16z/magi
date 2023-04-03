@@ -150,8 +150,8 @@ impl PendingChannel {
 
         Self {
             channel_id: frame.channel_id,
-            highest_l1_block: frame.l1_origin,
-            lowest_l1_block: frame.l1_origin,
+            highest_l1_block: frame.l1_inclusion_block,
+            lowest_l1_block: frame.l1_inclusion_block,
             frames: vec![frame],
             size,
         }
@@ -175,10 +175,10 @@ impl PendingChannel {
             .fold(Vec::new(), |a, b| [a, b.frame_data.clone()].concat())
     }
 
-    pub fn l1_origin(&self) -> u64 {
+    pub fn l1_inclusion_block(&self) -> u64 {
         self.frames
             .iter()
-            .map(|f| f.l1_origin)
+            .map(|f| f.l1_inclusion_block)
             .max()
             .expect("empty frame not allowed")
     }
@@ -193,10 +193,10 @@ impl PendingChannel {
             .any(|n| n == frame.frame_number);
 
         if !has_seen {
-            if frame.l1_origin > self.highest_l1_block {
-                self.highest_l1_block = frame.l1_origin;
-            } else if frame.l1_origin < self.lowest_l1_block {
-                self.lowest_l1_block = frame.l1_origin;
+            if frame.l1_inclusion_block > self.highest_l1_block {
+                self.highest_l1_block = frame.l1_inclusion_block;
+            } else if frame.l1_inclusion_block < self.lowest_l1_block {
+                self.lowest_l1_block = frame.l1_inclusion_block;
             }
 
             if frame.is_last {
@@ -213,7 +213,7 @@ impl PendingChannel {
 pub struct Channel {
     pub id: u128,
     pub data: Vec<u8>,
-    pub l1_origin: u64,
+    pub l1_inclusion_block: u64,
 }
 
 impl From<PendingChannel> for Channel {
@@ -221,7 +221,7 @@ impl From<PendingChannel> for Channel {
         Channel {
             id: pc.channel_id,
             data: pc.assemble(),
-            l1_origin: pc.l1_origin(),
+            l1_inclusion_block: pc.l1_inclusion_block(),
         }
     }
 }
