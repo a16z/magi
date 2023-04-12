@@ -1,11 +1,9 @@
 use std::{
     process,
-    str::FromStr,
     sync::{mpsc::Receiver, Arc, RwLock},
     time::Duration,
 };
 
-use ethers::types::H256;
 use eyre::Result;
 use tokio::time::sleep;
 
