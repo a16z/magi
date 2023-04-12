@@ -216,7 +216,7 @@ impl InnerWatcher {
             unfinalized_blocks: Vec::new(),
             deposits: HashMap::new(),
             system_config,
-            system_config_update: (0, None),
+            system_config_update: (l1_start_block, None),
         }
     }
 
