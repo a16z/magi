@@ -31,10 +31,11 @@ pub struct EngineDriver<E: Engine> {
 
 impl<E: Engine> EngineDriver<E> {
     pub async fn handle_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
-        let block: Option<Block<H256>> = self.provider.get_block(self.safe_head.number + 1).await?;
+        let block: Option<Block<H256>> = self.block_at(attributes.timestamp.as_u64()).await;
 
         if let Some(block) = block {
             if should_skip(&block, &attributes)? {
+                tracing::info!("skipping block");
                 self.skip_attributes(attributes, block)
             } else {
                 self.process_attributes(attributes).await
@@ -150,9 +151,25 @@ impl<E: Engine> EngineDriver<E> {
             finalized_block_hash: self.finalized_head.hash,
         }
     }
+
+    async fn block_at(&self, timestamp: u64) -> Option<Block<H256>> {
+        let time_diff = timestamp as i64 - self.finalized_head.timestamp as i64;
+        let blocks = time_diff / 2;
+        let block_num = self.finalized_head.number as i64 + blocks;
+        self.provider.get_block(block_num as u64).await.ok()?
+    }
 }
 
 fn should_skip(block: &Block<H256>, attributes: &PayloadAttributes) -> Result<bool> {
+    tracing::debug!(
+        "comparing block at {} with attributes at {}",
+        block.timestamp,
+        attributes.timestamp
+    );
+
+    tracing::debug!("block: {:?}", block);
+    tracing::debug!("attributes: {:?}", attributes);
+
     let attributes_hashes = attributes
         .transactions
         .as_ref()
@@ -160,6 +177,8 @@ fn should_skip(block: &Block<H256>, attributes: &PayloadAttributes) -> Result<bo
         .iter()
         .map(|tx| H256(keccak256(&tx.0)))
         .collect::<Vec<_>>();
+
+    tracing::debug!("attribute hashes: {:?}", attributes_hashes);
 
     let is_same = attributes_hashes == block.transactions
         && attributes.timestamp.as_u64() == block.timestamp.as_u64()
