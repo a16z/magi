@@ -35,7 +35,7 @@ impl<E: Engine> EngineDriver<E> {
 
         if let Some(block) = block {
             if should_skip(&block, &attributes)? {
-                tracing::info!("skipping block");                
+                tracing::info!("skipping block");
                 self.skip_attributes(attributes, block)
             } else {
                 self.process_attributes(attributes).await
@@ -161,7 +161,12 @@ impl<E: Engine> EngineDriver<E> {
 }
 
 fn should_skip(block: &Block<H256>, attributes: &PayloadAttributes) -> Result<bool> {
-    tracing::debug!("comparing block at {} with attributes at {}", block.timestamp, attributes.timestamp);
+    tracing::debug!(
+        "comparing block at {} with attributes at {}",
+        block.timestamp,
+        attributes.timestamp
+    );
+
     tracing::debug!("block: {:?}", block);
     tracing::debug!("attributes: {:?}", attributes);
 
