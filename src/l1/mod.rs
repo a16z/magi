@@ -324,6 +324,12 @@ impl InnerWatcher {
                 self.system_config_update = (to_block, None);
             }
         }
+        
+        if last_update_block == self.current_block {
+            if let Some(next_config) = next_config {
+                self.system_config = next_config;
+            }
+        }
 
         Ok(())
     }
