@@ -39,18 +39,20 @@ impl Attributes {
         state: Arc<RwLock<State>>,
         config: Arc<Config>,
     ) -> Self {
+        let epoch_hash = state.read().unwrap().safe_epoch.hash;
+
         Self {
             prev_stage,
             state,
             sequence_number: 0,
-            epoch_hash: H256::zero(),
+            epoch_hash,
             config,
         }
     }
 
     pub fn purge(&mut self) {
         self.sequence_number = 0;
-        self.epoch_hash = H256::zero();
+        self.epoch_hash = self.state.read().unwrap().safe_epoch.hash;
     }
 
     fn derive_attributes(&mut self, batch: Batch) -> PayloadAttributes {
@@ -135,10 +137,7 @@ impl Attributes {
     }
 
     fn update_sequence_number(&mut self, batch_epoch_hash: H256) {
-        if self.epoch_hash.is_zero() {
-            // saves are at sequence number 0 so sequencer number must be 1 on restart
-            self.sequence_number = 1;
-        } else if self.epoch_hash != batch_epoch_hash {
+        if self.epoch_hash != batch_epoch_hash {
             self.sequence_number = 0;
         } else {
             self.sequence_number += 1;

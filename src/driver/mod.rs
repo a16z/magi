@@ -210,7 +210,7 @@ impl<E: Engine> Driver<E> {
 
                         self.unfinalized_blocks.clear();
                         self.chain_watcher.restart(
-                            self.engine_driver.finalized_epoch.number + 1,
+                            self.engine_driver.finalized_epoch.number,
                             self.engine_driver.finalized_head.number,
                         )?;
 
