@@ -31,10 +31,11 @@ pub struct EngineDriver<E: Engine> {
 
 impl<E: Engine> EngineDriver<E> {
     pub async fn handle_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
-        let block: Option<Block<H256>> = self.provider.get_block(self.safe_head.number + 1).await?;
+        let block: Option<Block<H256>> = self.block_at(attributes.timestamp.as_u64()).await;
 
         if let Some(block) = block {
             if should_skip(&block, &attributes)? {
+                tracing::info!("skipping block");                
                 self.skip_attributes(attributes, block)
             } else {
                 self.process_attributes(attributes).await
@@ -149,6 +150,13 @@ impl<E: Engine> EngineDriver<E> {
             safe_block_hash: self.safe_head.hash,
             finalized_block_hash: self.finalized_head.hash,
         }
+    }
+
+    async fn block_at(&self, timestamp: u64) -> Option<Block<H256>> {
+        let time_diff = timestamp as i64 - self.finalized_head.timestamp as i64;
+        let blocks = time_diff / 2;
+        let block_num = self.finalized_head.number as i64 + blocks;
+        self.provider.get_block(block_num as u64).await.ok()?
     }
 }
 
