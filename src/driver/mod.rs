@@ -1,7 +1,8 @@
 use std::{
     process,
+    str::FromStr,
     sync::{mpsc::Receiver, Arc, RwLock},
-    time::Duration, str::FromStr,
+    time::Duration,
 };
 
 use ethers::types::H256;
@@ -56,19 +57,6 @@ impl Driver<EngineApi> {
         let finalized_epoch = head
             .map(|h| h.l1_epoch)
             .unwrap_or(config.chain.l1_start_epoch);
-
-        let finalized_head = BlockInfo {
-            hash: H256::from_str("0x956284666777298729e4283123ed43a28a2f97f6b2fb9090660a09280d5c763d").unwrap(),
-            number: 2851586,
-            parent_hash: H256::from_str("0x31af89bf945014ffc75b8b80f37d1da6c0389fc04c5cab0c554e5dbd939d2e9b").unwrap(),
-            timestamp: 1680896788,
-        };
-
-        let finalized_epoch = Epoch {
-            number: 8791213,
-            hash: H256::from_str("0xd395b0a5ed9787f14778dc312ba00917f77c068cfead886899e18012e65311aa").unwrap(),
-            timestamp: 1680896724, 
-        };
 
         tracing::info!("syncing from: {:?}", finalized_head.hash);
 

@@ -161,8 +161,6 @@ impl<E: Engine> EngineDriver<E> {
 }
 
 fn should_skip(block: &Block<H256>, attributes: &PayloadAttributes) -> Result<bool> {
-    return Ok(false);
-
     tracing::debug!(
         "comparing block at {} with attributes at {}",
         block.timestamp,

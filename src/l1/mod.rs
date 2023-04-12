@@ -317,7 +317,7 @@ impl InnerWatcher {
                 self.system_config_update = (to_block, None);
             }
         }
-        
+
         let (last_update_block, next_config) = self.system_config_update;
 
         if last_update_block == self.current_block {
