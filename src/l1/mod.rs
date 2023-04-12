@@ -525,7 +525,7 @@ impl TryFrom<Log> for SystemConfigUpdate {
             0 => {
                 let addr_bytes = log
                     .data
-                    .get(44..64)
+                    .get(76..96)
                     .ok_or(eyre::eyre!("invalid system config update"))?;
 
                 let addr = Address::from_slice(addr_bytes);
@@ -534,12 +534,12 @@ impl TryFrom<Log> for SystemConfigUpdate {
             1 => {
                 let fee_overhead = log
                     .data
-                    .get(32..64)
+                    .get(64..96)
                     .ok_or(eyre::eyre!("invalid system config update"))?;
 
                 let fee_scalar = log
                     .data
-                    .get(64..96)
+                    .get(96..128)
                     .ok_or(eyre::eyre!("invalid system config update"))?;
 
                 let fee_overhead = U256::from_big_endian(fee_overhead);
@@ -550,7 +550,7 @@ impl TryFrom<Log> for SystemConfigUpdate {
             2 => {
                 let gas_bytes = log
                     .data
-                    .get(32..64)
+                    .get(64..96)
                     .ok_or(eyre::eyre!("invalid system config update"))?;
 
                 let gas = U256::from_big_endian(gas_bytes);
