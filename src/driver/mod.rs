@@ -58,16 +58,16 @@ impl Driver<EngineApi> {
             .unwrap_or(config.chain.l1_start_epoch);
 
         let finalized_head = BlockInfo {
-            hash: H256::from_str("0x263f2a20c17178ce860931abea4cec0d0eda53e5224e3d3339f591a5a4e4f938").unwrap(),
-            number: 2851592,
-            parent_hash: H256::from_str("0xb6b5dcb99f90059833a54c6e9cfc2bbc24960991cfb674d964da2bbcbfdba3b9").unwrap(),
-            timestamp: 1669107401,
+            hash: H256::from_str("0x956284666777298729e4283123ed43a28a2f97f6b2fb9090660a09280d5c763d").unwrap(),
+            number: 2851586,
+            parent_hash: H256::from_str("0x31af89bf945014ffc75b8b80f37d1da6c0389fc04c5cab0c554e5dbd939d2e9b").unwrap(),
+            timestamp: 1680896788,
         };
 
         let finalized_epoch = Epoch {
-            number: 8791214,
-            hash: H256::from_str("0x437e3a920679c94316ea855a4428fc33b18126a96dc3cd30ceb1a6698918e7f9").unwrap(),
-            timestamp: 1680896748, 
+            number: 8791213,
+            hash: H256::from_str("0xd395b0a5ed9787f14778dc312ba00917f77c068cfead886899e18012e65311aa").unwrap(),
+            timestamp: 1680896724, 
         };
 
         tracing::info!("syncing from: {:?}", finalized_head.hash);
