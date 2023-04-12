@@ -282,11 +282,13 @@ impl InnerWatcher {
     async fn update_system_config(&mut self) -> Result<()> {
         let (last_update_block, next_config) = self.system_config_update;
 
-        if last_update_block >= self.current_block {
+        if last_update_block == self.current_block {
             if let Some(next_config) = next_config {
                 self.system_config = next_config;
             }
+        }
 
+        if last_update_block < self.current_block {
             let to_block = last_update_block + 1000;
             let update_event = "ConfigUpdate(uint256,uint8,bytes)";
             let update_topic = H256::from_slice(&keccak256(update_event));
