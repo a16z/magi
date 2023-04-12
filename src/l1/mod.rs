@@ -318,6 +318,7 @@ impl InnerWatcher {
                     }
                 }
 
+                tracing::info!("system config updated");
                 self.system_config_update = (update_block.as_u64(), Some(config));
             } else {
                 self.system_config_update = (to_block, None);
