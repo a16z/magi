@@ -325,6 +325,8 @@ impl InnerWatcher {
             }
         }
         
+        let (last_update_block, next_config) = self.system_config_update;
+
         if last_update_block == self.current_block {
             if let Some(next_config) = next_config {
                 tracing::info!("system config updated");
