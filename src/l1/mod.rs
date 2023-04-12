@@ -285,6 +285,7 @@ impl InnerWatcher {
         if last_update_block == self.current_block {
             if let Some(next_config) = next_config {
                 tracing::info!("system config updated");
+                tracing::debug!("{:?}", next_config);
                 self.system_config = next_config;
             }
         }
@@ -330,6 +331,7 @@ impl InnerWatcher {
         if last_update_block == self.current_block {
             if let Some(next_config) = next_config {
                 tracing::info!("system config updated");
+                tracing::debug!("{:?}", next_config);
                 self.system_config = next_config;
             }
         }
