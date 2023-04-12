@@ -287,6 +287,7 @@ impl InnerWatcher {
             let update_event = "ConfigUpdate(uint256,uint8,bytes)";
             let update_topic = H256::from_slice(&keccak256(update_event));
             let filter = Filter::new()
+                .address(self.config.chain.system_config_contract)
                 .topic0(update_topic)
                 .from_block(last_update_block + 1)
                 .to_block(to_block);
