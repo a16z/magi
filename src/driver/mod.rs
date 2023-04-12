@@ -59,7 +59,7 @@ impl Driver<EngineApi> {
 
         let finalized_head = BlockInfo {
             hash: H256::from_str("0x263f2a20c17178ce860931abea4cec0d0eda53e5224e3d3339f591a5a4e4f938").unwrap(),
-            number: 2851593,
+            number: 2851592,
             parent_hash: H256::from_str("0xb6b5dcb99f90059833a54c6e9cfc2bbc24960991cfb674d964da2bbcbfdba3b9").unwrap(),
             timestamp: 1669107401,
         };
