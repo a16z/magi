@@ -216,7 +216,7 @@ impl InnerWatcher {
             unfinalized_blocks: Vec::new(),
             deposits: HashMap::new(),
             system_config,
-            system_config_update: (0, None),
+            system_config_update: (l1_start_block, None),
         }
     }
 
@@ -280,17 +280,14 @@ impl InnerWatcher {
     }
 
     async fn update_system_config(&mut self) -> Result<()> {
-        let (last_update_block, next_config) = self.system_config_update;
+        let (last_update_block, _) = self.system_config_update;
 
-        if last_update_block >= self.current_block {
-            if let Some(next_config) = next_config {
-                self.system_config = next_config;
-            }
-
+        if last_update_block < self.current_block {
             let to_block = last_update_block + 1000;
-            let update_event = "ConfigUpdate(uint256,uint256,bytes)";
+            let update_event = "ConfigUpdate(uint256,uint8,bytes)";
             let update_topic = H256::from_slice(&keccak256(update_event));
             let filter = Filter::new()
+                .address(self.config.chain.system_config_contract)
                 .topic0(update_topic)
                 .from_block(last_update_block + 1)
                 .to_block(to_block);
@@ -319,6 +316,16 @@ impl InnerWatcher {
                 self.system_config_update = (update_block.as_u64(), Some(config));
             } else {
                 self.system_config_update = (to_block, None);
+            }
+        }
+
+        let (last_update_block, next_config) = self.system_config_update;
+
+        if last_update_block == self.current_block {
+            if let Some(next_config) = next_config {
+                tracing::info!("system config updated");
+                tracing::debug!("{:?}", next_config);
+                self.system_config = next_config;
             }
         }
 
@@ -511,7 +518,7 @@ impl TryFrom<Log> for SystemConfigUpdate {
             0 => {
                 let addr_bytes = log
                     .data
-                    .get(12..32)
+                    .get(76..96)
                     .ok_or(eyre::eyre!("invalid system config update"))?;
 
                 let addr = Address::from_slice(addr_bytes);
@@ -520,12 +527,12 @@ impl TryFrom<Log> for SystemConfigUpdate {
             1 => {
                 let fee_overhead = log
                     .data
-                    .get(0..32)
+                    .get(64..96)
                     .ok_or(eyre::eyre!("invalid system config update"))?;
 
                 let fee_scalar = log
                     .data
-                    .get(32..64)
+                    .get(96..128)
                     .ok_or(eyre::eyre!("invalid system config update"))?;
 
                 let fee_overhead = U256::from_big_endian(fee_overhead);
@@ -536,7 +543,7 @@ impl TryFrom<Log> for SystemConfigUpdate {
             2 => {
                 let gas_bytes = log
                     .data
-                    .get(0..32)
+                    .get(64..96)
                     .ok_or(eyre::eyre!("invalid system config update"))?;
 
                 let gas = U256::from_big_endian(gas_bytes);
