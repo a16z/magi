@@ -33,7 +33,7 @@ The docker setup contains a Grafana dashboard. To view sync progress, you can ch
 
 ## Contributing
 
-All contributions to Magi are welcome. Before opening a PR, please submit an issue detailing the bug or feature. When opening a PR, please ensure that your contribution builds on the stable rust toolchain, has been linted with `cargo fmt`, passes `cargo clippy`, and contains tests when applicable.
+All contributions to Magi are welcome. Before opening a PR, please submit an issue detailing the bug or feature. Please ensure that your contribution builds on the stable Rust toolchain, has been linted with `cargo fmt`, passes `cargo clippy`, and contains tests when applicable.
 
 ## Disclaimer
 
