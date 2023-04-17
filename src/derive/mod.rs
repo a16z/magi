@@ -37,7 +37,7 @@ impl Iterator for Pipeline {
 
 impl Pipeline {
     pub fn new(state: Arc<RwLock<State>>, config: Arc<Config>) -> Result<Self> {
-        let batcher_transactions = Arc::new(Mutex::new(BatcherTransactions::new()));
+        let batcher_transactions = Arc::new(Mutex::new(BatcherTransactions::default()));
 
         let channels = Arc::new(Mutex::new(Channels::new(
             batcher_transactions.clone(),

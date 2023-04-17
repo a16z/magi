@@ -373,7 +373,7 @@ mod tests {
     }
 
     fn create_stage() -> Channels {
-        let prev_stage = Arc::new(Mutex::new(BatcherTransactions::new()));
+        let prev_stage = Arc::new(Mutex::new(BatcherTransactions::default()));
 
         let config = Config {
             l1_rpc_url: String::new(),

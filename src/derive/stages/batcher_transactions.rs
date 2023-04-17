@@ -1,5 +1,6 @@
 use eyre::Result;
 
+#[derive(Default)]
 pub struct BatcherTransactions {
     txs: Vec<BatcherTransaction>,
 }
@@ -17,10 +18,6 @@ impl Iterator for BatcherTransactions {
 }
 
 impl BatcherTransactions {
-    pub fn new() -> Self {
-        Self { txs: Vec::new() }
-    }
-
     pub fn push_data(&mut self, txs: Vec<Vec<u8>>, l1_origin: u64) {
         for data in txs {
             let res = BatcherTransaction::new(&data, l1_origin).map(|tx| {
@@ -130,7 +127,7 @@ mod tests {
         let data = hex::decode(TX_DATA).unwrap();
         let txs = vec![data];
 
-        let mut stage = BatcherTransactions::new();
+        let mut stage = BatcherTransactions::default();
 
         stage.push_data(txs, 123456);
 
