@@ -27,3 +27,19 @@ pub use types::HeadInfo;
 /// Core Backend Database
 mod database;
 pub use database::Database;
+
+#[cfg(test)]
+mod tests {
+    use super::database::Database;
+    use super::types::HeadInfo;
+
+    #[test]
+    fn test_backend_db() {
+        let db = Database::new("/tmp/magi", "optimism-goerli");
+        let head = HeadInfo::default();
+        db.write_head(head.clone()).unwrap();
+        let read_head = db.read_head().unwrap();
+        assert_eq!(head, read_head);
+        db.clear().unwrap();
+    }
+}
