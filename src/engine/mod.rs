@@ -29,7 +29,6 @@ pub use traits::*;
 mod mock_engine;
 pub use mock_engine::*;
 
-
 #[cfg(test)]
 mod tests {
     use crate::engine::EngineApi;
@@ -40,9 +39,9 @@ mod tests {
         let url = "http://localhost:8551";
 
         let engine_api = EngineApi::new(url, jwt_secret);
-    
+
         let base_body = engine_api.base_body();
         assert_eq!(base_body.get("jsonrpc").unwrap(), "2.0");
         assert_eq!(base_body.get("id").unwrap(), 1);
-    }    
+    }
 }

@@ -96,9 +96,9 @@ mod tests {
     };
 
     use ethers::{
-        providers::{Provider, Middleware},
+        providers::{Middleware, Provider},
         types::H256,
-        utils::keccak256
+        utils::keccak256,
     };
 
     use crate::{
