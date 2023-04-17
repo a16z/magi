@@ -1,5 +1,3 @@
-use std::sync::{Arc, Mutex};
-
 use eyre::Result;
 
 pub struct BatcherTransactions {
@@ -19,8 +17,8 @@ impl Iterator for BatcherTransactions {
 }
 
 impl BatcherTransactions {
-    pub fn new() -> Arc<Mutex<Self>> {
-        Arc::new(Mutex::new(Self { txs: Vec::new() }))
+    pub fn new() -> Self {
+        Self { txs: Vec::new() }
     }
 
     pub fn push_data(&mut self, txs: Vec<Vec<u8>>, l1_origin: u64) {
@@ -132,8 +130,7 @@ mod tests {
         let data = hex::decode(TX_DATA).unwrap();
         let txs = vec![data];
 
-        let stage_mutex = BatcherTransactions::new();
-        let mut stage = stage_mutex.lock().unwrap();
+        let mut stage = BatcherTransactions::new();
 
         stage.push_data(txs, 123456);
 

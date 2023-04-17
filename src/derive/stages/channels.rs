@@ -24,17 +24,14 @@ impl Iterator for Channels {
 }
 
 impl Channels {
-    pub fn new(
-        prev_stage: Arc<Mutex<BatcherTransactions>>,
-        config: Arc<Config>,
-    ) -> Arc<Mutex<Self>> {
-        Arc::new(Mutex::new(Self {
+    pub fn new(prev_stage: Arc<Mutex<BatcherTransactions>>, config: Arc<Config>) -> Self {
+        Self {
             pending_channels: Vec::new(),
             prev_stage,
             frame_bank: Vec::new(),
             max_channel_size: config.chain.max_channel_size,
             channel_timeout: config.chain.channel_timeout,
-        }))
+        }
     }
 
     pub fn purge(&mut self) {
@@ -223,5 +220,170 @@ impl From<PendingChannel> for Channel {
             data: pc.assemble(),
             l1_inclusion_block: pc.l1_inclusion_block(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        path::PathBuf,
+        sync::{Arc, Mutex},
+    };
+
+    use crate::{
+        config::{ChainConfig, Config},
+        derive::stages::batcher_transactions::{BatcherTransactions, Frame},
+    };
+
+    use super::Channels;
+
+    #[test]
+    fn test_push_single_channel_frame() {
+        let mut stage = create_stage();
+
+        let frame = Frame {
+            channel_id: 5,
+            frame_number: 0,
+            frame_data: Vec::new(),
+            frame_data_len: 0,
+            is_last: true,
+            l1_inclusion_block: 0,
+        };
+
+        stage.push_frame(frame);
+
+        assert_eq!(stage.pending_channels.len(), 1);
+        assert_eq!(stage.pending_channels[0].channel_id, 5);
+        assert_eq!(stage.pending_channels[0].is_complete(), true);
+    }
+
+    #[test]
+    fn test_push_multi_channel_frame() {
+        let mut stage = create_stage();
+
+        let frame_1 = Frame {
+            channel_id: 5,
+            frame_number: 0,
+            frame_data: Vec::new(),
+            frame_data_len: 0,
+            is_last: false,
+            l1_inclusion_block: 0,
+        };
+
+        let frame_2 = Frame {
+            channel_id: 5,
+            frame_number: 1,
+            frame_data: Vec::new(),
+            frame_data_len: 0,
+            is_last: true,
+            l1_inclusion_block: 0,
+        };
+
+        stage.push_frame(frame_1);
+
+        assert_eq!(stage.pending_channels.len(), 1);
+        assert_eq!(stage.pending_channels[0].channel_id, 5);
+        assert_eq!(stage.pending_channels[0].is_complete(), false);
+
+        stage.push_frame(frame_2);
+
+        assert_eq!(stage.pending_channels.len(), 1);
+        assert_eq!(stage.pending_channels[0].channel_id, 5);
+        assert_eq!(stage.pending_channels[0].is_complete(), true);
+    }
+
+    #[test]
+    fn test_ready_channel() {
+        let mut stage = create_stage();
+
+        let frame_1 = Frame {
+            channel_id: 5,
+            frame_number: 0,
+            frame_data: Vec::new(),
+            frame_data_len: 0,
+            is_last: false,
+            l1_inclusion_block: 43,
+        };
+
+        let frame_2 = Frame {
+            channel_id: 5,
+            frame_number: 1,
+            frame_data: Vec::new(),
+            frame_data_len: 0,
+            is_last: true,
+            l1_inclusion_block: 96,
+        };
+
+        stage.push_frame(frame_1);
+        stage.push_frame(frame_2);
+
+        let channel = stage.fetch_ready_channel(5).unwrap();
+
+        assert_eq!(channel.id, 5);
+        assert_eq!(channel.l1_inclusion_block, 96);
+    }
+
+    #[test]
+    fn test_ready_channel_still_pending() {
+        let mut stage = create_stage();
+
+        let frame_1 = Frame {
+            channel_id: 5,
+            frame_number: 0,
+            frame_data: Vec::new(),
+            frame_data_len: 0,
+            is_last: false,
+            l1_inclusion_block: 43,
+        };
+
+        stage.push_frame(frame_1);
+
+        let channel = stage.fetch_ready_channel(5);
+
+        assert_eq!(channel, None);
+    }
+
+    #[test]
+    fn test_channel_timeout() {
+        let mut stage = create_stage();
+
+        let frame_1 = Frame {
+            channel_id: 5,
+            frame_number: 0,
+            frame_data: Vec::new(),
+            frame_data_len: 0,
+            is_last: false,
+            l1_inclusion_block: 0,
+        };
+
+        let frame_2 = Frame {
+            channel_id: 5,
+            frame_number: 1,
+            frame_data: Vec::new(),
+            frame_data_len: 0,
+            is_last: true,
+            l1_inclusion_block: 500,
+        };
+
+        stage.push_frame(frame_1);
+        assert_eq!(stage.pending_channels.len(), 1);
+
+        stage.push_frame(frame_2);
+        assert_eq!(stage.pending_channels.len(), 0);
+    }
+
+    fn create_stage() -> Channels {
+        let prev_stage = Arc::new(Mutex::new(BatcherTransactions::new()));
+
+        let config = Config {
+            l1_rpc_url: String::new(),
+            l2_rpc_url: String::new(),
+            data_dir: PathBuf::new(),
+            l2_engine_url: String::new(),
+            jwt_secret: String::new(),
+            chain: ChainConfig::optimism_goerli(),
+        };
+
+        Channels::new(prev_stage, Arc::new(config))
     }
 }

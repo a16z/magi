@@ -40,13 +40,13 @@ impl Batches {
         prev_stage: Arc<Mutex<Channels>>,
         state: Arc<RwLock<State>>,
         config: Arc<Config>,
-    ) -> Arc<Mutex<Self>> {
-        Arc::new(Mutex::new(Self {
+    ) -> Self {
+        Self {
             batches: BTreeMap::new(),
             prev_stage,
             state,
             config,
-        }))
+        }
     }
 
     pub fn purge(&mut self) {
