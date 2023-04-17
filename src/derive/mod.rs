@@ -37,9 +37,19 @@ impl Iterator for Pipeline {
 
 impl Pipeline {
     pub fn new(state: Arc<RwLock<State>>, config: Arc<Config>) -> Result<Self> {
-        let batcher_transactions = BatcherTransactions::new();
-        let channels = Channels::new(batcher_transactions.clone(), config.clone());
-        let batches = Batches::new(channels.clone(), state.clone(), config.clone());
+        let batcher_transactions = Arc::new(Mutex::new(BatcherTransactions::default()));
+
+        let channels = Arc::new(Mutex::new(Channels::new(
+            batcher_transactions.clone(),
+            config.clone(),
+        )));
+
+        let batches = Arc::new(Mutex::new(Batches::new(
+            channels.clone(),
+            state.clone(),
+            config.clone(),
+        )));
+
         let attributes = Attributes::new(batches.clone(), state, config);
 
         Ok(Self {
@@ -74,14 +84,17 @@ impl Pipeline {
             .lock()
             .map_err(|_| eyre::eyre!("lock poisoned"))?
             .purge();
+
         self.channels
             .lock()
             .map_err(|_| eyre::eyre!("lock poisoned"))?
             .purge();
+
         self.batches
             .lock()
             .map_err(|_| eyre::eyre!("lock poisoned"))?
             .purge();
+
         self.attributes.purge();
 
         Ok(())
