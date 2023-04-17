@@ -2,7 +2,7 @@
 
 [![build](https://github.com/a16z/magi/actions/workflows/test.yml/badge.svg)](https://github.com/a16z/magi/actions/workflows/test.yml) [![license: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://opensource.org/license/agpl-v3/) [![chat](https://img.shields.io/badge/chat-telegram-blue)](https://t.me/+6zrIsnaLO0hjNmZh)
 
-Magi is an OP Stack consensus client written in Rust, designed to perform the same functionality as op-node. It is compatible with execution clients like op-geth. As an independent implementation, Magi aims to enhance the safety and liveness of the entire OP Stack ecosystem. Magi is still new, so we expect to find some bugs in the coming months. For critical infrastructure, we recommend using op-node.
+Magi is an OP Stack rollup client written in Rust, designed to perform the same functionality as op-node. It is compatible with execution clients like op-geth. As an independent implementation, Magi aims to enhance the safety and liveness of the entire OP Stack ecosystem. Magi is still new, so we expect to find some bugs in the coming months. For critical infrastructure, we recommend using op-node.
 
 ## Running
 
