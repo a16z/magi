@@ -1,7 +1,7 @@
 .PHONY: build-all build-local run run-local run-geth
 
 build-all:
-	docker buildx build --platform linux/arm64,linux/amd64 -t noah7545/magi --push .
+	docker buildx build --platform linux/arm64,linux/amd64 -t a16zcrypto/magi --push .
 
 build-local:
 	docker buildx build -t noah7545/magi --load .
