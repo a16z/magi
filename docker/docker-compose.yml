@@ -29,7 +29,7 @@ services:
     <<: *logging
 
   magi:
-    image: noah7545/magi:latest
+    image: a16zcrypto/magi:latest
     container_name: magi
     build:
       dockerfile: Dockerfile
