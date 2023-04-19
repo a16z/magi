@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 
 use ethers::abi::{decode, encode, ParamType, Token};
 use ethers::types::{Address, Log, H256, U256, U64};
@@ -9,13 +9,14 @@ use eyre::Result;
 use crate::common::{Epoch, RawTransaction};
 use crate::config::{Config, SystemAccounts};
 use crate::derive::state::State;
+use crate::derive::PurgeableIterator;
 use crate::engine::PayloadAttributes;
 use crate::l1::L1Info;
 
-use super::batches::{Batch, Batches};
+use super::batches::Batch;
 
 pub struct Attributes {
-    prev_stage: Arc<Mutex<Batches>>,
+    batch_iter: Box<dyn PurgeableIterator<Item = Batch>>,
     state: Arc<RwLock<State>>,
     sequence_number: u64,
     epoch_hash: H256,
@@ -26,33 +27,35 @@ impl Iterator for Attributes {
     type Item = PayloadAttributes;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let batch = self.prev_stage.lock().ok().and_then(|mut s| s.next())?;
-        let payload_attributes = self.derive_attributes(batch);
+        self.batch_iter
+            .next()
+            .map(|batch| self.derive_attributes(batch))
+    }
+}
 
-        Some(payload_attributes)
+impl PurgeableIterator for Attributes {
+    fn purge(&mut self) {
+        self.batch_iter.purge();
+        self.sequence_number = 0;
+        self.epoch_hash = self.state.read().unwrap().safe_epoch.hash;
     }
 }
 
 impl Attributes {
     pub fn new(
-        prev_stage: Arc<Mutex<Batches>>,
+        batch_iter: Box<dyn PurgeableIterator<Item = Batch>>,
         state: Arc<RwLock<State>>,
         config: Arc<Config>,
     ) -> Self {
         let epoch_hash = state.read().unwrap().safe_epoch.hash;
 
         Self {
-            prev_stage,
+            batch_iter,
             state,
             sequence_number: 0,
             epoch_hash,
             config,
         }
-    }
-
-    pub fn purge(&mut self) {
-        self.sequence_number = 0;
-        self.epoch_hash = self.state.read().unwrap().safe_epoch.hash;
     }
 
     fn derive_attributes(&mut self, batch: Batch) -> PayloadAttributes {

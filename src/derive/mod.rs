@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{mpsc, Arc, RwLock};
 
 use eyre::Result;
 
@@ -6,7 +6,9 @@ use crate::{config::Config, engine::PayloadAttributes};
 
 use self::{
     stages::{
-        attributes::Attributes, batcher_transactions::BatcherTransactions, batches::Batches,
+        attributes::Attributes,
+        batcher_transactions::{BatcherTransactionMessage, BatcherTransactions},
+        batches::Batches,
         channels::Channels,
     },
     state::State,
@@ -15,10 +17,11 @@ use self::{
 pub mod stages;
 pub mod state;
 
+mod purgeable;
+pub use purgeable::PurgeableIterator;
+
 pub struct Pipeline {
-    batcher_transactions: Arc<Mutex<BatcherTransactions>>,
-    channels: Arc<Mutex<Channels>>,
-    batches: Arc<Mutex<Batches>>,
+    batcher_transaction_sender: mpsc::Sender<BatcherTransactionMessage>,
     attributes: Attributes,
     pending_attributes: Option<PayloadAttributes>,
 }
@@ -37,36 +40,22 @@ impl Iterator for Pipeline {
 
 impl Pipeline {
     pub fn new(state: Arc<RwLock<State>>, config: Arc<Config>) -> Result<Self> {
-        let batcher_transactions = Arc::new(Mutex::new(BatcherTransactions::default()));
-
-        let channels = Arc::new(Mutex::new(Channels::new(
-            batcher_transactions.clone(),
-            config.clone(),
-        )));
-
-        let batches = Arc::new(Mutex::new(Batches::new(
-            channels.clone(),
-            state.clone(),
-            config.clone(),
-        )));
-
-        let attributes = Attributes::new(batches.clone(), state, config);
+        let (tx, rx) = mpsc::channel();
+        let batcher_transactions = BatcherTransactions::new(rx);
+        let channels = Channels::new(batcher_transactions, config.clone());
+        let batches = Batches::new(channels, state.clone(), config.clone());
+        let attributes = Attributes::new(Box::new(batches), state, config);
 
         Ok(Self {
-            batcher_transactions,
-            channels,
-            batches,
+            batcher_transaction_sender: tx,
             attributes,
             pending_attributes: None,
         })
     }
 
     pub fn push_batcher_transactions(&self, txs: Vec<Vec<u8>>, l1_origin: u64) -> Result<()> {
-        self.batcher_transactions
-            .lock()
-            .map_err(|_| eyre::eyre!("lock poisoned"))?
-            .push_data(txs, l1_origin);
-
+        self.batcher_transaction_sender
+            .send(BatcherTransactionMessage { txs, l1_origin })?;
         Ok(())
     }
 
@@ -80,23 +69,7 @@ impl Pipeline {
     }
 
     pub fn purge(&mut self) -> Result<()> {
-        self.batcher_transactions
-            .lock()
-            .map_err(|_| eyre::eyre!("lock poisoned"))?
-            .purge();
-
-        self.channels
-            .lock()
-            .map_err(|_| eyre::eyre!("lock poisoned"))?
-            .purge();
-
-        self.batches
-            .lock()
-            .map_err(|_| eyre::eyre!("lock poisoned"))?
-            .purge();
-
         self.attributes.purge();
-
         Ok(())
     }
 }

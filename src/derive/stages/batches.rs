@@ -2,7 +2,7 @@ use core::fmt::Debug;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::io::Read;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, RwLock};
 
 use ethers::types::H256;
 use ethers::utils::rlp::{DecoderError, Rlp};
@@ -13,18 +13,22 @@ use libflate::zlib::Decoder;
 use crate::common::RawTransaction;
 use crate::config::Config;
 use crate::derive::state::State;
+use crate::derive::PurgeableIterator;
 
-use super::channels::{Channel, Channels};
+use super::channels::Channel;
 
-pub struct Batches {
+pub struct Batches<I> {
     /// Mapping of timestamps to batches
     batches: BTreeMap<u64, Batch>,
-    prev_stage: Arc<Mutex<Channels>>,
+    channel_iter: I,
     state: Arc<RwLock<State>>,
     config: Arc<Config>,
 }
 
-impl Iterator for Batches {
+impl<I> Iterator for Batches<I>
+where
+    I: Iterator<Item = Channel>,
+{
     type Item = Batch;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -35,26 +39,33 @@ impl Iterator for Batches {
     }
 }
 
-impl Batches {
-    pub fn new(
-        prev_stage: Arc<Mutex<Channels>>,
-        state: Arc<RwLock<State>>,
-        config: Arc<Config>,
-    ) -> Self {
+impl<I> PurgeableIterator for Batches<I>
+where
+    I: PurgeableIterator<Item = Channel>,
+{
+    fn purge(&mut self) {
+        self.channel_iter.purge();
+        self.batches.clear();
+    }
+}
+
+impl<I> Batches<I> {
+    pub fn new(channel_iter: I, state: Arc<RwLock<State>>, config: Arc<Config>) -> Self {
         Self {
             batches: BTreeMap::new(),
-            prev_stage,
+            channel_iter,
             state,
             config,
         }
     }
+}
 
-    pub fn purge(&mut self) {
-        self.batches.clear();
-    }
-
+impl<I> Batches<I>
+where
+    I: Iterator<Item = Channel>,
+{
     fn try_next(&mut self) -> Result<Option<Batch>> {
-        let channel = self.prev_stage.lock().unwrap().next();
+        let channel = self.channel_iter.next();
         if let Some(channel) = channel {
             let batches = decode_batches(&channel)?;
             batches.into_iter().for_each(|batch| {
