@@ -95,7 +95,7 @@ impl Batches {
 
             if let Some(next_epoch) = next_epoch {
                 if current_l1_block > epoch.number + seq_window_size {
-                    let next_timestamp = safe_head.timestamp + 2;
+                    let next_timestamp = safe_head.timestamp + self.config.chain.blocktime;
                     let epoch = if next_timestamp < next_epoch.timestamp {
                         epoch
                     } else {
@@ -128,7 +128,7 @@ impl Batches {
         let epoch = state.safe_epoch;
         let next_epoch = state.epoch_by_number(epoch.number + 1);
         let head = state.safe_head;
-        let next_timestamp = head.timestamp + 2;
+        let next_timestamp = head.timestamp + self.config.chain.blocktime;
 
         // check timestamp range
         match batch.timestamp.cmp(&next_timestamp) {

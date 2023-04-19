@@ -19,6 +19,8 @@ pub struct EngineDriver<E: Engine> {
     engine: Arc<E>,
     /// Provider for the local L2 execution RPC
     provider: Provider<Http>,
+    /// Blocktime of the L2 chain
+    blocktime: u64,
     /// Most recent block hash that can be derived from L1 data
     pub safe_head: BlockInfo,
     /// Batch epoch of the safe head
@@ -154,7 +156,7 @@ impl<E: Engine> EngineDriver<E> {
 
     async fn block_at(&self, timestamp: u64) -> Option<Block<H256>> {
         let time_diff = timestamp as i64 - self.finalized_head.timestamp as i64;
-        let blocks = time_diff / 2;
+        let blocks = time_diff / self.blocktime as i64;
         let block_num = self.finalized_head.number as i64 + blocks;
         self.provider.get_block(block_num as u64).await.ok()?
     }
@@ -201,6 +203,7 @@ impl EngineDriver<EngineApi> {
         Ok(Self {
             engine,
             provider,
+            blocktime: config.chain.blocktime,
             safe_head: finalized_head,
             safe_epoch: finalized_epoch,
             finalized_head,
