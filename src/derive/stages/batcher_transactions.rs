@@ -1,6 +1,7 @@
 use std::sync::mpsc;
 
 use eyre::Result;
+use std::collections::VecDeque;
 
 use crate::derive::PurgeableIterator;
 
@@ -10,7 +11,7 @@ pub struct BatcherTransactionMessage {
 }
 
 pub struct BatcherTransactions {
-    txs: Vec<BatcherTransaction>,
+    txs: VecDeque<BatcherTransaction>,
     transaction_rx: mpsc::Receiver<BatcherTransactionMessage>,
 }
 
@@ -19,11 +20,7 @@ impl Iterator for BatcherTransactions {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.process_incoming();
-        if !self.txs.is_empty() {
-            Some(self.txs.remove(0))
-        } else {
-            None
-        }
+        self.txs.pop_front()
     }
 }
 
@@ -39,7 +36,7 @@ impl BatcherTransactions {
     pub fn new(transaction_rx: mpsc::Receiver<BatcherTransactionMessage>) -> Self {
         Self {
             transaction_rx,
-            txs: Vec::new(),
+            txs: VecDeque::new(),
         }
     }
 
@@ -48,7 +45,7 @@ impl BatcherTransactions {
         {
             for data in txs {
                 let res = BatcherTransaction::new(&data, l1_origin).map(|tx| {
-                    self.txs.push(tx);
+                    self.txs.push_back(tx);
                 });
 
                 if res.is_err() {

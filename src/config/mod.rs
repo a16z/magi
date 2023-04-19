@@ -127,6 +127,9 @@ pub struct ChainConfig {
     pub max_seq_drift: u64,
     /// Timestamp of the regolith hardfork
     pub regolith_time: u64,
+    /// Network blocktime
+    #[serde(default = "default_blocktime")]
+    pub blocktime: u64,
 }
 
 /// Optimism system config contract values
@@ -219,6 +222,7 @@ impl ChainConfig {
             seq_window_size: 3600,
             max_seq_drift: 600,
             regolith_time: 1679079600,
+            blocktime: 2,
         }
     }
     pub fn base_goerli() -> Self {
@@ -249,6 +253,7 @@ impl ChainConfig {
             seq_window_size: 3600,
             max_seq_drift: 600,
             regolith_time: u64::MAX,
+            blocktime: 2,
         }
     }
 }
@@ -269,4 +274,8 @@ fn addr(s: &str) -> Address {
 
 fn hash(s: &str) -> H256 {
     H256::from_str(s).unwrap()
+}
+
+fn default_blocktime() -> u64 {
+    2
 }
