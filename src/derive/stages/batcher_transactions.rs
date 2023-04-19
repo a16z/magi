@@ -1,19 +1,16 @@
 use eyre::Result;
+use std::collections::VecDeque;
 
 #[derive(Default)]
 pub struct BatcherTransactions {
-    txs: Vec<BatcherTransaction>,
+    txs: VecDeque<BatcherTransaction>,
 }
 
 impl Iterator for BatcherTransactions {
     type Item = BatcherTransaction;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if !self.txs.is_empty() {
-            Some(self.txs.remove(0))
-        } else {
-            None
-        }
+        self.txs.pop_front()
     }
 }
 
@@ -21,7 +18,7 @@ impl BatcherTransactions {
     pub fn push_data(&mut self, txs: Vec<Vec<u8>>, l1_origin: u64) {
         for data in txs {
             let res = BatcherTransaction::new(&data, l1_origin).map(|tx| {
-                self.txs.push(tx);
+                self.txs.push_back(tx);
             });
 
             if res.is_err() {
