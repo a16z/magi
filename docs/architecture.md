@@ -120,5 +120,6 @@ The [Config](./src/config/mod.rs) object contains the system configuration for t
 - `batch_sender`: The L1 address of the batch sender.
 - `batch_inbox`: The batch inbox address.
 - `deposit_contract`: The L1 address of the deposit contract.
+- `blocktime`: The L2 blocktime.
 
 The [ChainConfig](./src/config/mod.rs) contains default implementations for certain chains. For example, a `goerli` [ChainConfig](./src/config/mod.rs) instance can be created by calling `ChainConfig::goerli()`.
