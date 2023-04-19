@@ -6,7 +6,7 @@ The [Driver](../src/driver/mod.rs) is the highest-level component in `magi`. It 
 
 On instantiation, the [Driver](../src/driver/mod.rs) is provided with an instance of the [Engine API](#engine-api), [Pipeline](#derivation-pipeline), and [Config](#config).
 
-Advancing the driver forward one block is then as simple as calling the [Driver::advance](../src/driver/mod.rs#L132) method as done in `magi`'s [main](./src/main.rs) binary.
+Advancing the driver forward one block is then as simple as calling the [Driver::advance](../src/driver/mod.rs#L132) method as done in `magi`'s [main](../bin/magi.rs) binary.
 
 Advancing the driver involves a few steps. First, the [Driver](../src/driver/mod.rs) will increment the [Pipeline](#derivation-pipeline) (as an iterator) to derive [PayloadAttributes](../src/engine/payload.rs). Then, the [Driver](../src/driver/mod.rs) will construct an [ExecutionPayload](../src/engine/payload.rs) that it can send through the [Engine API](#engine-api) as a `engine_newPayloadV1` request. Finally, the [ForkChoiceState](../src/engine/fork.rs) is updated by the driver, sending an `engine_forkchoiceUpdatedV1` request to the [Engine API](#engine-api).
 
@@ -16,7 +16,7 @@ At this point, `magi` has successfully advanced the L2 chain forward by one bloc
 
 The [EngineApi](../src/engine/mod.rs) exposes an interface for interacting with an external [execution client](https://ethereum.org/en/developers/docs/nodes-and-clients/#execution-clients), in our case [op-geth](https://github.com/ethereum-optimism/op-geth) or [op-reth](https://github.com/paradigmxyz/reth) (soon™). Notice, we cannot use [go-ethereum](https://github.com/ethereum/go-ethereum) as the execution client because Optimism's [execution client](https://github.com/ethereum-optimism/op-geth) requires a [minimal diff](https://op-geth.optimism.io/) to the [Engine API](https://github.com/ethereum/execution-apis/tree/main/src/engine).
 
-To construct an [EngineApi](../src/engine/mod.rs) as done in the `magi` [main binary](./src/main.rs), we must provide it with a base url (port is optional, and by default `8551`) as well as a 256 bit, hex-encoded secret string that is used to authenticate requests to the node. This secret is configured on the execution node's side using the `--authrpc.jwtsecret` flag. See [start-op-geth.sh](../docker/start-op-geth.sh) for an example of how to configure and run an [op-geth](https://github.com/ethereum-optimism/op-geth) instance.
+To construct an [EngineApi](../src/engine/mod.rs) as done in the `magi` [main binary](../bin/magi.rs), we must provide it with a base url (port is optional, and by default `8551`) as well as a 256 bit, hex-encoded secret string that is used to authenticate requests to the node. This secret is configured on the execution node's side using the `--authrpc.jwtsecret` flag. See [start-op-geth.sh](../docker/start-op-geth.sh) for an example of how to configure and run an [op-geth](https://github.com/ethereum-optimism/op-geth) instance.
 
 As mentioned in [Driver](#driver) section, the [Driver](../src/driver/mod.rs) uses the [EngineApi](../src/engine/mod.rs) to send constructed [ExecutionPayload](../src/engine/payload.rs) to the execution client using the [new_payload](../src/engine/api.rs#L187) method. It also updates the [ForkChoiceState](../src/engine/fork.rs) using the [forkchoice_updated](../src/engine/api.rs#L171) method.
 
