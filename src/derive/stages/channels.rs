@@ -1,10 +1,10 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
-use super::batcher_transactions::{BatcherTransactions, Frame};
-use crate::config::Config;
+use super::batcher_transactions::{BatcherTransaction, Frame};
+use crate::{config::Config, derive::PurgeableIterator};
 
-pub struct Channels {
-    prev_stage: Arc<Mutex<BatcherTransactions>>,
+pub struct Channels<I> {
+    batcher_tx_iter: I,
     /// List of incomplete channels
     pending_channels: Vec<PendingChannel>,
     /// A bank of frames and their version numbers pulled from a [BatcherTransaction]
@@ -15,7 +15,10 @@ pub struct Channels {
     channel_timeout: u64,
 }
 
-impl Iterator for Channels {
+impl<I> Iterator for Channels<I>
+where
+    I: Iterator<Item = BatcherTransaction>,
+{
     type Item = Channel;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -23,22 +26,33 @@ impl Iterator for Channels {
     }
 }
 
-impl Channels {
-    pub fn new(prev_stage: Arc<Mutex<BatcherTransactions>>, config: Arc<Config>) -> Self {
+impl<I> PurgeableIterator for Channels<I>
+where
+    I: PurgeableIterator<Item = BatcherTransaction>,
+{
+    fn purge(&mut self) {
+        self.batcher_tx_iter.purge();
+        self.pending_channels.clear();
+        self.frame_bank.clear();
+    }
+}
+
+impl<I> Channels<I> {
+    pub fn new(batcher_tx_iter: I, config: Arc<Config>) -> Self {
         Self {
+            batcher_tx_iter,
             pending_channels: Vec::new(),
-            prev_stage,
             frame_bank: Vec::new(),
             max_channel_size: config.chain.max_channel_size,
             channel_timeout: config.chain.channel_timeout,
         }
     }
+}
 
-    pub fn purge(&mut self) {
-        self.pending_channels.clear();
-        self.frame_bank.clear();
-    }
-
+impl<I> Channels<I>
+where
+    I: Iterator<Item = BatcherTransaction>,
+{
     /// Pushes a frame into the correct pending channel
     fn push_frame(&mut self, frame: Frame) {
         // Find a pending channel matching on the channel id
@@ -63,7 +77,7 @@ impl Channels {
 
     /// Pull the next batcher transaction from the [BatcherTransactions] stage
     fn fill_bank(&mut self) {
-        let next_batcher_tx = self.prev_stage.lock().ok().and_then(|mut s| s.next());
+        let next_batcher_tx = self.batcher_tx_iter.next();
 
         if let Some(tx) = next_batcher_tx {
             self.frame_bank.append(&mut tx.frames.to_vec());
@@ -225,21 +239,22 @@ impl From<PendingChannel> for Channel {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        path::PathBuf,
-        sync::{Arc, Mutex},
-    };
-
     use crate::{
         config::{ChainConfig, Config},
-        derive::stages::batcher_transactions::{BatcherTransactions, Frame},
+        derive::stages::batcher_transactions::{
+            BatcherTransactionMessage, BatcherTransactions, Frame,
+        },
+    };
+    use std::{
+        path::PathBuf,
+        sync::{mpsc, Arc},
     };
 
     use super::Channels;
 
     #[test]
     fn test_push_single_channel_frame() {
-        let mut stage = create_stage();
+        let (mut stage, _tx) = create_stage();
 
         let frame = Frame {
             channel_id: 5,
@@ -259,7 +274,7 @@ mod tests {
 
     #[test]
     fn test_push_multi_channel_frame() {
-        let mut stage = create_stage();
+        let (mut stage, _tx) = create_stage();
 
         let frame_1 = Frame {
             channel_id: 5,
@@ -294,7 +309,7 @@ mod tests {
 
     #[test]
     fn test_ready_channel() {
-        let mut stage = create_stage();
+        let (mut stage, _tx) = create_stage();
 
         let frame_1 = Frame {
             channel_id: 5,
@@ -325,7 +340,7 @@ mod tests {
 
     #[test]
     fn test_ready_channel_still_pending() {
-        let mut stage = create_stage();
+        let (mut stage, _tx) = create_stage();
 
         let frame_1 = Frame {
             channel_id: 5,
@@ -345,7 +360,7 @@ mod tests {
 
     #[test]
     fn test_channel_timeout() {
-        let mut stage = create_stage();
+        let (mut stage, _tx) = create_stage();
 
         let frame_1 = Frame {
             channel_id: 5,
@@ -372,9 +387,10 @@ mod tests {
         assert_eq!(stage.pending_channels.len(), 0);
     }
 
-    fn create_stage() -> Channels {
-        let prev_stage = Arc::new(Mutex::new(BatcherTransactions::default()));
-
+    fn create_stage() -> (
+        Channels<BatcherTransactions>,
+        mpsc::Sender<BatcherTransactionMessage>,
+    ) {
         let config = Config {
             l1_rpc_url: String::new(),
             l2_rpc_url: String::new(),
@@ -384,6 +400,10 @@ mod tests {
             chain: ChainConfig::optimism_goerli(),
         };
 
-        Channels::new(prev_stage, Arc::new(config))
+        let (tx, rx) = mpsc::channel();
+        (
+            Channels::new(BatcherTransactions::new(rx), Arc::new(config)),
+            tx,
+        )
     }
 }
