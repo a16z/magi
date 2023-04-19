@@ -70,7 +70,7 @@ impl Pipeline {
         Ok(())
     }
 
-    pub fn peak(&mut self) -> Option<&PayloadAttributes> {
+    pub fn peek(&mut self) -> Option<&PayloadAttributes> {
         if self.pending_attributes.is_none() {
             let next_attributes = self.next();
             self.pending_attributes = next_attributes;
