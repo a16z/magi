@@ -27,7 +27,7 @@ impl Iterator for BatcherTransactions {
 impl PurgeableIterator for BatcherTransactions {
     fn purge(&mut self) {
         // drain the channel first
-        while let Ok(_) = self.transaction_rx.try_recv() {}
+        while self.transaction_rx.try_recv().is_ok() {}
         self.txs.clear();
     }
 }
