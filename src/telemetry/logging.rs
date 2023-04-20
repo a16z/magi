@@ -14,10 +14,10 @@ use ansi_term::Colour::{Blue, Cyan, Purple, Red, Yellow};
 
 /// Standard log file name prefix. This will be optionally appended with a timestamp
 /// depending on the rotation strategy.
-const LOG_FILE_NAME_PREFIX: &'static str = "magi.log";
+const LOG_FILE_NAME_PREFIX: &str = "magi.log";
 
 /// Default log file rotation strategy. This can be overridden by the `logs_rotation` config.
-const DEFAULT_ROTATION: &'static str = "daily";
+const DEFAULT_ROTATION: &str = "daily";
 
 /// Configure logging telemetry with a global handler.
 pub fn init(
@@ -38,7 +38,7 @@ pub fn init(
     }
 
     // If no directory is provided, log to stdout only
-    return build_subscriber(verbose, None);
+    build_subscriber(verbose, None)
 }
 
 /// Subscriber Composer
