@@ -3,6 +3,7 @@ use std::time::SystemTime;
 
 use eyre::Result;
 use reqwest::{header, Client};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -96,7 +97,10 @@ impl EngineApi {
     }
 
     /// Helper to construct a post request through the client
-    pub async fn post(&self, method: &str, params: Vec<Value>) -> Result<reqwest::Response> {
+    async fn post<P>(&self, method: &str, params: Vec<Value>) -> Result<P>
+    where
+        P: DeserializeOwned,
+    {
         // Construct the request params
         let mut body = self.base_body();
         body.insert("method".to_string(), Value::String(method.to_string()));
@@ -119,51 +123,53 @@ impl EngineApi {
             .map_err(|_| eyre::eyre!("EngineApi failed to encode jwt with claims!"))?;
 
         // Send the request
-        client
+        let res = client
             .post(&self.base_url)
             .header(header::CONTENT_TYPE, "application/json")
             .header(header::AUTHORIZATION, format!("Bearer {}", jwt))
             .json(&body)
             .send()
             .await
-            .map_err(|e| eyre::eyre!(e))
+            .map_err(|e| eyre::eyre!(e))?
+            .json::<EngineApiResponse<P>>()
+            .await?;
+
+        if let Some(res) = res.result {
+            return Ok(res);
+        }
+
+        if let Some(err) = res.error {
+            eyre::bail!(err.message);
+        }
+
+        // This scenario shouldn't occur as the response should always have either data or an error
+        eyre::bail!("Failed to parse Engine API response")
     }
 }
 
-/// Execution Payload Response
+/// Generic Engine API response
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ExecutionPayloadResponse {
+pub struct EngineApiResponse<P> {
     /// JSON RPC version
-    pub jsonrpc: String,
+    jsonrpc: String,
     /// Request ID
-    pub id: u64,
-    /// Execution payload
-    pub result: ExecutionPayload,
+    id: u64,
+    /// JSON RPC payload
+    result: Option<P>,
+    /// JSON RPC error payload
+    error: Option<EngineApiErrorPayload>,
 }
 
-/// Payload Status Response
+/// Engine API error payload
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PayloadStatusResponse {
-    /// JSON RPC version
-    pub jsonrpc: String,
-    /// Request ID
-    pub id: u64,
-    /// Payload status response
-    pub result: PayloadStatus,
-}
-
-/// Fork Choice Update Response
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ForkChoiceUpdateResponse {
-    /// JSON RPC version
-    pub jsonrpc: String,
-    /// Request ID
-    pub id: u64,
-    /// Fork choice update
-    pub result: ForkChoiceUpdate,
+pub struct EngineApiErrorPayload {
+    /// The error code
+    pub code: i64,
+    /// The error message
+    pub message: String,
+    /// Optional additional error data
+    pub data: Option<Value>,
 }
 
 #[async_trait::async_trait]
@@ -180,15 +186,13 @@ impl Engine for EngineApi {
         let forkchoice_state_param = serde_json::to_value(forkchoice_state)?;
         let params = vec![forkchoice_state_param, payload_attributes_param];
         let res = self.post(ENGINE_FORKCHOICE_UPDATED_V1, params).await?;
-        let res = res.json::<ForkChoiceUpdateResponse>().await?;
-        Ok(res.result)
+        Ok(res)
     }
 
     async fn new_payload(&self, execution_payload: ExecutionPayload) -> Result<PayloadStatus> {
         let params = vec![serde_json::to_value(execution_payload)?];
         let res = self.post(ENGINE_NEW_PAYLOAD_V1, params).await?;
-        let res = res.json::<PayloadStatusResponse>().await?;
-        Ok(res.result)
+        Ok(res)
     }
 
     async fn get_payload(&self, payload_id: PayloadId) -> Result<ExecutionPayload> {
@@ -196,8 +200,7 @@ impl Engine for EngineApi {
         let padded = format!("0x{:0>16}", encoded);
         let params = vec![Value::String(padded)];
         let res = self.post(ENGINE_GET_PAYLOAD_V1, params).await?;
-        let res: ExecutionPayloadResponse = res.json::<ExecutionPayloadResponse>().await?;
-        Ok(res.result)
+        Ok(res)
     }
 }
 
