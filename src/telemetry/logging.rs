@@ -52,7 +52,7 @@ pub fn build_subscriber(verbose: bool, appender: Option<RollingFileAppender>) ->
         })
     });
 
-    let stdout_formatting_layer = AsniTermLayer.with_filter(stdout_env_filter);
+    let stdout_formatting_layer = AnsiTermLayer.with_filter(stdout_env_filter);
 
     if let Some(appender) = appender {
         let (non_blocking, guard) = tracing_appender::non_blocking(appender);
@@ -119,9 +119,9 @@ impl tracing::field::Visit for AnsiVisitor {
 
 /// An Ansi Term layer for tracing
 #[derive(Debug)]
-pub struct AsniTermLayer;
+pub struct AnsiTermLayer;
 
-impl<S> Layer<S> for AsniTermLayer
+impl<S> Layer<S> for AnsiTermLayer
 where
     S: tracing::Subscriber,
 {
