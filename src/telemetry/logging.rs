@@ -1,39 +1,82 @@
-use std::env::current_dir;
-use std::path::Path;
+use std::{
+    env::current_dir,
+    path::{Path, PathBuf},
+};
 
-use eyre::Result;
-use tracing::subscriber::set_global_default;
-use tracing::{Level, Subscriber};
-use tracing_log::LogTracer;
-use tracing_subscriber::Layer;
-use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
+use tracing::Level;
+use tracing_appender::{
+    non_blocking::WorkerGuard,
+    rolling::{self, RollingFileAppender, Rotation},
+};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
 use ansi_term::Colour::{Blue, Cyan, Purple, Red, Yellow};
 
-/// Configure logging telemetry
-pub fn init(verbose: bool) -> Result<()> {
-    let subscriber = match verbose {
-        true => get_subscriber("magi=debug".into()),
-        false => get_subscriber("magi=info".into()),
-    };
-    init_subscriber(subscriber)
+/// Standard log file name prefix. This will be optionally appended with a timestamp
+/// depending on the rotation strategy.
+const LOG_FILE_NAME_PREFIX: &'static str = "magi.log";
+
+/// Configure logging telemetry with a global handler.
+pub fn init(
+    verbose: bool,
+    logs_dir: Option<String>,
+    logs_rotation: Option<String>,
+) -> Vec<WorkerGuard> {
+    // Only log to a file if a directory is provided
+    if let Some(dir) = logs_dir {
+        let directory = PathBuf::from(dir);
+        let rotation = get_rotation_strategy(&logs_rotation.unwrap_or("never".into()));
+        let appender = Some(get_rolling_file_appender(
+            directory,
+            rotation,
+            LOG_FILE_NAME_PREFIX,
+        ));
+        return build_subscriber(verbose, appender);
+    }
+
+    // If no directory is provided, log to stdout only
+    return build_subscriber(verbose, None);
 }
 
 /// Subscriber Composer
 ///
 /// Builds a subscriber with multiple layers into a [tracing](https://crates.io/crates/tracing) subscriber.
-pub fn get_subscriber(env_filter: String) -> impl Subscriber + Sync + Send {
-    let env_filter =
-        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(env_filter));
-    let formatting_layer = AsniTermLayer;
-    Registry::default().with(env_filter).with(formatting_layer)
-}
+/// If an appender is provided, the subscriber will attach to it and log to the file as well as stdout.
+pub fn build_subscriber(verbose: bool, appender: Option<RollingFileAppender>) -> Vec<WorkerGuard> {
+    let mut guards = Vec::new();
 
-/// Globally registers a subscriber.
-/// This will error if a subscriber has already been registered.
-pub fn init_subscriber(subscriber: impl Subscriber + Send + Sync) -> Result<()> {
-    LogTracer::init().map_err(|_| eyre::eyre!("Failed to set logger"))?;
-    set_global_default(subscriber).map_err(|_| eyre::eyre!("Failed to set subscriber"))
+    let stdout_env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+        EnvFilter::new(match verbose {
+            true => "magi=debug".to_owned(),
+            false => "magi=info".to_owned(),
+        })
+    });
+
+    let stdout_formatting_layer = AsniTermLayer.with_filter(stdout_env_filter);
+
+    if let Some(appender) = appender {
+        let (non_blocking, guard) = tracing_appender::non_blocking(appender);
+        guards.push(guard);
+
+        // Force the file logger to log at `debug` level
+        let file_env_filter = EnvFilter::from("magi=debug");
+
+        tracing_subscriber::registry()
+            .with(stdout_formatting_layer)
+            .with(
+                tracing_subscriber::fmt::layer()
+                    .with_ansi(false)
+                    .with_writer(non_blocking)
+                    .with_filter(file_env_filter),
+            )
+            .init();
+    } else {
+        tracing_subscriber::registry()
+            .with(stdout_formatting_layer)
+            .init();
+    }
+
+    guards
 }
 
 /// The AnsiVisitor
@@ -154,5 +197,35 @@ where
 
         let mut visitor = AnsiVisitor;
         event.record(&mut visitor);
+    }
+}
+
+/// Get the rotation strategy from the given string.
+/// Defaults to never rotating.
+fn get_rotation_strategy(val: &str) -> Rotation {
+    match val {
+        "never" => Rotation::NEVER,
+        "daily" => Rotation::DAILY,
+        "hourly" => Rotation::HOURLY,
+        "minutely" => Rotation::MINUTELY,
+        _ => {
+            eprintln!("Invalid log rotation strategy provided. Defaulting to never rotating.");
+            eprintln!("Valid rotation options are: 'never', 'daily', 'hourly', 'minutely'.");
+            Rotation::NEVER
+        }
+    }
+}
+
+/// Get a rolling file appender for the given directory, rotation and file name prefix.
+fn get_rolling_file_appender(
+    directory: PathBuf,
+    rotation: Rotation,
+    file_name_prefix: &str,
+) -> RollingFileAppender {
+    match rotation {
+        Rotation::NEVER => rolling::never(directory, file_name_prefix),
+        Rotation::DAILY => rolling::daily(directory, file_name_prefix),
+        Rotation::HOURLY => rolling::hourly(directory, file_name_prefix),
+        Rotation::MINUTELY => rolling::minutely(directory, file_name_prefix),
     }
 }
