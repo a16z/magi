@@ -18,7 +18,7 @@ use crate::{
     driver::types::HeadInfo,
     engine::{Engine, EngineApi},
     l1::{BlockUpdate, ChainWatcher},
-    rpc::Rpc,
+    rpc,
     telemetry::metrics,
 };
 
@@ -44,8 +44,6 @@ pub struct Driver<E: Engine> {
     chain_watcher: ChainWatcher,
     /// Channel to receive the shutdown signal from
     shutdown_recv: Receiver<bool>,
-    /// Rpc client to talk to L2 rpc
-    rpc: Rpc,
 }
 
 impl Driver<EngineApi> {
@@ -88,7 +86,7 @@ impl Driver<EngineApi> {
         let pipeline = Pipeline::new(state.clone(), config)?;
 
         let config_arc = Arc::new(config_clone);
-        let rpc = Rpc::new(&config_arc).unwrap();
+        let _addr = rpc::run_server(config_arc);
 
         Ok(Self {
             engine_driver,
@@ -98,7 +96,6 @@ impl Driver<EngineApi> {
             state,
             chain_watcher,
             shutdown_recv,
-            rpc,
         })
     }
 }

@@ -60,9 +60,14 @@ services:
     env_file:
       - .env
     ports:
+<<<<<<< HEAD
       - 8551:8551
       - 8545:8545
       - 8546:8546
+=======
+      - 9200:9200
+      - 9545:9545
+>>>>>>> 79c33b8 (rpc server added)
     volumes:
       - ./:/scripts
       - data:/data

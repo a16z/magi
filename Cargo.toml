@@ -18,7 +18,7 @@ hex = "0.4.3"
 libflate = "1.2.0"
 openssl = { version = "0.10", features = ["vendored"] }
 once_cell = "1"
-jsonrpsee = {version = "0.17.0", features = ["http-client", "macros"]}
+jsonrpsee = {version = "0.17.0", features = ["server", "http-client", "ws-client", "macros", "client-ws-transport-native-tls"]}
 
 # Logging and Metrics
 chrono = "0.4.22"
