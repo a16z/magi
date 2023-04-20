@@ -18,3 +18,6 @@ pub mod engine;
 
 /// Application telemetry and logging
 pub mod telemetry;
+
+/// RPC module to talk to rpc direcly
+pub mod rpc;
