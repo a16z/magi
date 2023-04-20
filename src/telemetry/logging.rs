@@ -16,6 +16,9 @@ use ansi_term::Colour::{Blue, Cyan, Purple, Red, Yellow};
 /// depending on the rotation strategy.
 const LOG_FILE_NAME_PREFIX: &'static str = "magi.log";
 
+/// Default log file rotation strategy. This can be overridden by the `logs_rotation` config.
+const DEFAULT_ROTATION: &'static str = "daily";
+
 /// Configure logging telemetry with a global handler.
 pub fn init(
     verbose: bool,
@@ -25,7 +28,7 @@ pub fn init(
     // If a directory is provided, log to file and stdout
     if let Some(dir) = logs_dir {
         let directory = PathBuf::from(dir);
-        let rotation = get_rotation_strategy(&logs_rotation.unwrap_or("never".into()));
+        let rotation = get_rotation_strategy(&logs_rotation.unwrap_or(DEFAULT_ROTATION.into()));
         let appender = Some(get_rolling_file_appender(
             directory,
             rotation,
@@ -202,7 +205,7 @@ where
 }
 
 /// Get the rotation strategy from the given string.
-/// Defaults to never rotating.
+/// Defaults to rotating daily.
 fn get_rotation_strategy(val: &str) -> Rotation {
     match val {
         "never" => Rotation::NEVER,
@@ -210,9 +213,9 @@ fn get_rotation_strategy(val: &str) -> Rotation {
         "hourly" => Rotation::HOURLY,
         "minutely" => Rotation::MINUTELY,
         _ => {
-            eprintln!("Invalid log rotation strategy provided. Defaulting to never rotating.");
+            eprintln!("Invalid log rotation strategy provided. Defaulting to rotating daily.");
             eprintln!("Valid rotation options are: 'never', 'daily', 'hourly', 'minutely'.");
-            Rotation::NEVER
+            Rotation::DAILY
         }
     }
 }
