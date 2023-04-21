@@ -7,9 +7,11 @@ if [ $NETWORK = "optimism-goerli" ]
 then
     if [ ! -d $DATADIR ]
     then
+        # apk update && apk install tar
         mkdir $DATADIR
-        wget "https://backup.goerli.op-erigon.testinprod.io" -O $DATADIR/backup.tar.gz
-        tar -xvf $DATADIR/backup.tar.gz -C $DATADIR
+        wget "https://op-erigon-genesis.s3.amazonaws.com/erigon.tar.gz" -O erigon.tar.gz
+        tar -zxvf erigon.tar.gz -C /tmp
+        mv /tmp/chaindata $DATADIR
     fi
 else
     echo "Network not recognized. Available option is optimism-goerli. Use op-geth for base-goerli"

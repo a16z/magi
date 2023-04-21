@@ -21,4 +21,4 @@ exec magi \
     --l2-rpc-url http://${EXECUTION_CONTAINER}:8545 \
     --l2-engine-url http://${EXECUTION_CONTAINER}:8551 \
     --data-dir $DATADIR \
-    --sync-mode full \
+    --sync-mode full
