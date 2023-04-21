@@ -1795,6 +1795,7 @@ dependencies = [
  "jsonwebtoken",
  "lazy_static",
  "libflate",
+ "once_cell",
  "openssl",
  "prometheus_exporter",
  "rand",

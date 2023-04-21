@@ -18,6 +18,7 @@ use ethers::{
 };
 
 use eyre::Result;
+use once_cell::sync::Lazy;
 use tokio::{spawn, task::JoinHandle, time::sleep};
 
 use crate::{
@@ -25,6 +26,15 @@ use crate::{
     config::{Config, SystemConfig},
     derive::stages::attributes::UserDeposited,
 };
+
+static CONFIG_UPDATE_TOPIC: Lazy<H256> =
+    Lazy::new(|| H256::from_slice(&keccak256("ConfigUpdate(uint256,uint8,bytes)")));
+
+static TRANSACTION_DEPOSITED_TOPIC: Lazy<H256> = Lazy::new(|| {
+    H256::from_slice(&keccak256(
+        "TransactionDeposited(address,address,uint256,bytes)",
+    ))
+});
 
 /// Handles watching the L1 chain and monitoring for new blocks, deposits,
 /// and batcher transactions. The monitoring loop is spawned in a seperate
@@ -284,11 +294,9 @@ impl InnerWatcher {
 
         if last_update_block < self.current_block {
             let to_block = last_update_block + 1000;
-            let update_event = "ConfigUpdate(uint256,uint8,bytes)";
-            let update_topic = H256::from_slice(&keccak256(update_event));
             let filter = Filter::new()
                 .address(self.config.chain.system_config_contract)
-                .topic0(update_topic)
+                .topic0(*CONFIG_UPDATE_TOPIC)
                 .from_block(last_update_block + 1)
                 .to_block(to_block);
 
@@ -376,14 +384,11 @@ impl InnerWatcher {
         match self.deposits.remove(&block_num) {
             Some(deposits) => Ok(deposits),
             None => {
-                let deposit_event = "TransactionDeposited(address,address,uint256,bytes)";
-                let deposit_topic = H256::from_slice(&keccak256(deposit_event));
-
                 let end_block = self.head_block.min(block_num + 1000);
 
                 let deposit_filter = Filter::new()
                     .address(self.config.chain.deposit_contract)
-                    .topic0(deposit_topic)
+                    .topic0(*TRANSACTION_DEPOSITED_TOPIC)
                     .from_block(block_num)
                     .to_block(end_block);
 
