@@ -1,4 +1,4 @@
-use eyre::Result;
+use eyre::{Result, WrapErr};
 use lazy_static::lazy_static;
 use prometheus_exporter::{
     prometheus::{register_int_gauge, IntGauge},
@@ -14,6 +14,6 @@ lazy_static! {
 }
 
 pub fn init() -> Result<()> {
-    start("0.0.0.0:9200".parse().unwrap())?;
+    start("0.0.0.0:9200".parse().wrap_err("Could not parse address")?)?;
     Ok(())
 }
