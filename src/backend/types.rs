@@ -1,4 +1,4 @@
-use eyre::{Result, eyre};
+use eyre::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::common::{BlockInfo, Epoch};
@@ -17,7 +17,7 @@ impl TryFrom<sled::IVec> for HeadInfo {
 
     fn try_from(bytes: sled::IVec) -> Result<Self, Self::Error> {
         Ok(serde_json::from_slice(bytes.as_ref())
-            .map_err(|e| eyre!("Failed to deserialize HeadInfo: {}", e))?)
+            .map_err(|e| eyre!("Failed to deserialize HeadInfo: {}", e)))
     }
 }
 
