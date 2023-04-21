@@ -1,12 +1,14 @@
+use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::config::Config;
 
-use ethers::types::H256;
+use ethers::types::{Block, BlockId, H160, H256};
 
 use eyre::Result;
 
 use ethers::providers::{Middleware, Provider};
+use ethers::utils::keccak256;
 
 use jsonrpsee::{
     core::{async_trait, Error},
@@ -16,10 +18,10 @@ use jsonrpsee::{
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
-#[rpc(server, client)]
+#[rpc(server, client, namespace = "optimism")]
 pub trait Rpc {
-    #[method(name = "optimism_outputAtBlock")]
-    async fn optimism_output_at_block(&self, block_number: u64) -> Result<H256, Error>;
+    #[method(name = "outputAtBlock")]
+    async fn output_at_block(&self, block_number: u64) -> Result<OutputRootResponse, Error>;
 }
 
 #[derive(Debug)]
@@ -29,15 +31,49 @@ pub struct RpcServerImpl {
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
-    async fn optimism_output_at_block(&self, block_number: u64) -> Result<H256, Error> {
+    async fn output_at_block(&self, block_number: u64) -> Result<OutputRootResponse, Error> {
         let l2_provider =
             Provider::try_from(self.config.l2_rpc_url.clone()).expect("invalid L2 RPC url");
+
         let block = l2_provider.get_block(block_number).await.unwrap().unwrap();
 
-        // let output_response: OutputRootResponse = serde_json::from_value(response)?;
+        let state_root = block.state_root;
+        let block_hash = block.hash.unwrap();
+        let locations = vec![state_root];
+        let block_id = Some(BlockId::from(block_hash));
 
-        Ok(block.state_root)
+        // TODO hange this
+        let from = H160::from_str("0x4200000000000000000000000000000000000016").unwrap();
+        let state_proof = l2_provider
+            .get_proof(from, locations, block_id)
+            .await
+            .unwrap();
+
+        let output_root = compute_l2_output_root(block, state_proof.storage_hash);
+        // TODO: Verify proof like this - https://github.com/ethereum-optimism/optimism/blob/b65152ca11d7d4c2f23156af8a03339b6798c04d/op-node/node/api.go#L111
+
+        let version: H256 = Default::default();
+
+        Ok(OutputRootResponse {
+            output_root,
+            version,
+        })
     }
+}
+
+fn compute_l2_output_root(block: Block<H256>, storage_root: H256) -> H256 {
+    let version: H256 = Default::default();
+    let digest = keccak256(
+        [
+            version.to_fixed_bytes(),
+            block.state_root.to_fixed_bytes(),
+            storage_root.to_fixed_bytes(),
+            block.hash.unwrap().to_fixed_bytes(),
+        ]
+        .concat(),
+    );
+
+    H256::from_slice(&digest)
 }
 
 pub async fn run_server(config: Arc<Config>) -> Result<SocketAddr> {
@@ -54,8 +90,9 @@ pub async fn run_server(config: Arc<Config>) -> Result<SocketAddr> {
     Ok(addr)
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct OutputRootResponse {
-    pub l2_root_output: H256,
+    pub output_root: H256,
     pub version: H256,
 }
