@@ -16,9 +16,11 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     let sync_mode = cli.sync_mode.clone();
     let verbose = cli.verbose;
+    let logs_dir = cli.logs_dir.clone();
+    let logs_rotation = cli.logs_rotation.clone();
     let config = cli.to_config();
 
-    telemetry::init(verbose)?;
+    let _guards = telemetry::init(verbose, logs_dir, logs_rotation);
     metrics::init()?;
 
     match sync_mode {
@@ -69,6 +71,10 @@ pub struct Cli {
     jwt_secret: Option<String>,
     #[clap(short = 'v', long)]
     verbose: bool,
+    #[clap(long)]
+    logs_dir: Option<String>,
+    #[clap(long)]
+    logs_rotation: Option<String>,
 }
 
 impl Cli {
