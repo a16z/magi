@@ -13,5 +13,7 @@ run-local:
 	make build-local && cd docker && docker compose up
 
 run-geth:
-	cd docker && COMPOSE_PROFILES=no-magi docker compose up
+	cd docker && COMPOSE_PROFILES=op-geth docker compose up
 
+run-erigon:
+	cd docker && COMPOSE_PROFILES=op-erigon docker compose up
