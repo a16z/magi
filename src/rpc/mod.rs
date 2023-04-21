@@ -16,7 +16,7 @@ use jsonrpsee::{
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
-#[rpc(server, client, namespace = "rpc")]
+#[rpc(server, client)]
 pub trait Rpc {
     #[method(name = "optimism_outputAtBlock")]
     async fn optimism_output_at_block(&self, block_number: u64) -> Result<H256, Error>;
@@ -49,6 +49,7 @@ pub async fn run_server(config: Arc<Config>) -> Result<SocketAddr> {
     // In this example we don't care about doing shutdown so let's it run forever.
     // You may use the `ServerHandle` to shut it down or manage it yourself.
     tokio::spawn(handle.stopped());
+    tracing::info!("rpc server started at port 9545");
 
     Ok(addr)
 }

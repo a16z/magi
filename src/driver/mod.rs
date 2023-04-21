@@ -86,7 +86,7 @@ impl Driver<EngineApi> {
         let pipeline = Pipeline::new(state.clone(), config)?;
 
         let config_arc = Arc::new(config_clone);
-        let _addr = rpc::run_server(config_arc);
+        let _addr = rpc::run_server(config_arc).await?;
 
         Ok(Self {
             engine_driver,
