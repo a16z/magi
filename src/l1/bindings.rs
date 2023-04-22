@@ -33,8 +33,8 @@ abigen! {
         function latestOutputIndex() external view returns (uint256)
         function getL2Output(uint256 _l2OutputIndex) external view returns (OutputProposal)
         function getL2OutputAfter(uint256 _l2BlockNumber) external view returns (OutputProposal)
-        event OutputProposed(bytes32 indexed outputRoot, uint256 indexed l2OutputIndex, uint256 indexed l2BlockNumber,uint256 l1Timestamp)
         struct OutputProposal { bytes32 outputRoot; uint128 timestamp; uint128 l2BlockNumber; }
+        event OutputProposed(bytes32 indexed outputRoot, uint256 indexed l2OutputIndex, uint256 indexed l2BlockNumber,uint256 l1Timestamp)
     ]"#,
 }
 
@@ -73,9 +73,12 @@ impl L1Bindings<Provider<RetryClient<Http>>> {
         })
     }
 
-    /// Returns the first checkpoint that commits to the given L2 block number.
-    pub async fn get_checkpoint_output(&self) -> Result<OutputProposal> {
-        let latest_output_index = self.l2_output_oracle.latest_output_index().call().await?;
-        self.get_l2_output(latest_output_index).await
+    /// Returns a tuple with the latest output index and its corresponding output proposal.
+    pub async fn get_latest_l2_output(&self) -> Result<(U256, OutputProposal)> {
+        let latest_index = self.l2_output_oracle.latest_output_index().call().await?;
+        Ok((
+            latest_index.clone(),
+            self.get_l2_output(latest_index).await?,
+        ))
     }
 }
