@@ -82,3 +82,51 @@ impl L1Bindings<Provider<RetryClient<Http>>> {
         ))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::{path::PathBuf, sync::Arc};
+
+    use super::*;
+    use crate::config::{ChainConfig, Config};
+
+    #[tokio::test]
+    async fn test_get_latest_l2_output() {
+        let rpc = "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc";
+        let config = Arc::new(Config {
+            l1_rpc_url: rpc.to_string(),
+            l2_rpc_url: "mocked".to_string(),
+            chain: ChainConfig::optimism_goerli(),
+            data_dir: PathBuf::default(),
+            l2_engine_url: String::new(),
+            jwt_secret: String::new(),
+        });
+
+        let l1_bindings = L1Bindings::from_config(&config).await.unwrap();
+
+        let (latest_index, latest_output) = l1_bindings.get_latest_l2_output().await.unwrap();
+
+        println!("latest_index: {}", latest_index);
+        println!("latest_output: {:?}", latest_output);
+    }
+
+    #[tokio::test]
+    async fn test_get_l2_output() {
+        let rpc = "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc";
+        let config = Arc::new(Config {
+            l1_rpc_url: rpc.to_string(),
+            l2_rpc_url: "mocked".to_string(),
+            chain: ChainConfig::optimism_goerli(),
+            data_dir: PathBuf::default(),
+            l2_engine_url: String::new(),
+            jwt_secret: String::new(),
+        });
+
+        let l1_bindings = L1Bindings::from_config(&config).await.unwrap();
+
+        let l2_output_index = U256::from(0);
+        let output = l1_bindings.get_l2_output(l2_output_index).await.unwrap();
+
+        println!("output: {:?}", output);
+    }
+}
