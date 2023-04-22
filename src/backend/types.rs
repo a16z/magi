@@ -17,7 +17,7 @@ impl TryFrom<sled::IVec> for HeadInfo {
 
     fn try_from(bytes: sled::IVec) -> Result<Self, Self::Error> {
         Ok(serde_json::from_slice(bytes.as_ref())
-            .map_err(|e| eyre!("Failed to deserialize HeadInfo: {}", e)))
+            .map_err(|e| eyre::Result::Err(eyre::eyre!("Failed to deserialize HeadInfo: {}", e)))?)
     }
 }
 
@@ -25,6 +25,6 @@ impl From<HeadInfo> for sled::IVec {
     fn from(val: HeadInfo) -> Self {
         serde_json::to_vec(&val)
             .map(sled::IVec::from)
-            .unwrap_or_else(|e| panic!("Failed to serialize HeadInfo: {}", e))
+            .unwrap_or_else(|e| eyre::Result::Err(eyre::eyre!("Failed to serialize HeadInfo: {}", e)).unwrap())
     }
 }
