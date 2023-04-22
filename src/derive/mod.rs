@@ -96,8 +96,8 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_attributes_match() {
-        let rpc = "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc";
-        let l2_rpc = "https://opt-goerli.g.alchemy.com/v2/Olu7jiUDhtHf1iWldKzbBXGB6ImGs0XM";
+        let rpc = "https://eth-goerli.g.alchemy.com/v2/UbmnU8fj4rLikYW5ph8Xe975Pz-nxqfv";
+        let l2_rpc = "https://opt-goerli.g.alchemy.com/v2/UbmnU8fj4rLikYW5ph8Xe975Pz-nxqfv";
 
         let config = Arc::new(Config {
             l1_rpc_url: rpc.to_string(),
