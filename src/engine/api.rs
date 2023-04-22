@@ -23,7 +23,7 @@ pub struct EngineApi {
     /// Base request url
     pub base_url: String,
     /// The url port
-    pub port: u32,
+    pub port: u16,
     /// HTTP Client
     pub client: Option<Client>,
     /// A [crate::engine::JwtSecret] used to authenticate with the engine api
@@ -38,7 +38,7 @@ impl EngineApi {
         // Gracefully parse the port from the base url
         let parts: Vec<&str> = base_url.split(':').collect();
         let port = parts[parts.len() - 1]
-            .parse::<u32>()
+            .parse::<u16>()
             .unwrap_or(DEFAULT_AUTH_PORT);
         let base_url = if parts.len() <= 2 {
             parts[0].to_string()
@@ -54,7 +54,7 @@ impl EngineApi {
     }
 
     /// Constructs the base engine api url for the given address
-    pub fn auth_url_from_addr(addr: &str, port: Option<u32>) -> String {
+    pub fn auth_url_from_addr(addr: &str, port: Option<u16>) -> String {
         let stripped = addr.strip_prefix("http://").unwrap_or(addr);
         let stripped = addr.strip_prefix("https://").unwrap_or(stripped);
         let port = port.unwrap_or(DEFAULT_AUTH_PORT);
