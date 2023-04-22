@@ -117,6 +117,8 @@ pub struct ChainConfig {
     pub deposit_contract: Address,
     /// The L1 system config contract
     pub system_config_contract: Address,
+    /// The L1 _OptimismPortal_ contract
+    pub portal: Address,
     /// The maximum byte size of all pending channels
     pub max_channel_size: u64,
     /// The max timeout for a channel (as measured by the frame L1 block number)
@@ -217,6 +219,7 @@ impl ChainConfig {
             system_config_contract: addr("0xAe851f927Ee40dE99aaBb7461C00f9622ab91d60"),
             batch_inbox: addr("0xff00000000000000000000000000000000000420"),
             deposit_contract: addr("0x5b47E1A08Ea6d985D6649300584e6722Ec4B1383"),
+            portal: addr("0xa24A444C6ceeb1d4Fc19D1B78913C22B9d03BbC9"),
             max_channel_size: 100_000_000,
             channel_timeout: 300,
             seq_window_size: 3600,
@@ -248,6 +251,7 @@ impl ChainConfig {
             system_config_contract: addr("0xb15eea247ece011c68a614e4a77ad648ff495bc1"),
             batch_inbox: addr("0x8453100000000000000000000000000000000000"),
             deposit_contract: addr("0xe93c8cd0d409341205a592f8c4ac1a5fe5585cfa"),
+            portal: addr("?"),
             max_channel_size: 100_000_000,
             channel_timeout: 100,
             seq_window_size: 3600,

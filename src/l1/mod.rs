@@ -27,6 +27,8 @@ use crate::{
     derive::stages::attributes::UserDeposited,
 };
 
+mod bindings;
+
 static CONFIG_UPDATE_TOPIC: Lazy<H256> =
     Lazy::new(|| H256::from_slice(&keccak256("ConfigUpdate(uint256,uint8,bytes)")));
 
@@ -186,15 +188,12 @@ impl InnerWatcher {
         l1_start_block: u64,
         l2_start_block: u64,
     ) -> Self {
-        let http = Http::from_str(&config.l1_rpc_url).expect("invalid L1 RPC URL");
-        let policy = Box::new(HttpRateLimitRetryPolicy);
-        let client = RetryClient::new(http, policy, 100, 50);
-        let provider = Arc::new(Provider::new(client));
+        let provider = generate_http_provider(&config.l1_rpc_url);
 
         let system_config = if l2_start_block == config.chain.l2_genesis.number {
             config.chain.system_config
         } else {
-            let l2_provider = Provider::try_from(&config.l2_rpc_url).expect("invalid L2 RPC url");
+            let l2_provider = generate_http_provider(&config.l2_rpc_url);
 
             let block = l2_provider
                 .get_block_with_txs(l2_start_block - 1)
@@ -557,4 +556,11 @@ impl TryFrom<Log> for SystemConfigUpdate {
             _ => Err(eyre::eyre!("invalid system config update")),
         }
     }
+}
+
+fn generate_http_provider(url: &str) -> Arc<Provider<RetryClient<Http>>> {
+    let http = Http::from_str(url).expect("invalid RPC URL");
+    let policy = Box::new(HttpRateLimitRetryPolicy);
+    let client = RetryClient::new(http, policy, 100, 50);
+    Arc::new(Provider::new(client))
 }
