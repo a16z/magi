@@ -251,7 +251,7 @@ impl ChainConfig {
             system_config_contract: addr("0xb15eea247ece011c68a614e4a77ad648ff495bc1"),
             batch_inbox: addr("0x8453100000000000000000000000000000000000"),
             deposit_contract: addr("0xe93c8cd0d409341205a592f8c4ac1a5fe5585cfa"),
-            portal: addr("?"),
+            portal: addr("0xe93c8cD0D409341205A592f8c4Ac1A5fe5585cfA"),
             max_channel_size: 100_000_000,
             channel_timeout: 100,
             seq_window_size: 3600,
