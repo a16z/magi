@@ -18,13 +18,14 @@ async fn main() -> Result<()> {
     let verbose = cli.verbose;
     let logs_dir = cli.logs_dir.clone();
     let logs_rotation = cli.logs_rotation.clone();
+    let checkpoint_hash = cli.checkpoint_hash.clone();
     let config = cli.to_config();
 
     let _guards = telemetry::init(verbose, logs_dir, logs_rotation);
     metrics::init()?;
 
     match sync_mode {
-        SyncMode::Fast => panic!("fast sync not implemented"),
+        SyncMode::Fast => fast_sync(config, checkpoint_hash).await?,
         SyncMode::Full => full_sync(config).await?,
         SyncMode::Challenge => panic!("challenge sync not implemented"),
     };
@@ -53,6 +54,33 @@ pub async fn full_sync(config: Config) -> Result<()> {
     Ok(())
 }
 
+pub async fn fast_sync(config: Config, checkpoint_hash: Option<String>) -> Result<()> {
+    tracing::info!(target: "magi", "starting fast sync");
+    let (shutdown_sender, shutdown_recv) = channel();
+
+    if checkpoint_hash.is_none() {
+        panic!("checkpoint hash must be provided for fast sync right now.");
+    }
+
+    // todo: change driver setup for fast sync
+
+    // let mut driver = Driver::from_config(config, shutdown_recv)?;
+
+    ctrlc::set_handler(move || {
+        tracing::info!(target: "magi", "shutting down");
+        shutdown_sender.send(true).expect("shutdown failure");
+    })
+    .expect("could not register shutdown handler");
+
+    // // Run the driver
+    // if let Err(err) = driver.start().await {
+    //     tracing::error!(target: "magi", "{}", err);
+    //     std::process::exit(1);
+    // }
+
+    Ok(())
+}
+
 #[derive(Parser, Serialize)]
 pub struct Cli {
     #[clap(short, long, default_value = "optimism-goerli")]
@@ -75,6 +103,8 @@ pub struct Cli {
     logs_dir: Option<String>,
     #[clap(long)]
     logs_rotation: Option<String>,
+    #[clap(long)]
+    checkpoint_hash: Option<String>,
 }
 
 impl Cli {

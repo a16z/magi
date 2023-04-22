@@ -1,7 +1,7 @@
 use ethers::{
     prelude::abigen,
     providers::{Http, Provider, RetryClient},
-    types::U256,
+    types::{Address, U256},
 };
 use eyre::Result;
 
@@ -67,7 +67,7 @@ impl L1Bindings<Provider<RetryClient<Http>>> {
             .await?;
 
         Ok(OutputProposal {
-            output_root: output_root.into(),
+            output_root,
             timestamp,
             l_2_block_number,
         })
@@ -76,10 +76,7 @@ impl L1Bindings<Provider<RetryClient<Http>>> {
     /// Returns a tuple with the latest output index and its corresponding output proposal.
     pub async fn get_latest_l2_output(&self) -> Result<(U256, OutputProposal)> {
         let latest_index = self.l2_output_oracle.latest_output_index().call().await?;
-        Ok((
-            latest_index.clone(),
-            self.get_l2_output(latest_index).await?,
-        ))
+        Ok((latest_index, self.get_l2_output(latest_index).await?))
     }
 }
 
