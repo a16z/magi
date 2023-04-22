@@ -1,5 +1,5 @@
 #!/bin/sh
-set -eou
+set -e
 
 DATADIR=/data/geth
 
