@@ -1,4 +1,7 @@
-use std::{path::PathBuf, sync::mpsc::channel};
+use std::{
+    path::PathBuf,
+    sync::mpsc::{channel, Sender},
+};
 
 use clap::Parser;
 use dirs::home_dir;
@@ -37,13 +40,9 @@ pub async fn full_sync(config: Config) -> Result<()> {
     tracing::info!(target: "magi", "starting full sync");
     let (shutdown_sender, shutdown_recv) = channel();
 
-    let mut driver = Driver::from_config(config, shutdown_recv)?;
+    let mut driver = Driver::from_last_db_head(config, shutdown_recv)?;
 
-    ctrlc::set_handler(move || {
-        tracing::info!(target: "magi", "shutting down");
-        shutdown_sender.send(true).expect("shutdown failure");
-    })
-    .expect("could not register shutdown handler");
+    shutdown_on_ctrlc(shutdown_sender);
 
     // Run the driver
     if let Err(err) = driver.start().await {
@@ -62,21 +61,15 @@ pub async fn fast_sync(config: Config, checkpoint_hash: Option<String>) -> Resul
         panic!("checkpoint hash must be provided for fast sync right now.");
     }
 
-    // todo: change driver setup for fast sync
+    let mut driver = Driver::from_checkpoint_head(config, shutdown_recv)?;
 
-    // let mut driver = Driver::from_config(config, shutdown_recv)?;
+    shutdown_on_ctrlc(shutdown_sender);
 
-    ctrlc::set_handler(move || {
-        tracing::info!(target: "magi", "shutting down");
-        shutdown_sender.send(true).expect("shutdown failure");
-    })
-    .expect("could not register shutdown handler");
-
-    // // Run the driver
-    // if let Err(err) = driver.start().await {
-    //     tracing::error!(target: "magi", "{}", err);
-    //     std::process::exit(1);
-    // }
+    // Run the driver
+    if let Err(err) = driver.start().await {
+        tracing::error!(target: "magi", "{}", err);
+        std::process::exit(1);
+    }
 
     Ok(())
 }
@@ -131,4 +124,12 @@ impl From<Cli> for CliConfig {
             data_dir: value.data_dir.map(PathBuf::from),
         }
     }
+}
+
+fn shutdown_on_ctrlc(shutdown_sender: Sender<bool>) {
+    ctrlc::set_handler(move || {
+        tracing::info!(target: "magi", "shutting down");
+        shutdown_sender.send(true).expect("shutdown failure");
+    })
+    .expect("could not register shutdown handler");
 }

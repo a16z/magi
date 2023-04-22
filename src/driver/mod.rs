@@ -43,7 +43,7 @@ pub struct Driver<E: Engine> {
 }
 
 impl Driver<EngineApi> {
-    pub fn from_config(config: Config, shutdown_recv: Receiver<bool>) -> Result<Self> {
+    pub fn from_last_db_head(config: Config, shutdown_recv: Receiver<bool>) -> Result<Self> {
         let db = Database::new(&config.data_dir, &config.chain.network);
         let head = db.read_head();
 
@@ -84,6 +84,10 @@ impl Driver<EngineApi> {
             chain_watcher,
             shutdown_recv,
         })
+    }
+
+    pub fn from_checkpoint_head(config: Config, shutdown_recv: Receiver<bool>) -> Result<Self> {
+        todo!()
     }
 }
 
