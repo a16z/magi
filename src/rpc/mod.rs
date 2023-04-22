@@ -1,9 +1,8 @@
-use std::str::FromStr;
 use std::sync::Arc;
 
 use crate::config::Config;
 
-use ethers::types::{Block, BlockId, H160, H256};
+use ethers::types::{Block, BlockId, H256};
 
 use eyre::Result;
 
@@ -39,13 +38,11 @@ impl RpcServer for RpcServerImpl {
 
         let state_root = block.state_root;
         let block_hash = block.hash.unwrap();
-        let locations = vec![state_root];
+        let locations = vec![];
         let block_id = Some(BlockId::from(block_hash));
 
-        // TODO hange this
-        let from = H160::from_str("0x4200000000000000000000000000000000000016").unwrap();
         let state_proof = l2_provider
-            .get_proof(from, locations, block_id)
+            .get_proof(self.config.chain.l2_to_l1_message_parser_address, locations, block_id)
             .await
             .unwrap();
 
