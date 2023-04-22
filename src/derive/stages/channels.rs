@@ -269,7 +269,7 @@ mod tests {
 
         assert_eq!(stage.pending_channels.len(), 1);
         assert_eq!(stage.pending_channels[0].channel_id, 5);
-        assert_eq!(stage.pending_channels[0].is_complete(), true);
+        assert!(stage.pending_channels[0].is_complete());
     }
 
     #[test]
@@ -298,13 +298,13 @@ mod tests {
 
         assert_eq!(stage.pending_channels.len(), 1);
         assert_eq!(stage.pending_channels[0].channel_id, 5);
-        assert_eq!(stage.pending_channels[0].is_complete(), false);
+        assert!(!stage.pending_channels[0].is_complete());
 
         stage.push_frame(frame_2);
 
         assert_eq!(stage.pending_channels.len(), 1);
         assert_eq!(stage.pending_channels[0].channel_id, 5);
-        assert_eq!(stage.pending_channels[0].is_complete(), true);
+        assert!(stage.pending_channels[0].is_complete());
     }
 
     #[test]
