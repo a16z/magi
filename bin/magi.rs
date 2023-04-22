@@ -58,7 +58,7 @@ pub async fn fast_sync(config: Config, checkpoint_hash: Option<String>) -> Resul
     let (shutdown_sender, shutdown_recv) = channel();
 
     if checkpoint_hash.is_none() {
-        panic!("checkpoint hash must be provided for fast sync right now.");
+        panic!("fast sync requires a checkpoint_hash to be specified for now");
     }
 
     let mut driver = Driver::from_checkpoint_head(config, shutdown_recv)?;

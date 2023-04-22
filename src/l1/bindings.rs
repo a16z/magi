@@ -89,7 +89,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_latest_l2_output() {
-        let rpc = "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc";
+        let rpc = "https://eth-goerli.g.alchemy.com/v2/ptMIwA5DSr2c0Pc-EI6-9AGnILcb0tts";
         let config = Arc::new(Config {
             l1_rpc_url: rpc.to_string(),
             l2_rpc_url: "mocked".to_string(),
@@ -101,15 +101,14 @@ mod tests {
 
         let l1_bindings = L1Bindings::from_config(&config).await.unwrap();
 
-        let (latest_index, latest_output) = l1_bindings.get_latest_l2_output().await.unwrap();
+        let (_, latest_output) = l1_bindings.get_latest_l2_output().await.unwrap();
 
-        println!("latest_index: {}", latest_index);
-        println!("latest_output: {:?}", latest_output);
+        assert_eq!(latest_output.output_root.len(), 32);
     }
 
     #[tokio::test]
     async fn test_get_l2_output() {
-        let rpc = "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc";
+        let rpc = "https://eth-goerli.g.alchemy.com/v2/ptMIwA5DSr2c0Pc-EI6-9AGnILcb0tts";
         let config = Arc::new(Config {
             l1_rpc_url: rpc.to_string(),
             l2_rpc_url: "mocked".to_string(),
@@ -124,6 +123,15 @@ mod tests {
         let l2_output_index = U256::from(0);
         let output = l1_bindings.get_l2_output(l2_output_index).await.unwrap();
 
-        println!("output: {:?}", output);
+        assert_eq!(output.output_root.len(), 32);
+        assert_eq!(
+            output.output_root,
+            [
+                41, 43, 160, 214, 97, 209, 16, 252, 28, 153, 239, 186, 51, 22, 169, 224, 124, 34,
+                225, 145, 227, 216, 168, 200, 168, 98, 240, 160, 78, 134, 18, 190
+            ]
+        );
+        assert_eq!(output.timestamp, 1673556960);
+        assert_eq!(output.l_2_block_number, 4061236);
     }
 }
