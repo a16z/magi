@@ -10,7 +10,7 @@ For convenience, we provide a simple Docker setup to run Magi and op-geth togeth
 
 Start by cloning the Magi repository and entering the docker subdirectory
 ```sh
-git clone git@github.com:a16z/magi.git && cd magi/docker
+git clone https://github.com/a16z/magi.git && cd magi/docker
 ```
 
 Next copy `.env.default` to `.env`
