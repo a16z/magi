@@ -45,10 +45,21 @@ impl EngineApi {
         } else {
             parts.join(":")
         };
+
+        let client = reqwest::Client::builder()
+            .default_headers({
+                header::HeaderMap::from_iter([(
+                    header::CONTENT_TYPE,
+                    header::HeaderValue::from_static("application/json"),
+                )])
+            })
+            .build()
+            .expect("reqwest::Client could not be built, TLS backend could not be initialized");
+
         Self {
             base_url,
             port,
-            client: Some(reqwest::Client::new()),
+            client: Some(client),
             secret,
         }
     }
@@ -125,7 +136,6 @@ impl EngineApi {
         // Send the request
         let res = client
             .post(&self.base_url)
-            .header(header::CONTENT_TYPE, "application/json")
             .header(header::AUTHORIZATION, format!("Bearer {}", jwt))
             .json(&body)
             .send()
