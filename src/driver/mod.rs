@@ -4,6 +4,10 @@ use std::{
     time::Duration,
 };
 
+use ethers::{
+    providers::{Middleware, Provider},
+    types::{BlockId, BlockNumber},
+};
 use eyre::Result;
 use tokio::time::sleep;
 
@@ -43,9 +47,20 @@ pub struct Driver<E: Engine> {
 }
 
 impl Driver<EngineApi> {
-    pub fn from_config(config: Config, shutdown_recv: Receiver<bool>) -> Result<Self> {
+    pub async fn from_config(config: Config, shutdown_recv: Receiver<bool>) -> Result<Self> {
+        // TODO: remove everything database related
         let db = Database::new(&config.data_dir, &config.chain.network);
-        let head = db.read_head();
+
+        let provider = Provider::try_from(&config.l2_rpc_url)?;
+
+        let head: Option<HeadInfo> = if let Some(block) = provider
+            .get_block_with_txs(BlockId::Number(BlockNumber::Finalized))
+            .await?
+        {
+            Some(block.try_into()?)
+        } else {
+            None
+        };
 
         let finalized_head = head
             .as_ref()
@@ -71,7 +86,7 @@ impl Driver<EngineApi> {
             config.clone(),
         )));
 
-        let engine_driver = EngineDriver::new(finalized_head, finalized_epoch, &config)?;
+        let engine_driver = EngineDriver::new(finalized_head, finalized_epoch, provider, &config)?;
         let pipeline = Pipeline::new(state.clone(), config)?;
 
         Ok(Self {

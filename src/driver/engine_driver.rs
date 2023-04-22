@@ -195,10 +195,10 @@ impl EngineDriver<EngineApi> {
     pub fn new(
         finalized_head: BlockInfo,
         finalized_epoch: Epoch,
+        provider: Provider<Http>,
         config: &Arc<Config>,
     ) -> Result<Self> {
         let engine = Arc::new(EngineApi::new(&config.l2_engine_url, &config.jwt_secret));
-        let provider = Provider::try_from(&config.l2_rpc_url)?;
 
         Ok(Self {
             engine,

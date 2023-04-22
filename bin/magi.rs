@@ -36,7 +36,7 @@ pub async fn full_sync(config: Config) -> Result<()> {
     tracing::info!(target: "magi", "starting full sync");
     let (shutdown_sender, shutdown_recv) = channel();
 
-    let mut driver = Driver::from_config(config, shutdown_recv)?;
+    let mut driver = Driver::from_config(config, shutdown_recv).await?;
 
     ctrlc::set_handler(move || {
         tracing::info!(target: "magi", "shutting down");
