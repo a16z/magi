@@ -23,7 +23,7 @@ pub struct EngineApi {
     /// Base request url
     pub base_url: String,
     /// The url port
-    pub port: u32,
+    pub port: u16,
     /// HTTP Client
     pub client: Option<Client>,
     /// A [crate::engine::JwtSecret] used to authenticate with the engine api
@@ -38,23 +38,34 @@ impl EngineApi {
         // Gracefully parse the port from the base url
         let parts: Vec<&str> = base_url.split(':').collect();
         let port = parts[parts.len() - 1]
-            .parse::<u32>()
+            .parse::<u16>()
             .unwrap_or(DEFAULT_AUTH_PORT);
         let base_url = if parts.len() <= 2 {
             parts[0].to_string()
         } else {
             parts.join(":")
         };
+
+        let client = reqwest::Client::builder()
+            .default_headers({
+                header::HeaderMap::from_iter([(
+                    header::CONTENT_TYPE,
+                    header::HeaderValue::from_static("application/json"),
+                )])
+            })
+            .build()
+            .expect("reqwest::Client could not be built, TLS backend could not be initialized");
+
         Self {
             base_url,
             port,
-            client: Some(reqwest::Client::new()),
+            client: Some(client),
             secret,
         }
     }
 
     /// Constructs the base engine api url for the given address
-    pub fn auth_url_from_addr(addr: &str, port: Option<u32>) -> String {
+    pub fn auth_url_from_addr(addr: &str, port: Option<u16>) -> String {
         let stripped = addr.strip_prefix("http://").unwrap_or(addr);
         let stripped = addr.strip_prefix("https://").unwrap_or(stripped);
         let port = port.unwrap_or(DEFAULT_AUTH_PORT);
@@ -125,7 +136,6 @@ impl EngineApi {
         // Send the request
         let res = client
             .post(&self.base_url)
-            .header(header::CONTENT_TYPE, "application/json")
             .header(header::AUTHORIZATION, format!("Bearer {}", jwt))
             .json(&body)
             .send()
