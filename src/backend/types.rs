@@ -1,5 +1,4 @@
 use ethers::types::{Block, Transaction};
-use eyre::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::common::{BlockInfo, Epoch};
@@ -11,14 +10,6 @@ pub struct HeadInfo {
     pub l2_block_info: BlockInfo,
     /// L1 batch epoch of the head L2 block
     pub l1_epoch: Epoch,
-}
-
-impl TryFrom<sled::IVec> for HeadInfo {
-    type Error = eyre::Report;
-
-    fn try_from(bytes: sled::IVec) -> Result<Self> {
-        Ok(serde_json::from_slice(bytes.as_ref())?)
-    }
 }
 
 impl TryFrom<Block<Transaction>> for HeadInfo {
@@ -38,18 +29,6 @@ impl TryFrom<Block<Transaction>> for HeadInfo {
             l2_block_info: value.try_into()?,
             l1_epoch: tx_calldata.try_into()?,
         })
-    }
-}
-
-impl From<HeadInfo> for sled::IVec {
-    fn from(val: HeadInfo) -> Self {
-        let serialized = match serde_json::to_vec(&val) {
-            Ok(v) => v,
-            Err(e) => {
-                panic!("Failed to serialize HeadInfo: {}", e)
-            }
-        };
-        sled::IVec::from(serialized)
     }
 }
 
