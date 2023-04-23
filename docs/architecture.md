@@ -10,7 +10,7 @@ Advancing the driver forward one block is then as simple as calling the [Driver:
 
 Advancing the driver involves a few steps. First, the [Driver](../src/driver/mod.rs) will increment the [Pipeline](#derivation-pipeline) (as an iterator) to derive [PayloadAttributes](../src/engine/payload.rs). Then, the [Driver](../src/driver/mod.rs) will construct an [ExecutionPayload](../src/engine/payload.rs) that it can send through the [Engine API](#engine-api) as a `engine_newPayloadV1` request. Finally, the [ForkChoiceState](../src/engine/fork.rs) is updated by the driver, sending an `engine_forkchoiceUpdatedV1` request to the [Engine API](#engine-api).
 
-At this point, `magi` has successfully advanced the L2 chain forward by one block, and the [Driver](../src/driver/mod.rs) should store the L2 Block in the [Backend DB](#backend-db).
+At this point, `magi` has successfully advanced the L2 chain forward by one block.
 
 ### Engine API
 
