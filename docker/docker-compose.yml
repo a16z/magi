@@ -19,6 +19,8 @@ services:
     restart: unless-stopped
     stop_grace_period: 3m
     entrypoint: /scripts/start-magi.sh
+    depends_on:
+      - op-geth
     env_file:
       - .env
     ports:
