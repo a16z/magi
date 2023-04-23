@@ -12,7 +12,7 @@ use eyre::Result;
 use tokio::time::sleep;
 
 use crate::{
-    backend::{Database, HeadInfo},
+    backend::HeadInfo,
     common::{BlockInfo, Epoch},
     config::Config,
     derive::{state::State, Pipeline},
@@ -32,8 +32,6 @@ pub struct Driver<E: Engine> {
     pipeline: Pipeline,
     /// The engine driver
     engine_driver: EngineDriver<E>,
-    /// Database for storing progress data
-    db: Database,
     /// List of unfinalized L2 blocks with their epochs, L1 inclusions, and sequence numbers
     unfinalized_blocks: Vec<(BlockInfo, Epoch, u64, u64)>,
     /// Current finalized L1 block number
@@ -48,9 +46,6 @@ pub struct Driver<E: Engine> {
 
 impl Driver<EngineApi> {
     pub async fn from_config(config: Config, shutdown_recv: Receiver<bool>) -> Result<Self> {
-        // TODO: remove everything database related
-        let db = Database::new(&config.data_dir, &config.chain.network);
-
         let provider = Provider::try_from(&config.l2_rpc_url)?;
 
         let head: Option<HeadInfo> = if let Some(block) = provider
@@ -90,7 +85,6 @@ impl Driver<EngineApi> {
         let pipeline = Pipeline::new(state.clone(), config)?;
 
         Ok(Self {
-            db,
             engine_driver,
             pipeline,
             unfinalized_blocks: Vec::new(),
@@ -120,8 +114,6 @@ impl<E: Engine> Driver<E> {
 
     /// Shuts down the driver
     pub async fn shutdown(&self) {
-        let size = self.db.flush_async().await.expect("could not flush db");
-        tracing::info!(target: "magi::driver", "flushed {} bytes to disk", size);
         process::exit(0);
     }
 
@@ -260,16 +252,7 @@ impl<E: Engine> Driver<E> {
             .last();
 
         if let Some((head, epoch, _, _)) = new_finalized {
-            tracing::info!("saving new finalized head to db: {:?}", head.hash);
-
-            let res = self.db.write_head(HeadInfo {
-                l2_block_info: *head,
-                l1_epoch: *epoch,
-            });
-
-            if res.is_ok() {
-                self.engine_driver.update_finalized(*head, *epoch);
-            }
+            self.engine_driver.update_finalized(*head, *epoch);
         }
 
         self.unfinalized_blocks
