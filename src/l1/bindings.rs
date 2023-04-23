@@ -72,7 +72,7 @@ impl L1Bindings {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, sync::Arc};
+    use std::sync::Arc;
 
     use super::*;
     use crate::config::{ChainConfig, Config};
