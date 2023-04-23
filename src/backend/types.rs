@@ -5,10 +5,7 @@ use ethers::{
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    common::{BlockInfo, Epoch},
-    config::Config,
-};
+use crate::common::{BlockInfo, Epoch};
 
 /// Block info for the current head of the chain
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -28,7 +25,7 @@ impl HeadInfo {
             Ok(Some(block)) => Ok(Some(block.try_into()?)),
             Ok(None) => Ok(None),
             Err(err) => {
-                tracing::error!("Error fetching block: {:?}", err);
+                tracing::error!(target: "magi", "Error fetching block: {:?}", err);
                 Err(err.into())
             }
         }

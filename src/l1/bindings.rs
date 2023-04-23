@@ -84,7 +84,6 @@ mod tests {
             l1_rpc_url: rpc.to_string(),
             l2_rpc_url: "mocked".to_string(),
             chain: ChainConfig::optimism_goerli(),
-            data_dir: PathBuf::default(),
             l2_engine_url: String::new(),
             jwt_secret: String::new(),
         });
@@ -103,7 +102,6 @@ mod tests {
             l1_rpc_url: rpc.to_string(),
             l2_rpc_url: "mocked".to_string(),
             chain: ChainConfig::optimism_goerli(),
-            data_dir: PathBuf::default(),
             l2_engine_url: String::new(),
             jwt_secret: String::new(),
         });

@@ -33,7 +33,7 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         self.try_next().unwrap_or_else(|_| {
-            tracing::debug!("Failed to decode batch");
+            tracing::debug!(target = "magi", "Failed to decode batch");
             None
         })
     }

@@ -51,7 +51,7 @@ impl Driver<EngineApi> {
         let head = match HeadInfo::from_block(BlockNumber::Finalized, &provider).await {
             Ok(head) => head,
             Err(e) => {
-                tracing::error!("could not get finalized head: {}", e);
+                tracing::error!(target = "magi", "could not get finalized head: {}", e);
                 process::exit(1);
             }
         };
@@ -105,13 +105,14 @@ impl Driver<EngineApi> {
             Ok(Some(head)) => head,
             Ok(None) => {
                 tracing::error!(
+                    target = "magi",
                     "could not find head info from checkpoint hash: {}",
                     checkpoint_hash
                 );
                 process::exit(1);
             }
             Err(e) => {
-                tracing::error!("could not get finalized head: {}", e);
+                tracing::error!(target = "magi", "could not get finalized head: {}", e);
                 process::exit(1);
             }
         };
