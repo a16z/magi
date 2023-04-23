@@ -76,10 +76,7 @@ impl Pipeline {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        path::PathBuf,
-        sync::{Arc, RwLock},
-    };
+    use std::sync::{Arc, RwLock};
 
     use ethers::{
         providers::{Middleware, Provider},
@@ -103,7 +100,6 @@ mod tests {
             l1_rpc_url: rpc.to_string(),
             l2_rpc_url: l2_rpc.to_string(),
             chain: ChainConfig::optimism_goerli(),
-            data_dir: PathBuf::default(),
             l2_engine_url: String::new(),
             jwt_secret: String::new(),
         });

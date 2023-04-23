@@ -4,14 +4,18 @@ use std::{
     time::Duration,
 };
 
+use ethers::{
+    providers::{Middleware, Provider},
+    types::{BlockId, BlockNumber},
+};
 use eyre::Result;
 use tokio::time::sleep;
 
 use crate::{
-    backend::{Database, HeadInfo},
     common::{BlockInfo, Epoch},
     config::Config,
     derive::{state::State, Pipeline},
+    driver::types::HeadInfo,
     engine::{Engine, EngineApi},
     l1::{BlockUpdate, ChainWatcher},
     telemetry::metrics,
@@ -20,6 +24,7 @@ use crate::{
 use self::engine_driver::EngineDriver;
 
 mod engine_driver;
+mod types;
 
 /// Driver is responsible for advancing the execution node by feeding
 /// the derived chain into the engine API
@@ -28,8 +33,6 @@ pub struct Driver<E: Engine> {
     pipeline: Pipeline,
     /// The engine driver
     engine_driver: EngineDriver<E>,
-    /// Database for storing progress data
-    db: Database,
     /// List of unfinalized L2 blocks with their epochs, L1 inclusions, and sequence numbers
     unfinalized_blocks: Vec<(BlockInfo, Epoch, u64, u64)>,
     /// Current finalized L1 block number
@@ -43,9 +46,15 @@ pub struct Driver<E: Engine> {
 }
 
 impl Driver<EngineApi> {
-    pub fn from_config(config: Config, shutdown_recv: Receiver<bool>) -> Result<Self> {
-        let db = Database::new(&config.data_dir, &config.chain.network);
-        let head = db.read_head();
+    pub async fn from_config(config: Config, shutdown_recv: Receiver<bool>) -> Result<Self> {
+        let provider = Provider::try_from(&config.l2_rpc_url)?;
+
+        let head: Option<HeadInfo> = provider
+            .get_block_with_txs(BlockId::Number(BlockNumber::Finalized))
+            .await
+            .ok()
+            .flatten()
+            .and_then(|block| block.try_into().ok());
 
         let finalized_head = head
             .as_ref()
@@ -71,11 +80,10 @@ impl Driver<EngineApi> {
             config.clone(),
         )));
 
-        let engine_driver = EngineDriver::new(finalized_head, finalized_epoch, &config)?;
+        let engine_driver = EngineDriver::new(finalized_head, finalized_epoch, provider, &config)?;
         let pipeline = Pipeline::new(state.clone(), config)?;
 
         Ok(Self {
-            db,
             engine_driver,
             pipeline,
             unfinalized_blocks: Vec::new(),
@@ -105,8 +113,6 @@ impl<E: Engine> Driver<E> {
 
     /// Shuts down the driver
     pub async fn shutdown(&self) {
-        let size = self.db.flush_async().await.expect("could not flush db");
-        tracing::info!(target: "magi::driver", "flushed {} bytes to disk", size);
         process::exit(0);
     }
 
@@ -245,16 +251,7 @@ impl<E: Engine> Driver<E> {
             .last();
 
         if let Some((head, epoch, _, _)) = new_finalized {
-            tracing::info!("saving new finalized head to db: {:?}", head.hash);
-
-            let res = self.db.write_head(HeadInfo {
-                l2_block_info: *head,
-                l1_epoch: *epoch,
-            });
-
-            if res.is_ok() {
-                self.engine_driver.update_finalized(*head, *epoch);
-            }
+            self.engine_driver.update_finalized(*head, *epoch);
         }
 
         self.unfinalized_blocks

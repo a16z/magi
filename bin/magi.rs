@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::mpsc::channel};
+use std::sync::mpsc::channel;
 
 use clap::Parser;
 use dirs::home_dir;
@@ -36,7 +36,7 @@ pub async fn full_sync(config: Config) -> Result<()> {
     tracing::info!(target: "magi", "starting full sync");
     let (shutdown_sender, shutdown_recv) = channel();
 
-    let mut driver = Driver::from_config(config, shutdown_recv)?;
+    let mut driver = Driver::from_config(config, shutdown_recv).await?;
 
     ctrlc::set_handler(move || {
         tracing::info!(target: "magi", "shutting down");
@@ -57,8 +57,6 @@ pub async fn full_sync(config: Config) -> Result<()> {
 pub struct Cli {
     #[clap(short, long, default_value = "optimism-goerli")]
     network: String,
-    #[clap(long)]
-    data_dir: Option<String>,
     #[clap(long)]
     l1_rpc_url: Option<String>,
     #[clap(long)]
@@ -98,7 +96,6 @@ impl From<Cli> for CliConfig {
             l2_rpc_url: value.l2_rpc_url,
             l2_engine_url: value.l2_engine_url,
             jwt_secret: value.jwt_secret,
-            data_dir: value.data_dir.map(PathBuf::from),
         }
     }
 }

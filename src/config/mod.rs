@@ -1,6 +1,5 @@
 use std::{iter, path::PathBuf, process::exit, str::FromStr};
 
-use dirs::home_dir;
 use ethers::types::{Address, H256, U256};
 use figment::{
     providers::{Format, Serialized, Toml},
@@ -45,8 +44,6 @@ pub struct Config {
     pub l2_engine_url: String,
     /// The base chain config
     pub chain: ChainConfig,
-    /// Location of the database folder
-    pub data_dir: PathBuf,
     /// Engine API JWT Secret
     /// This is used to authenticate with the engine API
     pub jwt_secret: String,
@@ -88,8 +85,6 @@ impl Config {
 /// Chain config items derived from the CLI
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CliConfig {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub data_dir: Option<PathBuf>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub l1_rpc_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -178,7 +173,6 @@ impl From<ChainConfig> for Serialized<ChainProvider> {
 struct DefaultsProvider {
     l2_rpc_url: String,
     l2_engine_url: String,
-    data_dir: PathBuf,
 }
 
 impl Default for DefaultsProvider {
@@ -186,7 +180,6 @@ impl Default for DefaultsProvider {
         Self {
             l2_rpc_url: "http://127.0.0.1:8545".to_string(),
             l2_engine_url: "http://127.0.0.1:8551".to_string(),
-            data_dir: home_dir().unwrap().join(".magi/data"),
         }
     }
 }

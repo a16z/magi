@@ -1,8 +1,6 @@
 #!/bin/sh
 set -e
 
-DATADIR=/data/magi
-
 if [ -n "$USE_OP_GETH" ]
 then
     EXECUTION_CONTAINER=op-geth
@@ -20,5 +18,4 @@ exec magi \
     --l1-rpc-url $L1_RPC_URL \
     --l2-rpc-url http://${EXECUTION_CONTAINER}:8545 \
     --l2-engine-url http://${EXECUTION_CONTAINER}:8551 \
-    --data-dir $DATADIR \
     --sync-mode full

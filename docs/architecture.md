@@ -10,7 +10,7 @@ Advancing the driver forward one block is then as simple as calling the [Driver:
 
 Advancing the driver involves a few steps. First, the [Driver](../src/driver/mod.rs) will increment the [Pipeline](#derivation-pipeline) (as an iterator) to derive [PayloadAttributes](../src/engine/payload.rs). Then, the [Driver](../src/driver/mod.rs) will construct an [ExecutionPayload](../src/engine/payload.rs) that it can send through the [Engine API](#engine-api) as a `engine_newPayloadV1` request. Finally, the [ForkChoiceState](../src/engine/fork.rs) is updated by the driver, sending an `engine_forkchoiceUpdatedV1` request to the [Engine API](#engine-api).
 
-At this point, `magi` has successfully advanced the L2 chain forward by one block, and the [Driver](../src/driver/mod.rs) should store the L2 Block in the [Backend DB](#backend-db).
+At this point, `magi` has successfully advanced the L2 chain forward by one block.
 
 ### Engine API
 
@@ -79,30 +79,6 @@ When constructed in the [`Pipeline`](../src/derive/mod.rs), the [`ChainWatcher`]
 - [Batch Inbox Address](../src/config/mod.rs#L115)
 
 Note, when the `ChainWatcher` object is dropped, it will abort tasks associated with its handlers using [`tokio::task::JoinHandle::abort`](https://docs.rs/tokio/1.13.0/tokio/task/struct.JoinHandle.html#method.abort).
-
-### Backend DB
-
-The backend DB is an embedded database that uses [sled](https://docs.rs/sled/latest/sled/index.html) as its backend.
-It stores [serde_json](https://docs.rs/serde_json/latest/serde_json/index.html) serialized blocks on disk and provides an interface for querying them. See an example below.
-
-```rust
-use magi::backend::prelude::*;
-
-// Note: this will panic if both `/tmp/magi` and the hardcoded temporary location cannot be used.
-let mut db = Database::new("/tmp/magi");
-let block = ConstructedBlock {
-    hash: Some(BlockHash::from([1; 32])),
-    ..Default::default()
-};
-db.write_block(block.clone()).unwrap();
-let read_block = db.read_block(block.hash.unwrap()).unwrap();
-assert_eq!(block, read_block);
-db.clear().unwrap();
-```
-
-Notice, we can use the `Database::new` method to create a new database at a given path. If the path is `None`, then the database will be created in a temporary location. We can also use the `Database::clear` method to clear the database.
-
-Importantly, if the `ConstructedBlock` does not have its `hash` set, the block `number` will be used as its unique identifier.
 
 ### Config
 
