@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::mpsc::channel};
+use std::sync::mpsc::channel;
 
 use clap::Parser;
 use dirs::home_dir;
@@ -58,8 +58,6 @@ pub struct Cli {
     #[clap(short, long, default_value = "optimism-goerli")]
     network: String,
     #[clap(long)]
-    data_dir: Option<String>,
-    #[clap(long)]
     l1_rpc_url: Option<String>,
     #[clap(long)]
     l2_rpc_url: Option<String>,
@@ -98,7 +96,6 @@ impl From<Cli> for CliConfig {
             l2_rpc_url: value.l2_rpc_url,
             l2_engine_url: value.l2_engine_url,
             jwt_secret: value.jwt_secret,
-            data_dir: value.data_dir.map(PathBuf::from),
         }
     }
 }

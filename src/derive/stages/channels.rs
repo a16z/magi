@@ -245,10 +245,7 @@ mod tests {
             BatcherTransactionMessage, BatcherTransactions, Frame,
         },
     };
-    use std::{
-        path::PathBuf,
-        sync::{mpsc, Arc},
-    };
+    use std::sync::{mpsc, Arc};
 
     use super::Channels;
 
@@ -394,7 +391,6 @@ mod tests {
         let config = Config {
             l1_rpc_url: String::new(),
             l2_rpc_url: String::new(),
-            data_dir: PathBuf::new(),
             l2_engine_url: String::new(),
             jwt_secret: String::new(),
             chain: ChainConfig::optimism_goerli(),
