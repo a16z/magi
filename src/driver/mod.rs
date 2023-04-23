@@ -12,10 +12,10 @@ use eyre::Result;
 use tokio::time::sleep;
 
 use crate::{
-    backend::HeadInfo,
     common::{BlockInfo, Epoch},
     config::Config,
     derive::{state::State, Pipeline},
+    driver::types::HeadInfo,
     engine::{Engine, EngineApi},
     l1::{BlockUpdate, ChainWatcher},
     telemetry::metrics,
@@ -24,6 +24,7 @@ use crate::{
 use self::engine_driver::EngineDriver;
 
 mod engine_driver;
+mod types;
 
 /// Driver is responsible for advancing the execution node by feeding
 /// the derived chain into the engine API

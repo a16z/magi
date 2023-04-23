@@ -1,4 +1,5 @@
 use ethers::types::{Block, Transaction};
+use eyre::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::common::{BlockInfo, Epoch};
@@ -15,7 +16,7 @@ pub struct HeadInfo {
 impl TryFrom<Block<Transaction>> for HeadInfo {
     type Error = eyre::Report;
 
-    fn try_from(value: Block<Transaction>) -> std::result::Result<Self, Self::Error> {
+    fn try_from(value: Block<Transaction>) -> Result<Self> {
         let tx_calldata = value
             .transactions
             .get(0)
@@ -40,7 +41,7 @@ mod tests {
 
         use ethers::types::{Block, Transaction, H256};
 
-        use crate::backend::HeadInfo;
+        use crate::driver::HeadInfo;
 
         #[test]
         fn should_fail_conversion_from_a_block_to_head_info_if_missing_l1_deposited_tx(
