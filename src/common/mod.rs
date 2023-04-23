@@ -1,15 +1,12 @@
 use std::fmt::Debug;
 
 use ethers::{
-    providers::{Middleware, Provider},
-    types::{Block, Filter, ValueOrArray, H256},
+    types::{Block, H256},
     utils::rlp::{Decodable, DecoderError, Rlp},
 };
 use eyre::Result;
 use figment::value::{Dict, Tag, Value};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
-
-use crate::{config::Config, l1::OUTPUT_PROPOSED_TOPIC};
 
 /// Selected block header info
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Default, Serialize, Deserialize)]
@@ -18,24 +15,6 @@ pub struct BlockInfo {
     pub number: u64,
     pub parent_hash: H256,
     pub timestamp: u64,
-}
-
-impl BlockInfo {
-    pub async fn from_block_hash(hash: H256, rpc_url: &str) -> Result<Self> {
-        let provider = Provider::try_from(rpc_url)?;
-        let block = match provider.get_block(hash).await {
-            Ok(Some(block)) => block,
-            Ok(None) => return Err(eyre::eyre!("could not find block with hash: {hash}")),
-            Err(e) => return Err(e.into()),
-        };
-
-        Ok(Self {
-            hash: block.hash.unwrap(),
-            number: block.number.unwrap().as_u64(),
-            parent_hash: block.parent_hash,
-            timestamp: block.timestamp.as_u64(),
-        })
-    }
 }
 
 /// A raw transaction
