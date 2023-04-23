@@ -50,54 +50,6 @@ pub struct Epoch {
     pub timestamp: u64,
 }
 
-impl Epoch {
-    pub async fn from_l2_block(l2_block_no: u64, config: &Config) -> Result<Self> {
-        let provider = Provider::try_from(&config.l1_rpc_url)?;
-        let l2_block_no_hash = H256::from_slice(l2_block_no.to_be_bytes().as_ref());
-
-        let filter = Filter::new()
-            .address(config.chain.l2_output_oracle)
-            .topic0(ValueOrArray::Value(Some(*OUTPUT_PROPOSED_TOPIC)))
-            .topic3(ValueOrArray::Value(Some(l2_block_no_hash)))
-            .select(config.chain.l1_start_epoch.number..);
-
-        let l1_batch = provider.get_logs(&filter).await?;
-
-        // let l1_batch = provider
-        //     .get_logs(&ethers::types::Filter {
-        //         block_option: ethers::types::FilterBlockOption::Range {
-        //             from_block: Some(ethers::types::BlockNumber::Number(0.into())),
-        //             to_block: Some(ethers::types::BlockNumber::Number(l2_block.number.into())),
-        //         },
-        //         address: Some(ethers::types::ValueOrArray::Value(
-        //             ethers::types::Address::from_str("0x4200000000000000000000000000000000000010")?,
-        //         )),
-        //         topics: [None, None, None, None],
-        //     })
-        //     .await?
-        //     .into_iter()
-        //     .find(|log| {
-        //         let rlp = Rlp::new(&log.data.0);
-        //         let block_number = rlp.val_at::<u64>(0).unwrap();
-        //         block_number == l2_block.number
-        //     })
-        //     .ok_or(eyre::eyre!("could not find L1 batch for L2 block"))?;
-
-        // let rlp = Rlp::new(&l1_batch.data.0);
-        // let block_number = rlp.val_at::<u64>(0).unwrap();
-        // let block_hash = rlp.val_at::<ethers::types::H256>(1).unwrap();
-        // let timestamp = rlp.val_at::<u64>(2).unwrap();
-
-        // Ok(Self {
-        //     number: block_number,
-        //     hash: block_hash,
-        //     timestamp,
-        // })
-
-        todo!()
-    }
-}
-
 impl From<BlockInfo> for Value {
     fn from(value: BlockInfo) -> Value {
         let mut dict = Dict::new();

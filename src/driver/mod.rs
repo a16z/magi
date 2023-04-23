@@ -44,7 +44,7 @@ pub struct Driver<E: Engine> {
 }
 
 impl Driver<EngineApi> {
-    pub fn from_last_db_head(config: Config, shutdown_recv: Receiver<bool>) -> Result<Self> {
+    pub fn from_config(config: Config, shutdown_recv: Receiver<bool>) -> Result<Self> {
         let db = Database::new(&config.data_dir, &config.chain.network);
         let head = db.read_head();
 
@@ -98,7 +98,7 @@ impl Driver<EngineApi> {
     ) -> Result<Self> {
         let db = Database::new(&config.data_dir, &config.chain.network);
 
-        let head = match HeadInfo::from_block_hash(checkpoint_hash, &config).await {
+        let head = match HeadInfo::from_checkpoint(checkpoint_hash, &config).await {
             Ok(head) => head,
             Err(e) => {
                 tracing::error!("could not get checkpoint head: {}", e);

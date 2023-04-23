@@ -1,4 +1,7 @@
-use ethers::types::H256;
+use ethers::{
+    providers::{Middleware, Provider},
+    types::H256,
+};
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 
@@ -17,14 +20,14 @@ pub struct HeadInfo {
 }
 
 impl HeadInfo {
-    pub async fn from_block_hash(checkpoint_hash: H256, config: &Config) -> Result<Self> {
-        let l2_block_info = BlockInfo::from_block_hash(checkpoint_hash, &config.l2_rpc_url).await?;
-        let l1_epoch = Epoch::from_l2_block(l2_block_info.number, &config).await?;
+    pub async fn from_checkpoint(checkpoint_hash: H256, config: &Config) -> Result<Self> {
+        let provider = Provider::try_from(&config.l2_rpc_url)?;
+        let l2_block = provider.get_block_with_txs(checkpoint_hash).await?;
 
-        Ok(Self {
-            l2_block_info,
-            l1_epoch,
-        })
+        // wait for PR #122
+        // l2_block.expect("checkpoint block not found").try_into()?
+
+        todo!()
     }
 }
 

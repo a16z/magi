@@ -43,7 +43,7 @@ pub async fn full_sync(config: Config) -> Result<()> {
     let (shutdown_sender, shutdown_recv) = channel();
     shutdown_on_ctrlc(shutdown_sender);
 
-    let mut driver = Driver::from_last_db_head(config, shutdown_recv)?;
+    let mut driver = Driver::from_config(config, shutdown_recv)?;
 
     if let Err(err) = driver.start().await {
         tracing::error!(target: "magi", "{}", err);
@@ -60,7 +60,7 @@ pub async fn fast_sync(config: Config, checkpoint_hash: Option<String>) -> Resul
 
     let checkpoint_hash =
         H256::from_str(&checkpoint_hash.expect(
-            "fast sync requires an L1 block hash to be provided as checkpoint_hash for now",
+            "fast sync requires an L2 block hash to be provided as checkpoint_hash for now",
         ))
         .expect("invalid checkpoint hash provided");
 
