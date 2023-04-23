@@ -18,10 +18,10 @@ pub struct HeadInfo {
 
 impl HeadInfo {
     pub async fn from_block<T: Into<BlockId> + Send + Sync>(
-        block_hash_or_number: T,
+        block_id: T,
         provider: &Provider<Http>,
     ) -> Result<Option<Self>> {
-        match provider.get_block_with_txs(block_hash_or_number).await {
+        match provider.get_block_with_txs(block_id).await {
             Ok(Some(block)) => Ok(Some(block.try_into()?)),
             Ok(None) => Ok(None),
             Err(err) => {

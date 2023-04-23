@@ -45,74 +45,30 @@ pub struct Driver<E: Engine> {
 }
 
 impl Driver<EngineApi> {
-    pub async fn from_config(config: Config, shutdown_recv: Receiver<bool>) -> Result<Self> {
-        let provider = Provider::try_from(&config.l2_rpc_url)?;
-
-        let head = match HeadInfo::from_block(BlockNumber::Finalized, &provider).await {
-            Ok(head) => head,
-            Err(e) => {
-                tracing::error!(target = "magi", "could not get finalized head: {}", e);
-                process::exit(1);
-            }
-        };
-
-        let finalized_head = head
-            .as_ref()
-            .map(|h| h.l2_block_info)
-            .unwrap_or(config.chain.l2_genesis);
-
-        let finalized_epoch = head
-            .map(|h| h.l1_epoch)
-            .unwrap_or(config.chain.l1_start_epoch);
-
-        tracing::info!("syncing from: {:?}", finalized_head.hash);
-
-        let config = Arc::new(config);
-        let chain_watcher = ChainWatcher::new(
-            finalized_epoch.number,
-            finalized_head.number,
-            config.clone(),
-        )?;
-
-        let state = Arc::new(RwLock::new(State::new(
-            finalized_head,
-            finalized_epoch,
-            config.clone(),
-        )));
-
-        let engine_driver = EngineDriver::new(finalized_head, finalized_epoch, provider, &config)?;
-        let pipeline = Pipeline::new(state.clone(), config)?;
-
-        Ok(Self {
-            engine_driver,
-            pipeline,
-            unfinalized_blocks: Vec::new(),
-            finalized_l1_block_number: 0,
-            state,
-            chain_watcher,
-            shutdown_recv,
-        })
-    }
-
-    pub async fn from_checkpoint_head(
+    pub async fn from_config(
         config: Config,
         shutdown_recv: Receiver<bool>,
-        checkpoint_hash: H256,
+        checkpoint_hash: Option<H256>,
     ) -> Result<Self> {
         let provider = Provider::try_from(&config.l2_rpc_url)?;
 
-        let head = match HeadInfo::from_block(BlockId::Hash(checkpoint_hash), &provider).await {
+        // Use the checkpoint hash if provided, otherwise use the finalized block
+        let head_block_id = checkpoint_hash
+            .map(BlockId::Hash)
+            .unwrap_or(BlockNumber::Finalized.into());
+
+        let head = match HeadInfo::from_block(head_block_id, &provider).await {
             Ok(Some(head)) => head,
             Ok(None) => {
-                tracing::error!(
-                    target = "magi",
-                    "could not find head info from checkpoint hash: {}",
-                    checkpoint_hash
-                );
-                process::exit(1);
+                tracing::error!(target = "magi", "could not get head info.");
+                tracing::error!(target = "magi", "falling back to genesis head");
+                HeadInfo {
+                    l2_block_info: config.chain.l2_genesis,
+                    l1_epoch: config.chain.l1_start_epoch,
+                }
             }
             Err(e) => {
-                tracing::error!(target = "magi", "could not get finalized head: {}", e);
+                tracing::error!(target = "magi", "failed to get head info: {}", e);
                 process::exit(1);
             }
         };
