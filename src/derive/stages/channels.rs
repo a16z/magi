@@ -245,10 +245,7 @@ mod tests {
             BatcherTransactionMessage, BatcherTransactions, Frame,
         },
     };
-    use std::{
-        path::PathBuf,
-        sync::{mpsc, Arc},
-    };
+    use std::sync::{mpsc, Arc};
 
     use super::Channels;
 
@@ -269,7 +266,7 @@ mod tests {
 
         assert_eq!(stage.pending_channels.len(), 1);
         assert_eq!(stage.pending_channels[0].channel_id, 5);
-        assert_eq!(stage.pending_channels[0].is_complete(), true);
+        assert!(stage.pending_channels[0].is_complete());
     }
 
     #[test]
@@ -298,13 +295,13 @@ mod tests {
 
         assert_eq!(stage.pending_channels.len(), 1);
         assert_eq!(stage.pending_channels[0].channel_id, 5);
-        assert_eq!(stage.pending_channels[0].is_complete(), false);
+        assert!(!stage.pending_channels[0].is_complete());
 
         stage.push_frame(frame_2);
 
         assert_eq!(stage.pending_channels.len(), 1);
         assert_eq!(stage.pending_channels[0].channel_id, 5);
-        assert_eq!(stage.pending_channels[0].is_complete(), true);
+        assert!(stage.pending_channels[0].is_complete());
     }
 
     #[test]
@@ -394,7 +391,6 @@ mod tests {
         let config = Config {
             l1_rpc_url: String::new(),
             l2_rpc_url: String::new(),
-            data_dir: PathBuf::new(),
             l2_engine_url: String::new(),
             jwt_secret: String::new(),
             chain: ChainConfig::optimism_goerli(),

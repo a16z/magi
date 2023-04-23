@@ -1,5 +1,4 @@
 use std::{
-    path::PathBuf,
     str::FromStr,
     sync::mpsc::{channel, Sender},
 };
@@ -43,7 +42,7 @@ pub async fn full_sync(config: Config) -> Result<()> {
     let (shutdown_sender, shutdown_recv) = channel();
     shutdown_on_ctrlc(shutdown_sender);
 
-    let mut driver = Driver::from_config(config, shutdown_recv)?;
+    let mut driver = Driver::from_config(config, shutdown_recv).await?;
 
     if let Err(err) = driver.start().await {
         tracing::error!(target: "magi", "{}", err);
@@ -78,8 +77,6 @@ pub async fn fast_sync(config: Config, checkpoint_hash: Option<String>) -> Resul
 pub struct Cli {
     #[clap(short, long, default_value = "optimism-goerli")]
     network: String,
-    #[clap(long)]
-    data_dir: Option<String>,
     #[clap(long)]
     l1_rpc_url: Option<String>,
     #[clap(long)]
@@ -121,7 +118,6 @@ impl From<Cli> for CliConfig {
             l2_rpc_url: value.l2_rpc_url,
             l2_engine_url: value.l2_engine_url,
             jwt_secret: value.jwt_secret,
-            data_dir: value.data_dir.map(PathBuf::from),
         }
     }
 }

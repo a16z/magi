@@ -139,7 +139,7 @@ mod tests {
         assert_eq!(tx.version, 0);
         assert_eq!(frame.channel_id, 239159748140584302248388764660258118408);
         assert_eq!(frame.frame_data_len, 3028);
-        assert_eq!(frame.is_last, true);
+        assert!(frame.is_last);
         assert_eq!(frame.frame_data, data[23..data.len() - 1]);
     }
 

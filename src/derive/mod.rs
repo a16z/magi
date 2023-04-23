@@ -76,10 +76,7 @@ impl Pipeline {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        path::PathBuf,
-        sync::{Arc, RwLock},
-    };
+    use std::sync::{Arc, RwLock};
 
     use ethers::{
         providers::{Middleware, Provider},
@@ -96,14 +93,13 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_attributes_match() {
-        let rpc = "https://eth-goerli.g.alchemy.com/v2/a--NIcyeycPntQX42kunxUIVkg6_ekYc";
-        let l2_rpc = "https://opt-goerli.g.alchemy.com/v2/Olu7jiUDhtHf1iWldKzbBXGB6ImGs0XM";
+        let rpc = "https://eth-goerli.g.alchemy.com/v2/UbmnU8fj4rLikYW5ph8Xe975Pz-nxqfv";
+        let l2_rpc = "https://opt-goerli.g.alchemy.com/v2/UbmnU8fj4rLikYW5ph8Xe975Pz-nxqfv";
 
         let config = Arc::new(Config {
             l1_rpc_url: rpc.to_string(),
             l2_rpc_url: l2_rpc.to_string(),
             chain: ChainConfig::optimism_goerli(),
-            data_dir: PathBuf::default(),
             l2_engine_url: String::new(),
             jwt_secret: String::new(),
         });

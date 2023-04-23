@@ -1,7 +1,9 @@
 use std::fmt::Debug;
 
 use ethers::{
-    types::{Block, H256},
+    abi::{parse_abi_str, FixedBytes},
+    prelude::BaseContract,
+    types::{Block, Bytes, H256, U256},
     utils::rlp::{Decodable, DecoderError, Rlp},
 };
 use eyre::Result;
@@ -73,6 +75,31 @@ impl From<Epoch> for Value {
     }
 }
 
+type SetL1BlockValueInput = (u64, u64, U256, FixedBytes, u64, FixedBytes, U256, U256);
+
+/// Minimal L1Block ABI from the contract [implementation](https://github.com/ethereum-optimism/optimism/blob/develop/packages/contracts-bedrock/contracts/L2/L1Block.sol).
+const L1_BLOCK_CONTRACT_ABI: &str = r#"[
+                function setL1BlockValues(uint64 _number,uint64 _timestamp, uint256 _basefee, bytes32 _hash,uint64 _sequenceNumber,bytes32 _batcherHash,uint256 _l1FeeOverhead,uint256 _l1FeeScalar) external
+            ]"#;
+
+impl TryFrom<Bytes> for Epoch {
+    type Error = eyre::Report;
+
+    /// Performs the conversion from the `setL1BlockValues` calldata to [Epoch].
+    fn try_from(tx_calldata: Bytes) -> std::result::Result<Self, Self::Error> {
+        let abi = BaseContract::from(parse_abi_str(L1_BLOCK_CONTRACT_ABI)?);
+
+        let (number, timestamp, _, hash, ..): SetL1BlockValueInput =
+            abi.decode("setL1BlockValues", tx_calldata)?;
+
+        Ok(Self {
+            number,
+            timestamp,
+            hash: H256::from_slice(&hash),
+        })
+    }
+}
+
 impl Decodable for RawTransaction {
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         let tx_bytes: Vec<u8> = rlp.as_val()?;
@@ -97,5 +124,41 @@ impl<'de> Deserialize<'de> for RawTransaction {
         let tx: String = serde::Deserialize::deserialize(deserializer)?;
         let tx = tx.strip_prefix("0x").unwrap_or(&tx);
         Ok(RawTransaction(hex::decode(tx).map_err(D::Error::custom)?))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    mod epoch {
+        use std::str::FromStr;
+
+        use ethers::types::{Bytes, H256};
+
+        use crate::common::Epoch;
+
+        #[test]
+        fn should_convert_from_the_deposited_transaction_calldata() -> eyre::Result<()> {
+            // Arrange
+            let calldata = "0x015d8eb900000000000000000000000000000000000000000000000000000000008768240000000000000000000000000000000000000000000000000000000064443450000000000000000000000000000000000000000000000000000000000000000e0444c991c5fe1d7291ff34b3f5c3b44ee861f021396d33ba3255b83df30e357d00000000000000000000000000000000000000000000000000000000000000050000000000000000000000007431310e026b69bfc676c0013e12a1a11411eec9000000000000000000000000000000000000000000000000000000000000083400000000000000000000000000000000000000000000000000000000000f4240";
+
+            let expected_hash =
+                H256::from_str("0444c991c5fe1d7291ff34b3f5c3b44ee861f021396d33ba3255b83df30e357d")?;
+            let expected_block_number = 8874020;
+            let expected_timestamp = 1682191440;
+
+            // Act
+            let epoch = Epoch::try_from(Bytes::from_str(calldata)?);
+
+            // Assert
+            assert!(epoch.is_ok());
+            let epoch = epoch.unwrap();
+
+            assert_eq!(epoch.hash, expected_hash);
+            assert_eq!(epoch.number, expected_block_number);
+            assert_eq!(epoch.timestamp, expected_timestamp);
+
+            Ok(())
+        }
     }
 }

@@ -22,7 +22,7 @@ const JWT_SIGNATURE_ALGO: Algorithm = Algorithm::HS256;
 /// JwtSecret is a 256-bit hex-encoded secret key used to perform JWT-based authentication.
 ///
 /// See: [Secret key - Engine API specs](https://github.com/ethereum/execution-apis/blob/main/src/engine/authentication.md#key-distribution)
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct JwtSecret([u8; 32]);
 
 impl JwtSecret {
@@ -71,6 +71,12 @@ impl JwtSecret {
         let key = jsonwebtoken::EncodingKey::from_secret(bytes);
         let algo = jsonwebtoken::Header::new(Algorithm::HS256);
         Ok(jsonwebtoken::encode(&algo, claims, &key)?)
+    }
+}
+
+impl std::fmt::Debug for JwtSecret {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("JwtSecret").field(&"{{}}").finish()
     }
 }
 

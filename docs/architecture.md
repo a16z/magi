@@ -80,30 +80,6 @@ When constructed in the [`Pipeline`](../src/derive/mod.rs), the [`ChainWatcher`]
 
 Note, when the `ChainWatcher` object is dropped, it will abort tasks associated with its handlers using [`tokio::task::JoinHandle::abort`](https://docs.rs/tokio/1.13.0/tokio/task/struct.JoinHandle.html#method.abort).
 
-### Backend DB
-
-The backend DB is an embedded database that uses [sled](https://docs.rs/sled/latest/sled/index.html) as its backend.
-It stores [serde_json](https://docs.rs/serde_json/latest/serde_json/index.html) serialized blocks on disk and provides an interface for querying them. See an example below.
-
-```rust
-use magi::backend::prelude::*;
-
-// Note: this will panic if both `/tmp/magi` and the hardcoded temporary location cannot be used.
-let mut db = Database::new("/tmp/magi");
-let block = ConstructedBlock {
-    hash: Some(BlockHash::from([1; 32])),
-    ..Default::default()
-};
-db.write_block(block.clone()).unwrap();
-let read_block = db.read_block(block.hash.unwrap()).unwrap();
-assert_eq!(block, read_block);
-db.clear().unwrap();
-```
-
-Notice, we can use the `Database::new` method to create a new database at a given path. If the path is `None`, then the database will be created in a temporary location. We can also use the `Database::clear` method to clear the database.
-
-Importantly, if the `ConstructedBlock` does not have its `hash` set, the block `number` will be used as its unique identifier.
-
 ### Config
 
 The [Config](../src/config/mod.rs) object contains the system configuration for the `magi` node.

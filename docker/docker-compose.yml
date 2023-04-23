@@ -8,12 +8,33 @@ x-logging: &logging
       max-file: "3"
 
 services:
+  magi:
+    image: a16zcrypto/magi:latest
+    container_name: magi
+    build:
+      dockerfile: Dockerfile
+      context: ../
+    profiles:
+      - magi
+    restart: unless-stopped
+    stop_grace_period: 3m
+    entrypoint: /scripts/start-magi.sh
+    depends_on:
+      - op-geth
+    env_file:
+      - .env
+    ports:
+      - 9200:9200
+    volumes:
+      - ./:/scripts
+      - data:/data
+    <<: *logging
+
   op-geth:
     image: us-docker.pkg.dev/oplabs-tools-artifacts/images/op-geth:v1.11.2-13ee9ab
     container_name: op-geth
     profiles:
-      - default
-      - no-magi
+      - op-geth
     restart: unless-stopped
     stop_grace_period: 3m
     entrypoint: /scripts/start-op-geth.sh
@@ -28,21 +49,20 @@ services:
       - data:/data
     <<: *logging
 
-  magi:
-    image: a16zcrypto/magi:latest
-    container_name: magi
-    build:
-      dockerfile: Dockerfile
-      context: ../
+  op-erigon:
+    image: testinprod/op-erigon
+    container_name: op-erigon
     profiles:
-      - default
+      - op-erigon
     restart: unless-stopped
     stop_grace_period: 3m
-    entrypoint: /scripts/start-magi.sh
+    entrypoint: /scripts/start-op-erigon.sh
     env_file:
       - .env
     ports:
-      - 9200:9200
+      - 8551:8551
+      - 8545:8545
+      - 8546:8546
     volumes:
       - ./:/scripts
       - data:/data
@@ -52,7 +72,7 @@ services:
     image: prom/prometheus:latest
     container_name: prometheus
     profiles:
-      - default
+      - metrics
     ports:
       - 9090:9090
     command:
@@ -65,7 +85,7 @@ services:
     image: prom/node-exporter:latest
     container_name: node-exporter
     profiles:
-      - default
+      - metrics
     restart: unless-stopped
     volumes:
       - /proc:/host/proc:ro
@@ -83,7 +103,7 @@ services:
     image: grafana/grafana
     container_name: grafana
     profiles:
-      - default
+      - metrics
     ports:
       - "3000:3000"
     volumes:
