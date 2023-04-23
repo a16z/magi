@@ -61,15 +61,14 @@ impl Driver<EngineApi> {
         let head = match HeadInfo::from_block(head_block_id, &provider).await {
             Ok(Some(head)) => head,
             Ok(None) => {
-                tracing::error!(target = "magi", "could not get head info.");
-                tracing::error!(target = "magi", "falling back to genesis head");
+                tracing::warn!("could not get head info. Falling back to genesis head.");
                 HeadInfo {
                     l2_block_info: config.chain.l2_genesis,
                     l1_epoch: config.chain.l1_start_epoch,
                 }
             }
             Err(e) => {
-                tracing::error!(target = "magi", "failed to get head info: {}", e);
+                tracing::error!("failed to get head info: {}", e);
                 process::exit(1);
             }
         };
@@ -117,7 +116,22 @@ impl<E: Engine> Driver<E> {
             self.check_shutdown().await;
 
             if let Err(err) = self.advance().await {
-                tracing::error!(target: "magi", "fatal error: {:?}", err);
+                tracing::error!("fatal error: {:?}", err);
+                self.shutdown().await;
+            }
+        }
+    }
+
+    pub async fn start_fast(&mut self) -> Result<()> {
+        self.await_engine_ready().await;
+        self.await_syncing().await;
+        self.chain_watcher.start()?;
+
+        loop {
+            self.check_shutdown().await;
+
+            if let Err(err) = self.advance().await {
+                tracing::error!("fatal error: {:?}", err);
                 self.shutdown().await;
             }
         }
@@ -144,6 +158,14 @@ impl<E: Engine> Driver<E> {
         }
     }
 
+    async fn await_syncing(&self) {
+        while self.engine_driver.syncing().await {
+            dbg!("await syncing loop inside");
+            self.check_shutdown().await;
+            sleep(Duration::from_secs(1)).await;
+        }
+    }
+
     /// Attempts to advance the execution node forward one L1 block using derived
     /// L1 data. Errors if the most recent PayloadAttributes from the pipeline
     /// does not successfully advance the node
@@ -165,7 +187,6 @@ impl<E: Engine> Driver<E> {
                 .await?;
 
             tracing::info!(
-                target: "magi",
                 "head updated: {} {:?}",
                 self.engine_driver.safe_head.number,
                 self.engine_driver.safe_head.hash
@@ -274,5 +295,44 @@ impl<E: Engine> Driver<E> {
         metrics::FINALIZED_HEAD.set(self.engine_driver.finalized_head.number as i64);
         metrics::SAFE_HEAD.set(self.engine_driver.safe_head.number as i64);
         metrics::SYNCED.set(!self.unfinalized_blocks.is_empty() as i64);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{path::PathBuf, str::FromStr, sync::mpsc::channel};
+
+    use eyre::Result;
+
+    use crate::config::{ChainConfig, CliConfig};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_new_driver_from_config() -> Result<()> {
+        let config_path = PathBuf::from_str("config.toml")?;
+        let rpc = "https://eth-goerli.g.alchemy.com/v2/UbmnU8fj4rLikYW5ph8Xe975Pz-nxqfv";
+        let l2_rpc = "https://opt-goerli.g.alchemy.com/v2/UbmnU8fj4rLikYW5ph8Xe975Pz-nxqfv";
+        let cli_config = CliConfig {
+            l1_rpc_url: Some(rpc.to_owned()),
+            l2_rpc_url: Some(l2_rpc.to_owned()),
+            l2_engine_url: None,
+            jwt_secret: Some(
+                "d195a64e08587a3f1560686448867220c2727550ce3e0c95c7200d0ade0f9167".to_owned(),
+            ),
+        };
+        let config = Config::new(&config_path, cli_config, ChainConfig::optimism_goerli());
+        let (_shutdown_sender, shutdown_recv) = channel();
+
+        let checkpoint =
+            "0x75d4a658d7b6430c874c5518752a8d90fb1503eccd6ae4cfc97fd4aedeebb939".parse()?;
+        let driver = Driver::from_config(config, shutdown_recv, Some(checkpoint)).await?;
+
+        assert_eq!(driver.engine_driver.safe_head.number, 8428108);
+        assert_eq!(driver.engine_driver.safe_epoch.number, 8879997);
+        assert_eq!(driver.engine_driver.finalized_head.number, 8428108);
+        assert_eq!(driver.engine_driver.finalized_epoch.number, 8879997);
+
+        Ok(())
     }
 }

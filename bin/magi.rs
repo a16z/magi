@@ -65,7 +65,7 @@ pub async fn fast_sync(config: Config, checkpoint_hash: Option<String>) -> Resul
 
     let mut driver = Driver::from_config(config, shutdown_recv, Some(checkpoint_hash)).await?;
 
-    if let Err(err) = driver.start().await {
+    if let Err(err) = driver.start_fast().await {
         tracing::error!(target: "magi", "{}", err);
         std::process::exit(1);
     }

@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use ethers::providers::{Http, Middleware, Provider};
+use ethers::types::SyncingStatus;
 use ethers::{
     types::{Block, H256},
     utils::keccak256,
@@ -63,6 +64,27 @@ impl<E: Engine> EngineDriver<E> {
             .forkchoice_updated(forkchoice, None)
             .await
             .is_ok()
+    }
+
+    pub async fn syncing(&self) -> bool {
+        dbg!("syncing called");
+
+        match self
+            .provider
+            .syncing()
+            .await
+            .unwrap_or(SyncingStatus::IsFalse)
+        {
+            SyncingStatus::IsFalse => false,
+            SyncingStatus::IsSyncing(progress) => {
+                tracing::info!(
+                    "Syncing: {}/{}",
+                    progress.current_block,
+                    progress.highest_block
+                );
+                true
+            }
+        }
     }
 
     async fn process_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
