@@ -86,7 +86,7 @@ impl TryFrom<Bytes> for Epoch {
     type Error = eyre::Report;
 
     /// Performs the conversion from the `setL1BlockValues` calldata to [Epoch].
-    fn try_from(tx_calldata: Bytes) -> std::result::Result<Self, Self::Error> {
+    fn try_from(tx_calldata: Bytes) -> Result<Self> {
         let abi = BaseContract::from(parse_abi_str(L1_BLOCK_CONTRACT_ABI)?);
 
         let (number, timestamp, _, hash, ..): SetL1BlockValueInput =
