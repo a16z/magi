@@ -4,6 +4,7 @@ use std::{
     time::Duration,
 };
 
+use ethers::types::H256;
 use eyre::Result;
 use tokio::time::sleep;
 
@@ -47,6 +48,8 @@ impl Driver<EngineApi> {
         let db = Database::new(&config.data_dir, &config.chain.network);
         let head = db.read_head();
 
+        dbg!(head.clone());
+
         let finalized_head = head
             .as_ref()
             .map(|h| h.l2_block_info)
@@ -56,6 +59,8 @@ impl Driver<EngineApi> {
             .map(|h| h.l1_epoch)
             .unwrap_or(config.chain.l1_start_epoch);
 
+        dbg!(finalized_head.clone());
+        dbg!(finalized_epoch.clone());
         tracing::info!("syncing from: {:?}", finalized_head.hash);
 
         let config = Arc::new(config);
@@ -86,8 +91,57 @@ impl Driver<EngineApi> {
         })
     }
 
-    pub fn from_checkpoint_head(config: Config, shutdown_recv: Receiver<bool>) -> Result<Self> {
-        todo!()
+    pub async fn from_checkpoint_head(
+        config: Config,
+        shutdown_recv: Receiver<bool>,
+        checkpoint_hash: H256,
+    ) -> Result<Self> {
+        let db = Database::new(&config.data_dir, &config.chain.network);
+
+        let head = match HeadInfo::from_block_hash(checkpoint_hash, &config).await {
+            Ok(head) => head,
+            Err(e) => {
+                tracing::error!("could not get checkpoint head: {}", e);
+                process::exit(1);
+            }
+        };
+
+        if let Err(e) = db.write_head(head.clone()) {
+            tracing::error!("could not write head to db: {}", e);
+            process::exit(1);
+        }
+
+        let finalized_head = head.l2_block_info;
+        let finalized_epoch = head.l1_epoch;
+
+        tracing::info!("syncing from: {:?}", finalized_head.hash);
+
+        let config = Arc::new(config);
+        let chain_watcher = ChainWatcher::new(
+            finalized_epoch.number,
+            finalized_head.number,
+            config.clone(),
+        )?;
+
+        let state = Arc::new(RwLock::new(State::new(
+            finalized_head,
+            finalized_epoch,
+            config.clone(),
+        )));
+
+        let engine_driver = EngineDriver::new(finalized_head, finalized_epoch, &config)?;
+        let pipeline = Pipeline::new(state.clone(), config)?;
+
+        Ok(Self {
+            db,
+            engine_driver,
+            pipeline,
+            unfinalized_blocks: Vec::new(),
+            finalized_l1_block_number: 0,
+            state,
+            chain_watcher,
+            shutdown_recv,
+        })
     }
 }
 

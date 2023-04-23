@@ -1,22 +1,15 @@
 use ethers::{
     prelude::abigen,
     providers::{Http, Provider, RetryClient},
-    types::{Address, U256},
+    types::{H256, U256},
+    utils::keccak256,
 };
 use eyre::Result;
+use once_cell::sync::Lazy;
 
 use crate::config::Config;
 
 use super::generate_http_provider;
-
-abigen! {
-    OptimismPortal,
-    r#"[
-        function GUARDIAN() external view returns (address)
-        function L2_ORACLE() external view returns (address)
-        function SYSTEM_CONFIG() external view returns (address)
-    ]"#,
-}
 
 abigen! {
     L2OutputOracle,
@@ -38,25 +31,22 @@ abigen! {
     ]"#,
 }
 
-pub struct L1Bindings<T> {
-    optimism_portal: OptimismPortal<T>,
-    l2_output_oracle: L2OutputOracle<T>,
+pub static OUTPUT_PROPOSED_TOPIC: Lazy<H256> = Lazy::new(|| {
+    H256::from_slice(&keccak256(
+        "OutputProposed(bytes32,uint256,uint256,uint256)",
+    ))
+});
+
+pub struct L1Bindings {
+    l2_output_oracle: L2OutputOracle<Provider<RetryClient<Http>>>,
 }
 
-impl L1Bindings<Provider<RetryClient<Http>>> {
-    pub async fn from_config(config: &Config) -> Result<Self> {
+impl L1Bindings {
+    pub fn from_config(config: &Config) -> Self {
         let provider = generate_http_provider(&config.l1_rpc_url);
+        let l2_output_oracle = L2OutputOracle::new(config.chain.l2_output_oracle, provider);
 
-        let op_portal_address = config.chain.portal;
-        let optimism_portal = OptimismPortal::new(op_portal_address, provider.clone());
-
-        let l2_oracle_address = optimism_portal.l2_oracle().call().await?;
-        let l2_output_oracle = L2OutputOracle::new(l2_oracle_address, provider);
-
-        Ok(Self {
-            optimism_portal,
-            l2_output_oracle,
-        })
+        Self { l2_output_oracle }
     }
 
     pub async fn get_l2_output(&self, l2_output_index: U256) -> Result<OutputProposal> {
@@ -99,7 +89,7 @@ mod tests {
             jwt_secret: String::new(),
         });
 
-        let l1_bindings = L1Bindings::from_config(&config).await.unwrap();
+        let l1_bindings = L1Bindings::from_config(&config);
 
         let (_, latest_output) = l1_bindings.get_latest_l2_output().await.unwrap();
 
@@ -118,7 +108,7 @@ mod tests {
             jwt_secret: String::new(),
         });
 
-        let l1_bindings = L1Bindings::from_config(&config).await.unwrap();
+        let l1_bindings = L1Bindings::from_config(&config);
 
         let l2_output_index = U256::from(0);
         let output = l1_bindings.get_l2_output(l2_output_index).await.unwrap();

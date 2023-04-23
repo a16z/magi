@@ -1,10 +1,12 @@
 use std::{
     path::PathBuf,
+    str::FromStr,
     sync::mpsc::{channel, Sender},
 };
 
 use clap::Parser;
 use dirs::home_dir;
+use ethers::types::H256;
 use eyre::Result;
 
 use magi::{
@@ -39,12 +41,10 @@ async fn main() -> Result<()> {
 pub async fn full_sync(config: Config) -> Result<()> {
     tracing::info!(target: "magi", "starting full sync");
     let (shutdown_sender, shutdown_recv) = channel();
+    shutdown_on_ctrlc(shutdown_sender);
 
     let mut driver = Driver::from_last_db_head(config, shutdown_recv)?;
 
-    shutdown_on_ctrlc(shutdown_sender);
-
-    // Run the driver
     if let Err(err) = driver.start().await {
         tracing::error!(target: "magi", "{}", err);
         std::process::exit(1);
@@ -56,16 +56,16 @@ pub async fn full_sync(config: Config) -> Result<()> {
 pub async fn fast_sync(config: Config, checkpoint_hash: Option<String>) -> Result<()> {
     tracing::info!(target: "magi", "starting fast sync");
     let (shutdown_sender, shutdown_recv) = channel();
-
-    if checkpoint_hash.is_none() {
-        panic!("fast sync requires a checkpoint_hash to be specified for now");
-    }
-
-    let mut driver = Driver::from_checkpoint_head(config, shutdown_recv)?;
-
     shutdown_on_ctrlc(shutdown_sender);
 
-    // Run the driver
+    let checkpoint_hash =
+        H256::from_str(&checkpoint_hash.expect(
+            "fast sync requires an L1 block hash to be provided as checkpoint_hash for now",
+        ))
+        .expect("invalid checkpoint hash provided");
+
+    let mut driver = Driver::from_checkpoint_head(config, shutdown_recv, checkpoint_hash).await?;
+
     if let Err(err) = driver.start().await {
         tracing::error!(target: "magi", "{}", err);
         std::process::exit(1);

@@ -1,7 +1,11 @@
+use ethers::types::H256;
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::common::{BlockInfo, Epoch};
+use crate::{
+    common::{BlockInfo, Epoch},
+    config::Config,
+};
 
 /// Block info for the current head of the chain
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -10,6 +14,18 @@ pub struct HeadInfo {
     pub l2_block_info: BlockInfo,
     /// L1 batch epoch of the head L2 block
     pub l1_epoch: Epoch,
+}
+
+impl HeadInfo {
+    pub async fn from_block_hash(checkpoint_hash: H256, config: &Config) -> Result<Self> {
+        let l2_block_info = BlockInfo::from_block_hash(checkpoint_hash, &config.l2_rpc_url).await?;
+        let l1_epoch = Epoch::from_l2_block(l2_block_info.number, &config).await?;
+
+        Ok(Self {
+            l2_block_info,
+            l1_epoch,
+        })
+    }
 }
 
 impl TryFrom<sled::IVec> for HeadInfo {
