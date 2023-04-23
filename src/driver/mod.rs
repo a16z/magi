@@ -49,14 +49,12 @@ impl Driver<EngineApi> {
     pub async fn from_config(config: Config, shutdown_recv: Receiver<bool>) -> Result<Self> {
         let provider = Provider::try_from(&config.l2_rpc_url)?;
 
-        let head: Option<HeadInfo> = if let Some(block) = provider
+        let head: Option<HeadInfo> = provider
             .get_block_with_txs(BlockId::Number(BlockNumber::Finalized))
-            .await?
-        {
-            Some(block.try_into()?)
-        } else {
-            None
-        };
+            .await
+            .ok()
+            .flatten()
+            .and_then(|block| block.try_into().ok());
 
         let finalized_head = head
             .as_ref()
