@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc, fmt::Display};
+use std::{fmt::Display, net::SocketAddr, sync::Arc};
 
 use crate::config::Config;
 
@@ -32,29 +32,26 @@ pub struct RpcServerImpl {
 #[async_trait]
 impl RpcServer for RpcServerImpl {
     async fn output_at_block(&self, block_number: u64) -> Result<OutputRootResponse, Error> {
-        let l2_provider =
-            convert_err(Provider::try_from(self.config.l2_rpc_url.clone()))?;
+        let l2_provider = convert_err(Provider::try_from(self.config.l2_rpc_url.clone()))?;
 
-        let block = match convert_err(l2_provider.get_block(block_number).await)? {
-            Some(block) => block,
-            None => return Err(Error::Custom("unable to get block".to_string()))
-        };
-
+        let block = convert_err(l2_provider.get_block(block_number).await)?
+            .ok_or(Error::Custom("unable to get block".to_string()))?;
         let state_root = block.state_root;
-        let block_hash = match block.hash {
-            Some(hash) => hash,
-            None => return Err(Error::Custom("block hash not found".to_string()))
-        };
+        let block_hash = block
+            .hash
+            .ok_or(Error::Custom("block hash not found".to_string()))?;
         let locations = vec![];
         let block_id = Some(BlockId::from(block_hash));
 
-        let state_proof = convert_err(l2_provider
-            .get_proof(
-                self.config.chain.l2_to_l1_message_passer,
-                locations,
-                block_id,
-            )
-            .await)?;
+        let state_proof = convert_err(
+            l2_provider
+                .get_proof(
+                    self.config.chain.l2_to_l1_message_passer,
+                    locations,
+                    block_id,
+                )
+                .await,
+        )?;
 
         let withdrawal_storage_root = state_proof.storage_hash;
 
