@@ -244,7 +244,7 @@ impl ChainConfig {
             system_config_contract: addr("0xb15eea247ece011c68a614e4a77ad648ff495bc1"),
             batch_inbox: addr("0x8453100000000000000000000000000000000000"),
             deposit_contract: addr("0xe93c8cd0d409341205a592f8c4ac1a5fe5585cfa"),
-            l2_to_l1_message_parser_address: addr("0xEF2ec5A5465f075E010BE70966a8667c94BCe15a"), // TODO(madhur): fix this
+            l2_to_l1_message_parser_address: addr("0x4200000000000000000000000000000000000016"),
             max_channel_size: 100_000_000,
             channel_timeout: 100,
             seq_window_size: 3600,
