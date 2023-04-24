@@ -1,21 +1,22 @@
-use std::sync::Arc;
+use std::{net::SocketAddr, sync::Arc};
 
 use crate::config::Config;
 
-use ethers::types::{Block, BlockId, H256};
-
 use eyre::Result;
 
-use ethers::providers::{Middleware, Provider};
-use ethers::utils::keccak256;
+use ethers::{
+    providers::{Middleware, Provider},
+    types::{Block, BlockId, H256},
+    utils::keccak256,
+};
 
 use jsonrpsee::{
     core::{async_trait, Error},
     proc_macros::rpc,
     server::ServerBuilder,
 };
+
 use serde::{Deserialize, Serialize};
-use std::net::SocketAddr;
 
 #[rpc(server, client, namespace = "optimism")]
 pub trait Rpc {
@@ -42,9 +43,15 @@ impl RpcServer for RpcServerImpl {
         let block_id = Some(BlockId::from(block_hash));
 
         let state_proof = l2_provider
-            .get_proof(self.config.chain.l2_to_l1_message_parser_address, locations, block_id)
+            .get_proof(
+                self.config.chain.l2_to_l1_message_parser_address,
+                locations,
+                block_id,
+            )
             .await
             .unwrap();
+
+        let withdrawal_storage_root = state_proof.storage_hash;
 
         let output_root = compute_l2_output_root(block, state_proof.storage_hash);
         // TODO: Verify proof like this - https://github.com/ethereum-optimism/optimism/blob/b65152ca11d7d4c2f23156af8a03339b6798c04d/op-node/node/api.go#L111
@@ -54,6 +61,8 @@ impl RpcServer for RpcServerImpl {
         Ok(OutputRootResponse {
             output_root,
             version,
+            state_root,
+            withdrawal_storage_root,
         })
     }
 }
@@ -92,4 +101,6 @@ pub async fn run_server(config: Arc<Config>) -> Result<SocketAddr> {
 pub struct OutputRootResponse {
     pub output_root: H256,
     pub version: H256,
+    pub state_root: H256,
+    pub withdrawal_storage_root: H256,
 }
