@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, fmt::Display};
 
 use crate::config::Config;
 
@@ -18,7 +18,7 @@ use jsonrpsee::{
 
 use serde::{Deserialize, Serialize};
 
-#[rpc(server, client, namespace = "optimism")]
+#[rpc(server, namespace = "optimism")]
 pub trait Rpc {
     #[method(name = "outputAtBlock")]
     async fn output_at_block(&self, block_number: u64) -> Result<OutputRootResponse, Error>;
@@ -33,28 +33,32 @@ pub struct RpcServerImpl {
 impl RpcServer for RpcServerImpl {
     async fn output_at_block(&self, block_number: u64) -> Result<OutputRootResponse, Error> {
         let l2_provider =
-            Provider::try_from(self.config.l2_rpc_url.clone()).expect("invalid L2 RPC url");
+            convert_err(Provider::try_from(self.config.l2_rpc_url.clone()))?;
 
-        let block = l2_provider.get_block(block_number).await.unwrap().unwrap();
+        let block = match convert_err(l2_provider.get_block(block_number).await)? {
+            Some(block) => block,
+            None => return Err(Error::Custom("unable to get block".to_string()))
+        };
 
         let state_root = block.state_root;
-        let block_hash = block.hash.unwrap();
+        let block_hash = match block.hash {
+            Some(hash) => hash,
+            None => return Err(Error::Custom("block hash not found".to_string()))
+        };
         let locations = vec![];
         let block_id = Some(BlockId::from(block_hash));
 
-        let state_proof = l2_provider
+        let state_proof = convert_err(l2_provider
             .get_proof(
-                self.config.chain.l2_to_l1_message_parser_address,
+                self.config.chain.l2_to_l1_message_passer,
                 locations,
                 block_id,
             )
-            .await
-            .unwrap();
+            .await)?;
 
         let withdrawal_storage_root = state_proof.storage_hash;
 
         let output_root = compute_l2_output_root(block, state_proof.storage_hash);
-        // TODO: Verify proof like this - https://github.com/ethereum-optimism/optimism/blob/b65152ca11d7d4c2f23156af8a03339b6798c04d/op-node/node/api.go#L111
 
         let version: H256 = Default::default();
 
@@ -65,6 +69,10 @@ impl RpcServer for RpcServerImpl {
             withdrawal_storage_root,
         })
     }
+}
+
+fn convert_err<T, E: Display>(res: Result<T, E>) -> Result<T, Error> {
+    res.map_err(|err| Error::Custom(err.to_string()))
 }
 
 fn compute_l2_output_root(block: Block<H256>, storage_root: H256) -> H256 {

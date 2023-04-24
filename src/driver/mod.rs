@@ -68,7 +68,6 @@ impl Driver<EngineApi> {
 
         tracing::info!("syncing from: {:?}", finalized_head.hash);
 
-        let config_clone = config.clone();
         let config = Arc::new(config);
         let chain_watcher = ChainWatcher::new(
             finalized_epoch.number,
@@ -83,10 +82,9 @@ impl Driver<EngineApi> {
         )));
 
         let engine_driver = EngineDriver::new(finalized_head, finalized_epoch, provider, &config)?;
-        let pipeline = Pipeline::new(state.clone(), config)?;
+        let pipeline = Pipeline::new(state.clone(), config.clone())?;
 
-        let config_arc = Arc::new(config_clone);
-        let _addr = rpc::run_server(config_arc).await?;
+        let _addr = rpc::run_server(config).await?;
 
         Ok(Self {
             engine_driver,
