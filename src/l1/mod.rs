@@ -27,9 +27,6 @@ use crate::{
     derive::stages::attributes::UserDeposited,
 };
 
-mod bindings;
-pub use bindings::*;
-
 static CONFIG_UPDATE_TOPIC: Lazy<H256> =
     Lazy::new(|| H256::from_slice(&keccak256("ConfigUpdate(uint256,uint8,bytes)")));
 
