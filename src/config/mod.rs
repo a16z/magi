@@ -127,6 +127,8 @@ pub struct ChainConfig {
     /// Network blocktime
     #[serde(default = "default_blocktime")]
     pub blocktime: u64,
+    /// L2 To L1 Message passer address
+    pub l2_to_l1_message_passer: Address,
 }
 
 /// Optimism system config contract values
@@ -213,6 +215,7 @@ impl ChainConfig {
             batch_inbox: addr("0xff00000000000000000000000000000000000420"),
             deposit_contract: addr("0x5b47E1A08Ea6d985D6649300584e6722Ec4B1383"),
             l2_output_oracle: addr("0xE6Dfba0953616Bacab0c9A8ecb3a9BBa77FC15c0"),
+            l2_to_l1_message_passer: addr("0xEF2ec5A5465f075E010BE70966a8667c94BCe15a"),
             max_channel_size: 100_000_000,
             channel_timeout: 300,
             seq_window_size: 3600,
@@ -245,6 +248,7 @@ impl ChainConfig {
             batch_inbox: addr("0x8453100000000000000000000000000000000000"),
             deposit_contract: addr("0xe93c8cd0d409341205a592f8c4ac1a5fe5585cfa"),
             l2_output_oracle: addr("0x2A35891ff30313CcFa6CE88dcf3858bb075A2298"),
+            l2_to_l1_message_passer: addr("0x4200000000000000000000000000000000000016"),
             max_channel_size: 100_000_000,
             channel_timeout: 100,
             seq_window_size: 3600,

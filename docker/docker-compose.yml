@@ -25,6 +25,7 @@ services:
       - .env
     ports:
       - 9200:9200
+      - 9545:9545
     volumes:
       - ./:/scripts
       - data:/data

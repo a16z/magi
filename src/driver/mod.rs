@@ -18,6 +18,7 @@ use crate::{
     driver::types::HeadInfo,
     engine::{Engine, EngineApi, ForkchoiceState},
     l1::{BlockUpdate, ChainWatcher},
+    rpc,
     telemetry::metrics,
 };
 
@@ -83,7 +84,9 @@ impl Driver<EngineApi> {
         )));
 
         let engine_driver = EngineDriver::new(finalized_head, finalized_epoch, provider, &config)?;
-        let pipeline = Pipeline::new(state.clone(), config)?;
+        let pipeline = Pipeline::new(state.clone(), config.clone())?;
+
+        let _addr = rpc::run_server(config).await?;
 
         Ok(Self {
             engine_driver,
