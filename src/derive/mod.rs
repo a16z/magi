@@ -78,7 +78,7 @@ impl Pipeline {
 mod tests {
     use std::{
         env,
-        sync::{Arc, RwLock}
+        sync::{Arc, RwLock},
     };
 
     use ethers::{
@@ -150,10 +150,7 @@ mod tests {
     }
 
     async fn get_expected_hashes(block_num: u64) -> Vec<H256> {
-        let provider = Provider::try_from(
-            env::var("L2_TEST_RPC_URL").unwrap(),
-        )
-        .unwrap();
+        let provider = Provider::try_from(env::var("L2_TEST_RPC_URL").unwrap()).unwrap();
 
         provider
             .get_block(block_num)
