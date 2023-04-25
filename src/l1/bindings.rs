@@ -86,6 +86,7 @@ mod tests {
             chain: ChainConfig::optimism_goerli(),
             l2_engine_url: String::new(),
             jwt_secret: String::new(),
+            l2_trusted_rpc_url: None,
         });
 
         let l1_bindings = L1Bindings::from_config(&config);
@@ -104,6 +105,7 @@ mod tests {
             chain: ChainConfig::optimism_goerli(),
             l2_engine_url: String::new(),
             jwt_secret: String::new(),
+            l2_trusted_rpc_url: None,
         });
 
         let l1_bindings = L1Bindings::from_config(&config);

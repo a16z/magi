@@ -1,7 +1,14 @@
-use ethers::types::{Bytes, H160, H256, U64};
+use ethers::{
+    providers::{Http, Middleware, Provider},
+    types::{BlockId, Bytes, H160, H256, U64},
+};
+use eyre::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::common::{Epoch, RawTransaction};
+use crate::{
+    common::{Epoch, RawTransaction},
+    config::Config,
+};
 
 /// ## ExecutionPayload
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -35,6 +42,75 @@ pub struct ExecutionPayload {
     pub block_hash: H256,
     /// An array of transaction objects where each object is a byte list
     pub transactions: Vec<RawTransaction>,
+}
+
+impl ExecutionPayload {
+    /// ## from_block
+    ///
+    /// Creates a new ExecutionPayload from a block hash.
+    /// Requires both an L1 rpc url and a trusted L2 rpc url.
+    /// Ported from [op-fast-sync](https://github.com/testinprod-io/op-fast-sync/blob/master/build_payloads.py)
+    pub async fn from_block(config: &Config, block_hash: H256) -> Result<Self> {
+        let l1_provider = Provider::<Http>::try_from(config.l1_rpc_url.as_str())?;
+        let l2_provider = Provider::<Http>::try_from(
+            config
+                .l2_trusted_rpc_url
+                .clone()
+                .expect("trusted l2 rpc url is required to build a payload from a block hash")
+                .as_str(),
+        )?;
+
+        let l2_block_number = l2_provider
+            .get_block(block_hash)
+            .await?
+            .expect("l2 block not found")
+            .number
+            .unwrap();
+
+        let l1_block_number_raw = l2_provider
+            .get_storage_at(
+                config.chain.l1_block,
+                H256::zero(),
+                Some(BlockId::Number(l2_block_number.into())),
+            )
+            .await?;
+
+        let l1_block_number_raw = &format!("{:x}", l1_block_number_raw);
+        let l1_block_number_raw = &l1_block_number_raw[48..];
+        let l1_block_number = U64::from_str_radix(l1_block_number_raw, 16)?;
+
+        let l1_block = &l1_provider
+            .get_block_with_txs(l1_block_number)
+            .await?
+            .expect("l1 block not found");
+
+        Ok(ExecutionPayload {
+            parent_hash: l1_block.parent_hash,
+            fee_recipient: config.chain.sequencer_fee_vault,
+            state_root: l1_block.state_root,
+            receipts_root: l1_block.receipts_root,
+            logs_bloom: l1_block.logs_bloom.unwrap().as_bytes().to_vec().into(),
+            prev_randao: l1_block.mix_hash.unwrap(),
+            block_number: l1_block.number.unwrap(),
+            gas_limit: l1_block.gas_limit.as_u64().into(),
+            gas_used: l1_block.gas_used.as_u64().into(),
+            timestamp: l1_block.timestamp.as_u64().into(),
+            extra_data: l1_block.extra_data.clone(),
+            base_fee_per_gas: l1_block
+                .base_fee_per_gas
+                .unwrap_or(0u64.into())
+                .as_u64()
+                .into(),
+            block_hash: l1_block.hash.unwrap(),
+            transactions: (*l1_block
+                .transactions
+                .clone()
+                .into_iter()
+                .map(|tx| RawTransaction(tx.rlp().to_vec()))
+                .collect::<Vec<_>>())
+            .to_vec(),
+        })
+    }
 }
 
 /// ## PayloadAttributes
@@ -107,4 +183,45 @@ pub enum Status {
     Accepted,
     /// Payload contains an invalid block hash
     InvalidBlockHash,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use eyre::Result;
+
+    use crate::{
+        config::{ChainConfig, Config},
+        engine::ExecutionPayload,
+    };
+
+    #[tokio::test]
+    async fn test_from_block_hash_to_execution_paylaod() -> Result<()> {
+        let checkpoint_hash =
+            "0xc2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973".parse()?;
+
+        let rpc = "https://eth-goerli.g.alchemy.com/v2/UbmnU8fj4rLikYW5ph8Xe975Pz-nxqfv".to_owned();
+        let l2_rpc =
+            "https://opt-goerli.g.alchemy.com/v2/UbmnU8fj4rLikYW5ph8Xe975Pz-nxqfv".to_owned();
+        let config = Arc::new(Config {
+            l1_rpc_url: rpc,
+            l2_rpc_url: l2_rpc.clone(),
+            chain: ChainConfig::optimism_goerli(),
+            l2_engine_url: String::new(),
+            jwt_secret: String::new(),
+            l2_trusted_rpc_url: Some(l2_rpc),
+        });
+
+        let payload = ExecutionPayload::from_block(&config, checkpoint_hash).await?;
+
+        assert_eq!(
+            payload.block_hash,
+            "0xb7e19cc10812911dfa8a438e0a81a9933f843aa5b528899b8d9e221b649ae0df".parse()?
+        );
+        assert_eq!(payload.block_number, 8883228u64.into());
+        assert_eq!(payload.base_fee_per_gas, 132645894679u64.into());
+
+        Ok(())
+    }
 }

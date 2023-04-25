@@ -16,7 +16,7 @@ use crate::{
     config::Config,
     derive::{state::State, Pipeline},
     driver::types::HeadInfo,
-    engine::{Engine, EngineApi, ForkchoiceState},
+    engine::{Engine, EngineApi, ExecutionPayload, ForkchoiceState, Status},
     l1::{BlockUpdate, ChainWatcher},
     rpc,
     telemetry::metrics,
@@ -99,7 +99,7 @@ impl Driver<EngineApi> {
         })
     }
 
-    pub async fn from_checkpoint_head(
+    pub async fn from_checkpoint_hash(
         config: Config,
         shutdown_recv: Receiver<bool>,
         checkpoint_hash: H256,
@@ -109,6 +109,16 @@ impl Driver<EngineApi> {
 
         let engine_api = EngineApi::new(&config.l2_engine_url, &config.jwt_secret);
 
+        let checkpoint_payload = ExecutionPayload::from_block(&config, checkpoint_hash).await?;
+        match engine_api.new_payload(checkpoint_payload).await?.status {
+            Status::Valid | Status::Syncing | Status::Accepted => {}
+            Status::Invalid | Status::InvalidBlockHash => {
+                panic!("the provided checkpoint payload response is invalid")
+            }
+        }
+
+        dbg!("payload sent");
+
         // call forkchoice_updated once to make the execution layer start syncing to the checkpoint
         let forkchoice_state = ForkchoiceState::from_single_head(checkpoint_hash);
         let fc_res = engine_api
@@ -117,7 +127,7 @@ impl Driver<EngineApi> {
 
         dbg!(fc_res);
         tracing::info!(
-            "syncing the execution layer to the checkpoint hash: {:?}",
+            "syncing execution client up to checkpoint: {:?}",
             checkpoint_hash
         );
 
@@ -384,6 +394,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    // TODO fix this test & add more
     async fn test_new_driver_from_config() -> Result<()> {
         let config_path = PathBuf::from_str("config.toml")?;
         let rpc = "https://eth-goerli.g.alchemy.com/v2/UbmnU8fj4rLikYW5ph8Xe975Pz-nxqfv";
@@ -395,6 +406,7 @@ mod tests {
             jwt_secret: Some(
                 "d195a64e08587a3f1560686448867220c2727550ce3e0c95c7200d0ade0f9167".to_owned(),
             ),
+            l2_trusted_rpc_url: None,
         };
         let config = Config::new(&config_path, cli_config, ChainConfig::optimism_goerli());
         let (_shutdown_sender, shutdown_recv) = channel();

@@ -25,7 +25,8 @@ async fn main() -> Result<()> {
     metrics::init()?;
 
     match sync_mode {
-        SyncMode::Fast => fast_sync(config, checkpoint_hash).await?,
+        SyncMode::Fast => panic!("fast sync not implemented"),
+        SyncMode::Checkpoint => checkpoint_sync(config, checkpoint_hash).await?,
         SyncMode::Full => full_sync(config).await?,
         SyncMode::Challenge => panic!("challenge sync not implemented"),
     };
@@ -48,17 +49,17 @@ pub async fn full_sync(config: Config) -> Result<()> {
     Ok(())
 }
 
-pub async fn fast_sync(config: Config, checkpoint_hash: Option<String>) -> Result<()> {
-    tracing::info!(target: "magi", "starting fast sync");
+pub async fn checkpoint_sync(config: Config, checkpoint_hash: Option<String>) -> Result<()> {
+    tracing::info!(target: "magi", "starting checkpoint sync");
     let (shutdown_sender, shutdown_recv) = channel();
     shutdown_on_ctrlc(shutdown_sender);
 
     let checkpoint_hash = checkpoint_hash
-        .expect("fast sync requires an L2 block hash to be provided as checkpoint_hash for now")
+        .expect("checkpoint sync requires an L2 block hash to be provided as checkpoint_hash")
         .parse()
         .expect("invalid checkpoint hash provided");
 
-    let mut driver = Driver::from_checkpoint_head(config, shutdown_recv, checkpoint_hash).await?;
+    let mut driver = Driver::from_checkpoint_hash(config, shutdown_recv, checkpoint_hash).await?;
 
     if let Err(err) = driver.start().await {
         tracing::error!(target: "magi", "{}", err);
@@ -90,6 +91,8 @@ pub struct Cli {
     logs_rotation: Option<String>,
     #[clap(long)]
     checkpoint_hash: Option<String>,
+    #[clap(long)]
+    l2_trusted_rpc_url: Option<String>,
 }
 
 impl Cli {
@@ -113,6 +116,7 @@ impl From<Cli> for CliConfig {
             l2_rpc_url: value.l2_rpc_url,
             l2_engine_url: value.l2_engine_url,
             jwt_secret: value.jwt_secret,
+            l2_trusted_rpc_url: value.l2_trusted_rpc_url,
         }
     }
 }
