@@ -45,6 +45,7 @@ exec geth \
   --nodiscover \
   --maxpeers=0 \
   --networkid=420 \
+  --verbosity=5 \
   --authrpc.vhosts="*" \
   --authrpc.addr=0.0.0.0 \
   --authrpc.port=8551 \

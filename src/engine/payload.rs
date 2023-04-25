@@ -60,18 +60,16 @@ impl ExecutionPayload {
                 .as_str(),
         )?;
 
-        let l2_block_number = l2_provider
-            .get_block(block_hash)
+        let l2_block = l2_provider
+            .get_block_with_txs(block_hash)
             .await?
-            .expect("l2 block not found")
-            .number
-            .unwrap();
+            .expect("l2 block not found");
 
         let l1_block_number_raw = l2_provider
             .get_storage_at(
                 config.chain.l1_block,
                 H256::zero(),
-                Some(BlockId::Number(l2_block_number.into())),
+                Some(BlockId::Number(l2_block.number.unwrap().into())),
             )
             .await?;
 
@@ -79,30 +77,30 @@ impl ExecutionPayload {
         let l1_block_number_raw = &l1_block_number_raw[48..];
         let l1_block_number = U64::from_str_radix(l1_block_number_raw, 16)?;
 
-        let l1_block = &l1_provider
-            .get_block_with_txs(l1_block_number)
+        let l1_block = l1_provider
+            .get_block(l1_block_number)
             .await?
             .expect("l1 block not found");
 
         Ok(ExecutionPayload {
-            parent_hash: l1_block.parent_hash,
+            parent_hash: l2_block.parent_hash,
             fee_recipient: config.chain.sequencer_fee_vault,
-            state_root: l1_block.state_root,
-            receipts_root: l1_block.receipts_root,
-            logs_bloom: l1_block.logs_bloom.unwrap().as_bytes().to_vec().into(),
+            state_root: l2_block.state_root,
+            receipts_root: l2_block.receipts_root,
+            logs_bloom: l2_block.logs_bloom.unwrap().as_bytes().to_vec().into(),
             prev_randao: l1_block.mix_hash.unwrap(),
-            block_number: l1_block.number.unwrap(),
-            gas_limit: l1_block.gas_limit.as_u64().into(),
-            gas_used: l1_block.gas_used.as_u64().into(),
-            timestamp: l1_block.timestamp.as_u64().into(),
-            extra_data: l1_block.extra_data.clone(),
-            base_fee_per_gas: l1_block
+            block_number: l2_block.number.unwrap(),
+            gas_limit: l2_block.gas_limit.as_u64().into(),
+            gas_used: l2_block.gas_used.as_u64().into(),
+            timestamp: l2_block.timestamp.as_u64().into(),
+            extra_data: l2_block.extra_data.clone(),
+            base_fee_per_gas: l2_block
                 .base_fee_per_gas
                 .unwrap_or(0u64.into())
                 .as_u64()
                 .into(),
-            block_hash: l1_block.hash.unwrap(),
-            transactions: (*l1_block
+            block_hash: l2_block.hash.unwrap(),
+            transactions: (*l2_block
                 .transactions
                 .clone()
                 .into_iter()
@@ -217,10 +215,10 @@ mod tests {
 
         assert_eq!(
             payload.block_hash,
-            "0xb7e19cc10812911dfa8a438e0a81a9933f843aa5b528899b8d9e221b649ae0df".parse()?
+            "0xc2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973".parse()?
         );
-        assert_eq!(payload.block_number, 8883228u64.into());
-        assert_eq!(payload.base_fee_per_gas, 132645894679u64.into());
+        assert_eq!(payload.block_number, 8453214u64.into());
+        assert_eq!(payload.base_fee_per_gas, 50u64.into());
 
         Ok(())
     }

@@ -5,7 +5,7 @@ use std::{
 };
 
 use ethers::{
-    providers::{Middleware, Provider},
+    providers::{Http, Middleware, Provider},
     types::{BlockId, BlockNumber, SyncingStatus, H256},
 };
 use eyre::Result;
@@ -109,11 +109,13 @@ impl Driver<EngineApi> {
 
         let engine_api = EngineApi::new(&config.l2_engine_url, &config.jwt_secret);
 
+        // built the execution payload of the checkpoint block and send it to the execution client
         let checkpoint_payload = ExecutionPayload::from_block(&config, checkpoint_hash).await?;
         match engine_api.new_payload(checkpoint_payload).await?.status {
             Status::Valid | Status::Syncing | Status::Accepted => {}
             Status::Invalid | Status::InvalidBlockHash => {
-                panic!("the provided checkpoint payload response is invalid")
+                tracing::error!("the provided checkpoint payload is invalid, exiting");
+                process::exit(1);
             }
         }
 
@@ -126,26 +128,14 @@ impl Driver<EngineApi> {
             .await?;
 
         dbg!(fc_res);
+
         tracing::info!(
             "syncing execution client up to checkpoint: {:?}",
             checkpoint_hash
         );
 
         // wait until the execution layer has synced to the checkpoint
-        loop {
-            let sstat = &provider.syncing().await?;
-            dbg!(sstat);
-
-            if let Ok(shutdown) = shutdown_recv.try_recv() {
-                if shutdown {
-                    process::exit(0);
-                }
-            }
-            if let SyncingStatus::IsFalse = sstat {
-                break;
-            }
-            sleep(Duration::from_secs(2)).await;
-        }
+        await_syncing(&provider, &shutdown_recv).await?;
         dbg!("finished syncing");
 
         // now that we've synced, we can get the head info for the checkpoint block
@@ -239,13 +229,6 @@ impl<E: Engine> Driver<E> {
 
     async fn await_engine_ready(&self) {
         while !self.engine_driver.engine_ready().await {
-            self.check_shutdown().await;
-            sleep(Duration::from_secs(1)).await;
-        }
-    }
-
-    async fn await_syncing_complete(&self) {
-        while self.engine_driver.syncing().await {
             self.check_shutdown().await;
             sleep(Duration::from_secs(1)).await;
         }
@@ -381,6 +364,26 @@ impl<E: Engine> Driver<E> {
         metrics::SAFE_HEAD.set(self.engine_driver.safe_head.number as i64);
         metrics::SYNCED.set(!self.unfinalized_blocks.is_empty() as i64);
     }
+}
+
+async fn await_syncing(provider: &Provider<Http>, shutdown_recv: &Receiver<bool>) -> Result<()> {
+    while let SyncingStatus::IsSyncing(progress) = &provider.syncing().await? {
+        tracing::debug!(
+            "syncing progress: {} / {}",
+            progress.current_block,
+            progress.highest_block
+        );
+
+        if let Ok(shutdown) = shutdown_recv.try_recv() {
+            if shutdown {
+                process::exit(0);
+            }
+        }
+        sleep(Duration::from_secs(2)).await;
+    }
+
+    tracing::debug!("syncing complete");
+    Ok(())
 }
 
 #[cfg(test)]

@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use ethers::providers::{Http, Middleware, Provider};
-use ethers::types::SyncingStatus;
 use ethers::{
     types::{Block, H256},
     utils::keccak256,
@@ -64,27 +63,6 @@ impl<E: Engine> EngineDriver<E> {
             .forkchoice_updated(forkchoice, None)
             .await
             .is_ok()
-    }
-
-    pub async fn syncing(&self) -> bool {
-        dbg!("-- syncing called");
-
-        match self
-            .provider
-            .syncing()
-            .await
-            .unwrap_or(SyncingStatus::IsFalse)
-        {
-            SyncingStatus::IsFalse => false,
-            SyncingStatus::IsSyncing(progress) => {
-                tracing::info!(
-                    "Syncing: {}/{}",
-                    progress.current_block,
-                    progress.highest_block
-                );
-                true
-            }
-        }
     }
 
     async fn process_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
@@ -232,29 +210,55 @@ impl EngineDriver<EngineApi> {
             finalized_epoch,
         })
     }
+}
 
-    pub fn from_checkpoint(
-        checkpoint_hash: H256,
-        provider: Provider<Http>,
-        config: &Arc<Config>,
-    ) -> Result<Self> {
-        let engine = Arc::new(EngineApi::new(&config.l2_engine_url, &config.jwt_secret));
-        let finalized_head = BlockInfo {
-            hash: checkpoint_hash,
-            number: 0,
-            parent_hash: H256::zero(),
-            timestamp: 0,
-        };
-        let finalized_epoch = Epoch::default();
+#[cfg(test)]
+mod test {
+    use std::sync::Arc;
 
-        Ok(Self {
-            engine,
-            provider,
-            blocktime: config.chain.blocktime,
-            safe_head: finalized_head,
-            safe_epoch: finalized_epoch,
-            finalized_head,
-            finalized_epoch,
-        })
+    use ethers::{providers::Provider, types::H256};
+    use eyre::Result;
+
+    use crate::{
+        common::{BlockInfo, Epoch},
+        config::{ChainConfig, Config},
+        engine::Engine,
+    };
+
+    use super::EngineDriver;
+
+    #[tokio::test]
+    async fn test_get_payload() -> Result<()> {
+        let rpc = "https://eth-goerli.g.alchemy.com/v2/UbmnU8fj4rLikYW5ph8Xe975Pz-nxqfv".to_owned();
+        let l2_rpc =
+            "https://opt-goerli.g.alchemy.com/v2/UbmnU8fj4rLikYW5ph8Xe975Pz-nxqfv".to_owned();
+
+        let config = Arc::new(Config {
+            l1_rpc_url: rpc,
+            l2_rpc_url: l2_rpc.clone(),
+            chain: ChainConfig::optimism_goerli(),
+            l2_engine_url: String::new(),
+            jwt_secret: String::new(),
+            l2_trusted_rpc_url: Some(l2_rpc),
+        });
+
+        let driver = EngineDriver::new(
+            BlockInfo {
+                number: 0,
+                hash: H256::zero(),
+                parent_hash: H256::zero(),
+                timestamp: 0,
+            },
+            Epoch::default(),
+            Provider::try_from("http://localhost:8545")?,
+            &config,
+        )?;
+
+        let forkchoice = driver.create_forkchoice_state();
+        let update = driver.engine.forkchoice_updated(forkchoice, None).await?;
+
+        println!("{:?}", update.payload_id);
+
+        Ok(())
     }
 }
