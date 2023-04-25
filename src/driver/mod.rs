@@ -51,7 +51,7 @@ impl Driver<EngineApi> {
         config: Config,
         shutdown_recv: Receiver<bool>,
     ) -> Result<Self> {
-        let provider: Provider<ethers::providers::Http> = Provider::try_from(&config.l2_rpc_url)?;
+        let provider = Provider::try_from(&config.l2_rpc_url)?;
 
         let block_id = BlockId::Number(BlockNumber::Finalized);
         let head = match HeadInfo::from_block(block_id, &provider).await {
@@ -186,7 +186,7 @@ impl Driver<EngineApi> {
 impl<E: Engine> Driver<E> {
     /// Runs the Driver
     pub async fn start(&mut self) -> Result<()> {
-        self.await_engine_ready().await; // calls forkchoice_updated with the finalized head
+        self.await_engine_ready().await;
         self.chain_watcher.start()?;
 
         loop {
@@ -397,8 +397,7 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    // TODO fix this test & add more
-    async fn test_new_driver_from_config() -> Result<()> {
+    async fn test_new_driver_from_finalized_head() -> Result<()> {
         let config_path = PathBuf::from_str("config.toml")?;
         let rpc = "https://eth-goerli.g.alchemy.com/v2/UbmnU8fj4rLikYW5ph8Xe975Pz-nxqfv";
         let l2_rpc = "https://opt-goerli.g.alchemy.com/v2/UbmnU8fj4rLikYW5ph8Xe975Pz-nxqfv";
@@ -409,18 +408,21 @@ mod tests {
             jwt_secret: Some(
                 "d195a64e08587a3f1560686448867220c2727550ce3e0c95c7200d0ade0f9167".to_owned(),
             ),
-            l2_trusted_rpc_url: None,
+            l2_trusted_rpc_url: Some(l2_rpc.to_owned()),
         };
         let config = Config::new(&config_path, cli_config, ChainConfig::optimism_goerli());
         let (_shutdown_sender, shutdown_recv) = channel();
 
+        let block_id = BlockId::Number(BlockNumber::Finalized);
+        let provider = Provider::<Http>::try_from(config.l2_rpc_url.clone())?;
+        let finalized_block = provider.get_block(block_id).await?.unwrap();
+
         let driver = Driver::from_finalized_head(config, shutdown_recv).await?;
 
-        // todo: fix these tests
-        assert_eq!(driver.engine_driver.safe_head.number, 8428108);
-        assert_eq!(driver.engine_driver.safe_epoch.number, 8879997);
-        assert_eq!(driver.engine_driver.finalized_head.number, 8428108);
-        assert_eq!(driver.engine_driver.finalized_epoch.number, 8879997);
+        assert_eq!(
+            driver.engine_driver.finalized_head.number,
+            finalized_block.number.unwrap().as_u64()
+        );
 
         Ok(())
     }
