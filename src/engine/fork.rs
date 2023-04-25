@@ -29,3 +29,15 @@ pub struct ForkchoiceState {
     /// 32 byte block hash of the most recent finalized block
     pub finalized_block_hash: H256,
 }
+
+impl ForkchoiceState {
+    /// Creates a new fork choice state with the given head block hash.
+    /// The safe block hash and finalized block hash are set to the head block hash.
+    pub fn from_single_head(head_block_hash: H256) -> Self {
+        Self {
+            head_block_hash,
+            safe_block_hash: head_block_hash,
+            finalized_block_hash: head_block_hash,
+        }
+    }
+}

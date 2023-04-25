@@ -202,7 +202,13 @@ impl InnerWatcher {
                 .unwrap()
                 .unwrap();
 
-            let input = &block.transactions[0].input;
+            let input = &block
+                .transactions
+                .get(0)
+                .expect(
+                    "Could not find the L1 attributes deposited transaction in the parent L2 block",
+                )
+                .input;
 
             let batch_sender = Address::from_slice(&input[176..196]);
             let l1_fee_overhead = U256::from(H256::from_slice(&input[196..228]).as_bytes());

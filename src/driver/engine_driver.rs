@@ -67,7 +67,7 @@ impl<E: Engine> EngineDriver<E> {
     }
 
     pub async fn syncing(&self) -> bool {
-        dbg!("syncing called");
+        dbg!("-- syncing called");
 
         match self
             .provider
@@ -221,6 +221,31 @@ impl EngineDriver<EngineApi> {
         config: &Arc<Config>,
     ) -> Result<Self> {
         let engine = Arc::new(EngineApi::new(&config.l2_engine_url, &config.jwt_secret));
+
+        Ok(Self {
+            engine,
+            provider,
+            blocktime: config.chain.blocktime,
+            safe_head: finalized_head,
+            safe_epoch: finalized_epoch,
+            finalized_head,
+            finalized_epoch,
+        })
+    }
+
+    pub fn from_checkpoint(
+        checkpoint_hash: H256,
+        provider: Provider<Http>,
+        config: &Arc<Config>,
+    ) -> Result<Self> {
+        let engine = Arc::new(EngineApi::new(&config.l2_engine_url, &config.jwt_secret));
+        let finalized_head = BlockInfo {
+            hash: checkpoint_hash,
+            number: 0,
+            parent_hash: H256::zero(),
+            timestamp: 0,
+        };
+        let finalized_epoch = Epoch::default();
 
         Ok(Self {
             engine,

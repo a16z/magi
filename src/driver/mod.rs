@@ -5,8 +5,8 @@ use std::{
 };
 
 use ethers::{
-    providers::Provider,
-    types::{BlockId, BlockNumber, H256},
+    providers::{Middleware, Provider},
+    types::{BlockId, BlockNumber, SyncingStatus, H256},
 };
 use eyre::Result;
 use tokio::time::sleep;
@@ -16,7 +16,7 @@ use crate::{
     config::Config,
     derive::{state::State, Pipeline},
     driver::types::HeadInfo,
-    engine::{Engine, EngineApi},
+    engine::{Engine, EngineApi, ForkchoiceState},
     l1::{BlockUpdate, ChainWatcher},
     telemetry::metrics,
 };
@@ -46,30 +46,21 @@ pub struct Driver<E: Engine> {
 }
 
 impl Driver<EngineApi> {
-    pub async fn from_config(
+    pub async fn from_finalized_head(
         config: Config,
         shutdown_recv: Receiver<bool>,
-        checkpoint_hash: Option<H256>,
     ) -> Result<Self> {
-        let provider = Provider::try_from(&config.l2_rpc_url)?;
+        let provider: Provider<ethers::providers::Http> = Provider::try_from(&config.l2_rpc_url)?;
 
-        // Use the checkpoint hash if provided, otherwise use the finalized block
-        let head_block_id = checkpoint_hash
-            .map(BlockId::Hash)
-            .unwrap_or(BlockNumber::Finalized.into());
-
-        let head = match HeadInfo::from_block(head_block_id, &provider).await {
+        let block_id = BlockId::Number(BlockNumber::Finalized);
+        let head = match HeadInfo::from_block(block_id, &provider).await {
             Ok(Some(head)) => head,
-            Ok(None) => {
-                tracing::warn!("could not get head info. Falling back to genesis head.");
+            _ => {
+                tracing::warn!("could not get head info. Falling back to the genesis head.");
                 HeadInfo {
                     l2_block_info: config.chain.l2_genesis,
                     l1_epoch: config.chain.l1_start_epoch,
                 }
-            }
-            Err(e) => {
-                tracing::error!("failed to get head info: {}", e);
-                process::exit(1);
             }
         };
 
@@ -104,12 +95,95 @@ impl Driver<EngineApi> {
             shutdown_recv,
         })
     }
+
+    pub async fn from_checkpoint_head(
+        config: Config,
+        shutdown_recv: Receiver<bool>,
+        checkpoint_hash: H256,
+    ) -> Result<Self> {
+        let provider = Provider::try_from(&config.l2_rpc_url)?;
+        let config = Arc::new(config);
+
+        let engine_api = EngineApi::new(&config.l2_engine_url, &config.jwt_secret);
+
+        // call forkchoice_updated once to make the execution layer start syncing to the checkpoint
+        let forkchoice_state = ForkchoiceState::from_single_head(checkpoint_hash);
+        let fc_res = engine_api
+            .forkchoice_updated(forkchoice_state, None)
+            .await?;
+
+        dbg!(fc_res);
+        tracing::info!(
+            "syncing the execution layer to the checkpoint hash: {:?}",
+            checkpoint_hash
+        );
+
+        // wait until the execution layer has synced to the checkpoint
+        loop {
+            let sstat = &provider.syncing().await?;
+            dbg!(sstat);
+
+            if let Ok(shutdown) = shutdown_recv.try_recv() {
+                if shutdown {
+                    process::exit(0);
+                }
+            }
+            if let SyncingStatus::IsFalse = sstat {
+                break;
+            }
+            sleep(Duration::from_secs(2)).await;
+        }
+        dbg!("finished syncing");
+
+        // now that we've synced, we can get the head info for the checkpoint block
+        // our l2 rpc should now have this block
+        let head = match HeadInfo::from_block(BlockId::Hash(checkpoint_hash), &provider).await {
+            Ok(Some(head)) => head,
+            _ => {
+                tracing::warn!("could not get head info. Falling back to the genesis head.");
+                HeadInfo {
+                    l2_block_info: config.chain.l2_genesis,
+                    l1_epoch: config.chain.l1_start_epoch,
+                }
+            }
+        };
+
+        let finalized_head = head.l2_block_info;
+        let finalized_epoch = head.l1_epoch;
+
+        tracing::info!("starting  from: {:?}", finalized_head.hash);
+
+        let chain_watcher = ChainWatcher::new(
+            finalized_epoch.number,
+            finalized_head.number,
+            config.clone(),
+        )?;
+
+        let state = Arc::new(RwLock::new(State::new(
+            finalized_head,
+            finalized_epoch,
+            config.clone(),
+        )));
+
+        let engine_driver = EngineDriver::new(finalized_head, finalized_epoch, provider, &config)?;
+        let pipeline = Pipeline::new(state.clone(), config)?;
+
+        Ok(Self {
+            engine_driver,
+            pipeline,
+            unfinalized_blocks: Vec::new(),
+            finalized_l1_block_number: 0,
+            state,
+            chain_watcher,
+            shutdown_recv,
+        })
+    }
 }
 
 impl<E: Engine> Driver<E> {
     /// Runs the Driver
     pub async fn start(&mut self) -> Result<()> {
-        self.await_engine_ready().await;
+        self.await_engine_ready().await; // calls forkchoice_updated with the finalized head
         self.chain_watcher.start()?;
 
         loop {
@@ -124,7 +198,6 @@ impl<E: Engine> Driver<E> {
 
     pub async fn start_fast(&mut self) -> Result<()> {
         self.await_engine_ready().await;
-        self.await_syncing().await;
         self.chain_watcher.start()?;
 
         loop {
@@ -158,9 +231,8 @@ impl<E: Engine> Driver<E> {
         }
     }
 
-    async fn await_syncing(&self) {
+    async fn await_syncing_complete(&self) {
         while self.engine_driver.syncing().await {
-            dbg!("await syncing loop inside");
             self.check_shutdown().await;
             sleep(Duration::from_secs(1)).await;
         }
@@ -324,10 +396,9 @@ mod tests {
         let config = Config::new(&config_path, cli_config, ChainConfig::optimism_goerli());
         let (_shutdown_sender, shutdown_recv) = channel();
 
-        let checkpoint =
-            "0x75d4a658d7b6430c874c5518752a8d90fb1503eccd6ae4cfc97fd4aedeebb939".parse()?;
-        let driver = Driver::from_config(config, shutdown_recv, Some(checkpoint)).await?;
+        let driver = Driver::from_finalized_head(config, shutdown_recv).await?;
 
+        // todo: fix these tests
         assert_eq!(driver.engine_driver.safe_head.number, 8428108);
         assert_eq!(driver.engine_driver.safe_epoch.number, 8879997);
         assert_eq!(driver.engine_driver.finalized_head.number, 8428108);

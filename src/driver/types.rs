@@ -17,14 +17,14 @@ pub struct HeadInfo {
 }
 
 impl HeadInfo {
-    pub async fn from_block<T: Into<BlockId> + Send + Sync + Copy + std::fmt::Debug>(
+    pub async fn from_block<T: Into<BlockId> + Send + Sync + Copy>(
         block_id: T,
         provider: &Provider<Http>,
     ) -> Result<Option<Self>> {
         match provider.get_block_with_txs(block_id).await {
             Ok(Some(block)) => Ok(Some(block.try_into()?)),
             Ok(None) => {
-                tracing::warn!("No block found at {:?}", block_id);
+                tracing::warn!("No block found at {:?}", block_id.into());
                 Ok(None)
             }
             Err(err) => {
