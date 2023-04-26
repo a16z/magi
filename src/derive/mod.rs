@@ -141,31 +141,6 @@ mod tests {
                 )
                 .unwrap();
 
-            chain_watcher.start().unwrap();
-
-            let state = Arc::new(RwLock::new(State::new(
-                config.chain.l2_genesis,
-                config.chain.l1_start_epoch,
-                config.clone(),
-            )));
-
-            let mut pipeline = Pipeline::new(state.clone(), config.clone()).unwrap();
-
-            chain_watcher.block_update_receiver.recv().unwrap();
-            let update = chain_watcher.block_update_receiver.recv().unwrap();
-
-            let l1_info = match update {
-                BlockUpdate::NewBlock(block) => *block,
-                _ => panic!("wrong update type"),
-            };
-
-            pipeline
-                .push_batcher_transactions(
-                    l1_info.batcher_transactions.clone(),
-                    l1_info.block_info.number,
-                )
-                .unwrap();
-
             state.write().unwrap().update_l1_info(l1_info);
 
             if let Some(payload) = pipeline.next() {
