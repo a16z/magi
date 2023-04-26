@@ -82,13 +82,16 @@ impl ExecutionPayload {
             .await?
             .expect("l1 block not found");
 
-        let txs = (*l2_block
+        dbg!(l2_block.transactions.clone());
+
+        let encoded_txs = (*l2_block
             .transactions
-            .clone()
             .into_iter()
             .map(|tx| RawTransaction(tx.rlp().to_vec()))
             .collect::<Vec<_>>())
         .to_vec();
+
+        dbg!(encoded_txs.clone());
 
         Ok(ExecutionPayload {
             parent_hash: l2_block.parent_hash,
@@ -108,7 +111,7 @@ impl ExecutionPayload {
                 .as_u64()
                 .into(),
             block_hash: l2_block.hash.unwrap(),
-            transactions: txs,
+            transactions: encoded_txs,
         })
     }
 }
