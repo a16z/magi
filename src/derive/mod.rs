@@ -96,56 +96,58 @@ mod tests {
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_attributes_match() {
-        let rpc = env::var("L1_TEST_RPC_URL").unwrap();
-        let l2_rpc = env::var("L2_TEST_RPC_URL").unwrap();
-
-        let config = Arc::new(Config {
-            l1_rpc_url: rpc,
-            l2_rpc_url: l2_rpc,
-            chain: ChainConfig::optimism_goerli(),
-            l2_engine_url: String::new(),
-            jwt_secret: String::new(),
-        });
-
-        let mut chain_watcher = ChainWatcher::new(
-            config.chain.l1_start_epoch.number,
-            config.chain.l2_genesis.number,
-            config.clone(),
-        )
-        .unwrap();
-
-        chain_watcher.start().unwrap();
-
-        let state = Arc::new(RwLock::new(State::new(
-            config.chain.l2_genesis,
-            config.chain.l1_start_epoch,
-            config.clone(),
-        )));
-
-        let mut pipeline = Pipeline::new(state.clone(), config.clone()).unwrap();
-
-        chain_watcher.block_update_receiver.recv().unwrap();
-        let update = chain_watcher.block_update_receiver.recv().unwrap();
-
-        let l1_info = match update {
-            BlockUpdate::NewBlock(block) => *block,
-            _ => panic!("wrong update type"),
-        };
-
-        pipeline
-            .push_batcher_transactions(
-                l1_info.batcher_transactions.clone(),
-                l1_info.block_info.number,
+        if std::env::var("L1_TEST_RPC_URL").is_ok() && std::env::var("L2_TEST_RPC_URL").is_ok() {
+            let rpc = env::var("L1_TEST_RPC_URL").unwrap();
+            let l2_rpc = env::var("L2_TEST_RPC_URL").unwrap();
+    
+            let config = Arc::new(Config {
+                l1_rpc_url: rpc,
+                l2_rpc_url: l2_rpc,
+                chain: ChainConfig::optimism_goerli(),
+                l2_engine_url: String::new(),
+                jwt_secret: String::new(),
+            });
+    
+            let mut chain_watcher = ChainWatcher::new(
+                config.chain.l1_start_epoch.number,
+                config.chain.l2_genesis.number,
+                config.clone(),
             )
             .unwrap();
-
-        state.write().unwrap().update_l1_info(l1_info);
-
-        if let Some(payload) = pipeline.next() {
-            let hashes = get_tx_hashes(&payload.transactions.unwrap());
-            let expected_hashes = get_expected_hashes(config.chain.l2_genesis.number + 1).await;
-
-            assert_eq!(hashes, expected_hashes);
+    
+            chain_watcher.start().unwrap();
+    
+            let state = Arc::new(RwLock::new(State::new(
+                config.chain.l2_genesis,
+                config.chain.l1_start_epoch,
+                config.clone(),
+            )));
+    
+            let mut pipeline = Pipeline::new(state.clone(), config.clone()).unwrap();
+    
+            chain_watcher.block_update_receiver.recv().unwrap();
+            let update = chain_watcher.block_update_receiver.recv().unwrap();
+    
+            let l1_info = match update {
+                BlockUpdate::NewBlock(block) => *block,
+                _ => panic!("wrong update type"),
+            };
+    
+            pipeline
+                .push_batcher_transactions(
+                    l1_info.batcher_transactions.clone(),
+                    l1_info.block_info.number,
+                )
+                .unwrap();
+    
+            state.write().unwrap().update_l1_info(l1_info);
+    
+            if let Some(payload) = pipeline.next() {
+                let hashes = get_tx_hashes(&payload.transactions.unwrap());
+                let expected_hashes = get_expected_hashes(config.chain.l2_genesis.number + 1).await;
+    
+                assert_eq!(hashes, expected_hashes);
+            }
         }
     }
 
