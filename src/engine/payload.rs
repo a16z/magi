@@ -197,29 +197,31 @@ mod tests {
 
     #[tokio::test]
     async fn test_from_block_hash_to_execution_paylaod() -> Result<()> {
-        let checkpoint_hash =
-            "0xc2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973".parse()?;
+        if std::env::var("L1_TEST_RPC_URL").is_ok() && std::env::var("L2_TEST_RPC_URL").is_ok() {
+            let checkpoint_hash =
+                "0xc2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973".parse()?;
 
-        let rpc = std::env::var("L1_TEST_RPC_URL")?;
-        let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
-        let config = Arc::new(Config {
-            l1_rpc_url: rpc,
-            l2_rpc_url: l2_rpc.clone(),
-            chain: ChainConfig::optimism_goerli(),
-            l2_engine_url: String::new(),
-            jwt_secret: String::new(),
-            l2_trusted_rpc_url: Some(l2_rpc),
-            rpc_port: 0,
-        });
+            let rpc = std::env::var("L1_TEST_RPC_URL")?;
+            let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
+            let config = Arc::new(Config {
+                l1_rpc_url: rpc,
+                l2_rpc_url: l2_rpc.clone(),
+                chain: ChainConfig::optimism_goerli(),
+                l2_engine_url: String::new(),
+                jwt_secret: String::new(),
+                l2_trusted_rpc_url: Some(l2_rpc),
+                rpc_port: 0,
+            });
 
-        let payload = ExecutionPayload::from_block(&config, checkpoint_hash).await?;
+            let payload = ExecutionPayload::from_block(&config, checkpoint_hash).await?;
 
-        assert_eq!(
-            payload.block_hash,
-            "0xc2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973".parse()?
-        );
-        assert_eq!(payload.block_number, 8453214u64.into());
-        assert_eq!(payload.base_fee_per_gas, 50u64.into());
+            assert_eq!(
+                payload.block_hash,
+                "0xc2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973".parse()?
+            );
+            assert_eq!(payload.block_number, 8453214u64.into());
+            assert_eq!(payload.base_fee_per_gas, 50u64.into());
+        }
 
         Ok(())
     }

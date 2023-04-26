@@ -200,37 +200,40 @@ mod tests {
 
         #[tokio::test]
         async fn test_head_info_from_l2_block_hash() -> Result<()> {
-            let l2_block_hash = H256::from_str(
-                "0x75d4a658d7b6430c874c5518752a8d90fb1503eccd6ae4cfc97fd4aedeebb939",
-            )?;
+            if std::env::var("L1_TEST_RPC_URL").is_ok() && std::env::var("L2_TEST_RPC_URL").is_ok()
+            {
+                let l2_block_hash = H256::from_str(
+                    "0x75d4a658d7b6430c874c5518752a8d90fb1503eccd6ae4cfc97fd4aedeebb939",
+                )?;
 
-            let expected_l2_block_number = 8428108;
-            let expected_l2_block_timestamp = 1682284284;
+                let expected_l2_block_number = 8428108;
+                let expected_l2_block_timestamp = 1682284284;
 
-            let expected_l1_epoch_hash = H256::from_str(
-                "0x76ab90dc2afea158bbe14a99f22d5f867b51719378aa37d1a3aa3833ace67cad",
-            )?;
-            let expected_l1_epoch_block_number = 8879997;
-            let expected_l1_epoch_timestamp = 1682284164;
+                let expected_l1_epoch_hash = H256::from_str(
+                    "0x76ab90dc2afea158bbe14a99f22d5f867b51719378aa37d1a3aa3833ace67cad",
+                )?;
+                let expected_l1_epoch_block_number = 8879997;
+                let expected_l1_epoch_timestamp = 1682284164;
 
-            let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
-            let provider = Provider::try_from(l2_rpc)?;
+                let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
+                let provider = Provider::try_from(l2_rpc)?;
 
-            let head = HeadInfo::from_block(l2_block_hash, &provider).await?;
+                let head = HeadInfo::from_block(l2_block_hash, &provider).await?;
 
-            // Assert
-            assert!(head.is_some());
-            let HeadInfo {
-                l2_block_info,
-                l1_epoch,
-            } = head.unwrap();
+                // Assert
+                assert!(head.is_some());
+                let HeadInfo {
+                    l2_block_info,
+                    l1_epoch,
+                } = head.unwrap();
 
-            assert_eq!(l2_block_info.number, expected_l2_block_number);
-            assert_eq!(l2_block_info.timestamp, expected_l2_block_timestamp);
+                assert_eq!(l2_block_info.number, expected_l2_block_number);
+                assert_eq!(l2_block_info.timestamp, expected_l2_block_timestamp);
 
-            assert_eq!(l1_epoch.hash, expected_l1_epoch_hash);
-            assert_eq!(l1_epoch.number, expected_l1_epoch_block_number);
-            assert_eq!(l1_epoch.timestamp, expected_l1_epoch_timestamp);
+                assert_eq!(l1_epoch.hash, expected_l1_epoch_hash);
+                assert_eq!(l1_epoch.number, expected_l1_epoch_block_number);
+                assert_eq!(l1_epoch.timestamp, expected_l1_epoch_timestamp);
+            }
 
             Ok(())
         }

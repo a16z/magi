@@ -366,7 +366,9 @@ impl<E: Engine> Driver<E> {
 }
 
 async fn await_syncing(provider: &Provider<Http>, shutdown_recv: &Receiver<bool>) -> Result<()> {
-    while let SyncingStatus::IsSyncing(progress) = &provider.syncing().await? {
+    let sync_status = &provider.syncing().await?;
+    dbg!(sync_status.clone());
+    while let SyncingStatus::IsSyncing(progress) = sync_status {
         tracing::debug!(
             "syncing progress: {} / {}",
             progress.current_block,
@@ -381,7 +383,7 @@ async fn await_syncing(provider: &Provider<Http>, shutdown_recv: &Receiver<bool>
         sleep(Duration::from_secs(2)).await;
     }
 
-    tracing::debug!("syncing complete");
+    tracing::info!("syncing complete");
     Ok(())
 }
 
@@ -397,33 +399,34 @@ mod tests {
 
     #[tokio::test]
     async fn test_new_driver_from_finalized_head() -> Result<()> {
-        let config_path = PathBuf::from_str("config.toml")?;
-        let rpc = std::env::var("L1_TEST_RPC_URL")?;
-        let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
-        let cli_config = CliConfig {
-            l1_rpc_url: Some(rpc.to_owned()),
-            l2_rpc_url: Some(l2_rpc.to_owned()),
-            l2_engine_url: None,
-            jwt_secret: Some(
-                "d195a64e08587a3f1560686448867220c2727550ce3e0c95c7200d0ade0f9167".to_owned(),
-            ),
-            l2_trusted_rpc_url: Some(l2_rpc.to_owned()),
-            rpc_port: None,
-        };
-        let config = Config::new(&config_path, cli_config, ChainConfig::optimism_goerli());
-        let (_shutdown_sender, shutdown_recv) = channel();
+        if std::env::var("L1_TEST_RPC_URL").is_ok() && std::env::var("L2_TEST_RPC_URL").is_ok() {
+            let config_path = PathBuf::from_str("config.toml")?;
+            let rpc = std::env::var("L1_TEST_RPC_URL")?;
+            let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
+            let cli_config = CliConfig {
+                l1_rpc_url: Some(rpc.to_owned()),
+                l2_rpc_url: Some(l2_rpc.to_owned()),
+                l2_engine_url: None,
+                jwt_secret: Some(
+                    "d195a64e08587a3f1560686448867220c2727550ce3e0c95c7200d0ade0f9167".to_owned(),
+                ),
+                l2_trusted_rpc_url: Some(l2_rpc.to_owned()),
+                rpc_port: None,
+            };
+            let config = Config::new(&config_path, cli_config, ChainConfig::optimism_goerli());
+            let (_shutdown_sender, shutdown_recv) = channel();
 
-        let block_id = BlockId::Number(BlockNumber::Finalized);
-        let provider = Provider::<Http>::try_from(config.l2_rpc_url.clone())?;
-        let finalized_block = provider.get_block(block_id).await?.unwrap();
+            let block_id = BlockId::Number(BlockNumber::Finalized);
+            let provider = Provider::<Http>::try_from(config.l2_rpc_url.clone())?;
+            let finalized_block = provider.get_block(block_id).await?.unwrap();
 
-        let driver = Driver::from_finalized_head(config, shutdown_recv).await?;
+            let driver = Driver::from_finalized_head(config, shutdown_recv).await?;
 
-        assert_eq!(
-            driver.engine_driver.finalized_head.number,
-            finalized_block.number.unwrap().as_u64()
-        );
-
+            assert_eq!(
+                driver.engine_driver.finalized_head.number,
+                finalized_block.number.unwrap().as_u64()
+            );
+        }
         Ok(())
     }
 }
