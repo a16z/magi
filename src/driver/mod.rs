@@ -398,8 +398,8 @@ mod tests {
     #[tokio::test]
     async fn test_new_driver_from_finalized_head() -> Result<()> {
         let config_path = PathBuf::from_str("config.toml")?;
-        let rpc = "https://eth-goerli.g.alchemy.com/v2/UbmnU8fj4rLikYW5ph8Xe975Pz-nxqfv";
-        let l2_rpc = "https://opt-goerli.g.alchemy.com/v2/UbmnU8fj4rLikYW5ph8Xe975Pz-nxqfv";
+        let rpc = std::env::var("L1_TEST_RPC_URL")?;
+        let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
         let cli_config = CliConfig {
             l1_rpc_url: Some(rpc.to_owned()),
             l2_rpc_url: Some(l2_rpc.to_owned()),

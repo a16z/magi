@@ -200,9 +200,8 @@ mod tests {
         let checkpoint_hash =
             "0xc2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973".parse()?;
 
-        let rpc = "https://eth-goerli.g.alchemy.com/v2/UbmnU8fj4rLikYW5ph8Xe975Pz-nxqfv".to_owned();
-        let l2_rpc =
-            "https://opt-goerli.g.alchemy.com/v2/UbmnU8fj4rLikYW5ph8Xe975Pz-nxqfv".to_owned();
+        let rpc = std::env::var("L1_TEST_RPC_URL")?;
+        let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
         let config = Arc::new(Config {
             l1_rpc_url: rpc,
             l2_rpc_url: l2_rpc.clone(),

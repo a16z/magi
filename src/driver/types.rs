@@ -213,7 +213,7 @@ mod tests {
             let expected_l1_epoch_block_number = 8879997;
             let expected_l1_epoch_timestamp = 1682284164;
 
-            let l2_rpc = "https://opt-goerli.g.alchemy.com/v2/UbmnU8fj4rLikYW5ph8Xe975Pz-nxqfv";
+            let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
             let provider = Provider::try_from(l2_rpc)?;
 
             let head = HeadInfo::from_block(l2_block_hash, &provider).await?;
