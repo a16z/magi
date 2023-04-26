@@ -393,6 +393,7 @@ mod tests {
             l2_rpc_url: String::new(),
             l2_engine_url: String::new(),
             jwt_secret: String::new(),
+            rpc_port: 9545,
             chain: ChainConfig::optimism_goerli(),
         };
 

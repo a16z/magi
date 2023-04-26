@@ -88,7 +88,10 @@ fn compute_l2_output_root(block: Block<H256>, storage_root: H256) -> H256 {
 }
 
 pub async fn run_server(config: Arc<Config>) -> Result<SocketAddr> {
-    let server = ServerBuilder::default().build("127.0.0.1:9545").await?;
+    let port = config.rpc_port;
+    let server = ServerBuilder::default()
+        .build(format!("127.0.0.1:{}", port))
+        .await?;
     let addr = server.local_addr()?;
     let rpc_impl = RpcServerImpl { config };
     let handle = server.start(rpc_impl.into_rpc())?;
@@ -96,7 +99,7 @@ pub async fn run_server(config: Arc<Config>) -> Result<SocketAddr> {
     // In this example we don't care about doing shutdown so let's it run forever.
     // You may use the `ServerHandle` to shut it down or manage it yourself.
     tokio::spawn(handle.stopped());
-    tracing::info!("rpc server started at port 9545");
+    tracing::info!("rpc server started at port {}", port);
 
     Ok(addr)
 }
