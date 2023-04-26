@@ -18,4 +18,5 @@ exec magi \
     --l1-rpc-url $L1_RPC_URL \
     --l2-rpc-url http://${EXECUTION_CONTAINER}:8545 \
     --l2-engine-url http://${EXECUTION_CONTAINER}:8551 \
+    --rpc-port $RPC_PORT \
     --sync-mode full

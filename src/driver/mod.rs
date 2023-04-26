@@ -409,6 +409,7 @@ mod tests {
                 "d195a64e08587a3f1560686448867220c2727550ce3e0c95c7200d0ade0f9167".to_owned(),
             ),
             l2_trusted_rpc_url: Some(l2_rpc.to_owned()),
+            rpc_port: None,
         };
         let config = Config::new(&config_path, cli_config, ChainConfig::optimism_goerli());
         let (_shutdown_sender, shutdown_recv) = channel();

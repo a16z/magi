@@ -211,6 +211,7 @@ mod tests {
             l2_engine_url: String::new(),
             jwt_secret: String::new(),
             l2_trusted_rpc_url: Some(l2_rpc),
+            rpc_port: 0,
         });
 
         let payload = ExecutionPayload::from_block(&config, checkpoint_hash).await?;

@@ -84,6 +84,8 @@ pub struct Cli {
     #[clap(long)]
     jwt_secret: Option<String>,
     #[clap(short = 'v', long)]
+    rpc_port: Option<u16>,
+    #[clap(short = 'p', long)]
     verbose: bool,
     #[clap(long)]
     logs_dir: Option<String>,
@@ -117,6 +119,7 @@ impl From<Cli> for CliConfig {
             l2_engine_url: value.l2_engine_url,
             jwt_secret: value.jwt_secret,
             l2_trusted_rpc_url: value.l2_trusted_rpc_url,
+            rpc_port: value.rpc_port,
         }
     }
 }
