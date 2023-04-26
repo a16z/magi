@@ -111,15 +111,12 @@ impl Driver<EngineApi> {
 
         // built the execution payload of the checkpoint block and send it to the execution client
         let checkpoint_payload = ExecutionPayload::from_block(&config, checkpoint_hash).await?;
-        match engine_api.new_payload(checkpoint_payload).await?.status {
-            Status::Valid | Status::Syncing | Status::Accepted => {}
-            Status::Invalid | Status::InvalidBlockHash => {
-                tracing::error!("the provided checkpoint payload is invalid, exiting");
-                process::exit(1);
-            }
+        if let Status::Invalid | Status::InvalidBlockHash =
+            engine_api.new_payload(checkpoint_payload).await?.status
+        {
+            tracing::error!("the provided checkpoint payload is invalid, exiting");
+            process::exit(1);
         }
-
-        dbg!("payload sent");
 
         // call forkchoice_updated once to make the execution layer start syncing to the checkpoint
         let forkchoice_state = ForkchoiceState::from_single_head(checkpoint_hash);
@@ -127,7 +124,10 @@ impl Driver<EngineApi> {
             .forkchoice_updated(forkchoice_state, None)
             .await?;
 
-        dbg!(fc_res);
+        if let Status::Invalid | Status::InvalidBlockHash = fc_res.payload_status.status {
+            tracing::error!("could not accept forkchoice, exiting");
+            process::exit(1);
+        }
 
         tracing::info!(
             "syncing execution client up to checkpoint: {:?}",
@@ -136,7 +136,6 @@ impl Driver<EngineApi> {
 
         // wait until the execution layer has synced to the checkpoint
         await_syncing(&provider, &shutdown_recv).await?;
-        dbg!("finished syncing");
 
         // now that we've synced, we can get the head info for the checkpoint block
         // our l2 rpc should now have this block
