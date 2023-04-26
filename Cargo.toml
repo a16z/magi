@@ -52,4 +52,4 @@ clap = { version = "3.2.18", features = ["derive", "env"] }
 dirs = "4.0.0"
 
 [patch.crates-io]
-ethers = { git = "https://github.com/ncitron/ethers-rs/", branch = "optimism-support" }
+ethers = { git = "https://github.com/merklefruit/ethers-rs/", branch = "optimism-txs" }

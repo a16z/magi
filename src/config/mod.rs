@@ -102,6 +102,7 @@ pub struct CliConfig {
     pub jwt_secret: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub l2_trusted_rpc_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc_port: Option<u16>,
 }
 
