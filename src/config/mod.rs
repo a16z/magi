@@ -47,6 +47,8 @@ pub struct Config {
     /// Engine API JWT Secret
     /// This is used to authenticate with the engine API
     pub jwt_secret: String,
+    /// The port of RPC server
+    pub rpc_port: u16,
 }
 
 impl Config {
@@ -93,6 +95,8 @@ pub struct CliConfig {
     pub l2_engine_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jwt_secret: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rpc_port: Option<u16>,
 }
 
 /// A Chain Configuration
@@ -175,6 +179,7 @@ impl From<ChainConfig> for Serialized<ChainProvider> {
 struct DefaultsProvider {
     l2_rpc_url: String,
     l2_engine_url: String,
+    rpc_port: u16,
 }
 
 impl Default for DefaultsProvider {
@@ -182,6 +187,7 @@ impl Default for DefaultsProvider {
         Self {
             l2_rpc_url: "http://127.0.0.1:8545".to_string(),
             l2_engine_url: "http://127.0.0.1:8551".to_string(),
+            rpc_port: 9545,
         }
     }
 }
