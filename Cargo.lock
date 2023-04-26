@@ -1035,7 +1035,7 @@ dependencies = [
 [[package]]
 name = "ethers"
 version = "2.0.2"
-source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#54f6f889e7e60d3387ddfc402746ff6835c28c5c"
+source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#1b59b68f9eab4605b36657850c5691b6e05fc52d"
 dependencies = [
  "ethers-addressbook",
  "ethers-contract",
@@ -1050,7 +1050,7 @@ dependencies = [
 [[package]]
 name = "ethers-addressbook"
 version = "2.0.2"
-source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#54f6f889e7e60d3387ddfc402746ff6835c28c5c"
+source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#1b59b68f9eab4605b36657850c5691b6e05fc52d"
 dependencies = [
  "ethers-core",
  "once_cell",
@@ -1061,7 +1061,7 @@ dependencies = [
 [[package]]
 name = "ethers-contract"
 version = "2.0.2"
-source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#54f6f889e7e60d3387ddfc402746ff6835c28c5c"
+source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#1b59b68f9eab4605b36657850c5691b6e05fc52d"
 dependencies = [
  "ethers-contract-abigen",
  "ethers-contract-derive",
@@ -1079,7 +1079,7 @@ dependencies = [
 [[package]]
 name = "ethers-contract-abigen"
 version = "2.0.2"
-source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#54f6f889e7e60d3387ddfc402746ff6835c28c5c"
+source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#1b59b68f9eab4605b36657850c5691b6e05fc52d"
 dependencies = [
  "Inflector",
  "dunce",
@@ -1105,7 +1105,7 @@ dependencies = [
 [[package]]
 name = "ethers-contract-derive"
 version = "2.0.2"
-source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#54f6f889e7e60d3387ddfc402746ff6835c28c5c"
+source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#1b59b68f9eab4605b36657850c5691b6e05fc52d"
 dependencies = [
  "ethers-contract-abigen",
  "ethers-core",
@@ -1118,7 +1118,7 @@ dependencies = [
 [[package]]
 name = "ethers-core"
 version = "2.0.2"
-source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#54f6f889e7e60d3387ddfc402746ff6835c28c5c"
+source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#1b59b68f9eab4605b36657850c5691b6e05fc52d"
 dependencies = [
  "arrayvec",
  "bytes",
@@ -1150,7 +1150,7 @@ dependencies = [
 [[package]]
 name = "ethers-etherscan"
 version = "2.0.2"
-source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#54f6f889e7e60d3387ddfc402746ff6835c28c5c"
+source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#1b59b68f9eab4605b36657850c5691b6e05fc52d"
 dependencies = [
  "ethers-core",
  "ethers-solc",
@@ -1166,7 +1166,7 @@ dependencies = [
 [[package]]
 name = "ethers-middleware"
 version = "2.0.2"
-source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#54f6f889e7e60d3387ddfc402746ff6835c28c5c"
+source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#1b59b68f9eab4605b36657850c5691b6e05fc52d"
 dependencies = [
  "async-trait",
  "auto_impl",
@@ -1192,7 +1192,7 @@ dependencies = [
 [[package]]
 name = "ethers-providers"
 version = "2.0.2"
-source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#54f6f889e7e60d3387ddfc402746ff6835c28c5c"
+source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#1b59b68f9eab4605b36657850c5691b6e05fc52d"
 dependencies = [
  "async-trait",
  "auto_impl",
@@ -1228,7 +1228,7 @@ dependencies = [
 [[package]]
 name = "ethers-signers"
 version = "2.0.2"
-source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#54f6f889e7e60d3387ddfc402746ff6835c28c5c"
+source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#1b59b68f9eab4605b36657850c5691b6e05fc52d"
 dependencies = [
  "async-trait",
  "coins-bip32",
@@ -1246,7 +1246,7 @@ dependencies = [
 [[package]]
 name = "ethers-solc"
 version = "2.0.2"
-source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#54f6f889e7e60d3387ddfc402746ff6835c28c5c"
+source = "git+https://github.com/ncitron/ethers-rs/?branch=optimism-support#1b59b68f9eab4605b36657850c5691b6e05fc52d"
 dependencies = [
  "cfg-if",
  "dunce",

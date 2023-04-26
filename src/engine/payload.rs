@@ -82,6 +82,14 @@ impl ExecutionPayload {
             .await?
             .expect("l1 block not found");
 
+        let txs = (*l2_block
+            .transactions
+            .clone()
+            .into_iter()
+            .map(|tx| RawTransaction(tx.rlp().to_vec()))
+            .collect::<Vec<_>>())
+        .to_vec();
+
         Ok(ExecutionPayload {
             parent_hash: l2_block.parent_hash,
             fee_recipient: config.chain.sequencer_fee_vault,
@@ -100,13 +108,7 @@ impl ExecutionPayload {
                 .as_u64()
                 .into(),
             block_hash: l2_block.hash.unwrap(),
-            transactions: (*l2_block
-                .transactions
-                .clone()
-                .into_iter()
-                .map(|tx| RawTransaction(tx.rlp().to_vec()))
-                .collect::<Vec<_>>())
-            .to_vec(),
+            transactions: txs,
         })
     }
 }
