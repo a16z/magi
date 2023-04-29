@@ -111,20 +111,18 @@ impl Driver<EngineApi> {
 
         // built the execution payload of the checkpoint block and send it to the execution client
         let checkpoint_payload = ExecutionPayload::from_block(&config, checkpoint_hash).await?;
-        if let Status::Invalid | Status::InvalidBlockHash =
-            engine_api.new_payload(checkpoint_payload).await?.status
-        {
+        let payload_res = engine_api.new_payload(checkpoint_payload).await?;
+        if let Status::Invalid | Status::InvalidBlockHash = payload_res.status {
             tracing::error!("the provided checkpoint payload is invalid, exiting");
             process::exit(1);
         }
 
         // call forkchoice_updated once to make the execution layer start syncing to the checkpoint
         let forkchoice_state = ForkchoiceState::from_single_head(checkpoint_hash);
-        let fc_res = engine_api
+        let forkchoice_res = engine_api
             .forkchoice_updated(forkchoice_state, None)
             .await?;
-
-        if let Status::Invalid | Status::InvalidBlockHash = fc_res.payload_status.status {
+        if let Status::Invalid | Status::InvalidBlockHash = forkchoice_res.payload_status.status {
             tracing::error!("could not accept forkchoice, exiting");
             process::exit(1);
         }
@@ -138,7 +136,7 @@ impl Driver<EngineApi> {
         await_syncing(&provider, &shutdown_recv).await?;
 
         // now that we've synced, we can get the head info for the checkpoint block
-        // our l2 rpc should now have this block
+        // (our l2 rpc should now have this block)
         let head = match HeadInfo::from_block(BlockId::Hash(checkpoint_hash), &provider).await {
             Ok(Some(head)) => head,
             _ => {
@@ -366,25 +364,28 @@ impl<E: Engine> Driver<E> {
 }
 
 async fn await_syncing(provider: &Provider<Http>, shutdown_recv: &Receiver<bool>) -> Result<()> {
-    let sync_status = &provider.syncing().await?;
-    dbg!(sync_status.clone());
-    while let SyncingStatus::IsSyncing(progress) = sync_status {
-        tracing::debug!(
-            "syncing progress: {} / {}",
-            progress.current_block,
-            progress.highest_block
-        );
-
+    loop {
         if let Ok(shutdown) = shutdown_recv.try_recv() {
             if shutdown {
                 process::exit(0);
             }
         }
-        sleep(Duration::from_secs(2)).await;
-    }
 
-    tracing::info!("syncing complete");
-    Ok(())
+        match &provider.syncing().await? {
+            SyncingStatus::IsSyncing(progress) => {
+                tracing::debug!(
+                    "syncing progress: {} / {}",
+                    progress.current_block,
+                    progress.highest_block
+                );
+                sleep(Duration::from_secs(2)).await;
+            }
+            SyncingStatus::IsFalse => {
+                tracing::info!("syncing complete");
+                return Ok(());
+            }
+        }
+    }
 }
 
 #[cfg(test)]
