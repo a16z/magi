@@ -42,8 +42,6 @@ exec geth \
   --http.api=web3,debug,eth,txpool,net,engine \
   --syncmode=full \
   --gcmode=full \
-  --nodiscover \
-  --maxpeers=0 \
   --networkid=420 \
   --authrpc.vhosts="*" \
   --authrpc.addr=0.0.0.0 \
