@@ -6,7 +6,7 @@ use std::{
 
 use ethers::{
     providers::{Http, Middleware, Provider},
-    types::{BlockId, BlockNumber, SyncingStatus, H256},
+    types::{BlockId, BlockNumber, H256, U64},
 };
 use eyre::Result;
 use tokio::time::sleep;
@@ -111,7 +111,7 @@ impl Driver<EngineApi> {
 
         // built the execution payload of the checkpoint block and send it to the execution client
         let checkpoint_payload = ExecutionPayload::from_block(&config, checkpoint_hash).await?;
-        let payload_res = engine_api.new_payload(checkpoint_payload).await?;
+        let payload_res = engine_api.new_payload(checkpoint_payload.clone()).await?;
         if let Status::Invalid | Status::InvalidBlockHash = payload_res.status {
             tracing::error!("the provided checkpoint payload is invalid, exiting");
             process::exit(1);
@@ -128,12 +128,11 @@ impl Driver<EngineApi> {
         }
 
         tracing::info!(
-            "syncing execution client up to checkpoint: {:?}",
-            checkpoint_hash
+            "syncing execution client up to the checkpoint block. This will take a while...",
         );
 
         // wait until the execution layer has synced to the checkpoint
-        await_syncing(&provider, &shutdown_recv).await?;
+        await_syncing(&provider, &shutdown_recv, checkpoint_payload.block_number).await?;
 
         // now that we've synced, we can get the head info for the checkpoint block
         // (our l2 rpc should now have this block)
@@ -363,7 +362,11 @@ impl<E: Engine> Driver<E> {
     }
 }
 
-async fn await_syncing(provider: &Provider<Http>, shutdown_recv: &Receiver<bool>) -> Result<()> {
+async fn await_syncing(
+    provider: &Provider<Http>,
+    shutdown_recv: &Receiver<bool>,
+    target_block: U64,
+) -> Result<()> {
     loop {
         if let Ok(shutdown) = shutdown_recv.try_recv() {
             if shutdown {
@@ -371,19 +374,10 @@ async fn await_syncing(provider: &Provider<Http>, shutdown_recv: &Receiver<bool>
             }
         }
 
-        match &provider.syncing().await? {
-            SyncingStatus::IsSyncing(progress) => {
-                tracing::debug!(
-                    "syncing progress: {} / {}",
-                    progress.current_block,
-                    progress.highest_block
-                );
-                sleep(Duration::from_secs(2)).await;
-            }
-            SyncingStatus::IsFalse => {
-                tracing::info!("syncing complete");
-                return Ok(());
-            }
+        if provider.get_block_number().await? != target_block {
+            sleep(Duration::from_secs(2)).await;
+        } else {
+            return Ok(());
         }
     }
 }

@@ -39,11 +39,10 @@ exec geth \
   --http.vhosts="*" \
   --http.addr=0.0.0.0 \
   --http.port=8545 \
-  --http.api=web3,debug,eth,txpool,net,engine \
+  --http.api=web3,debug,eth,txpool,net,engine,admin \
   --syncmode=full \
   --gcmode=full \
   --nodiscover \
-  --maxpeers=0 \
   --networkid=420 \
   --verbosity=5 \
   --authrpc.vhosts="*" \
