@@ -76,6 +76,6 @@ then
         --rollup.disabletxpoolgossip=true \
         $@
 else
-    echo "Sync mode not recognized. Must use `full` or `checkpoint`"
+    echo "Sync mode not recognized. Must use full or checkpoint"
     exit 1
 fi
