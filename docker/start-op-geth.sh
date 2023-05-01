@@ -31,23 +31,51 @@ echo $JWT_SECRET > jwtsecret.txt
 echo "chain id"
 echo $CHAIN_ID
 
-exec geth \
-  --datadir="$DATADIR" \
-  --networkid="$CHAIN_ID" \
-  --http \
-  --http.corsdomain="*" \
-  --http.vhosts="*" \
-  --http.addr=0.0.0.0 \
-  --http.port=8545 \
-  --http.api=web3,debug,eth,txpool,net,engine,admin \
-  --syncmode=full \
-  --gcmode=full \
-  --nodiscover \
-  --networkid=420 \
-  --verbosity=5 \
-  --authrpc.vhosts="*" \
-  --authrpc.addr=0.0.0.0 \
-  --authrpc.port=8551 \
-  --authrpc.jwtsecret=/jwtsecret.txt \
-  --rollup.disabletxpoolgossip=true \
-  $@
+if [ $SYNC_MODE = "full" ]
+then
+    echo "sync mode: full"
+    exec geth \
+        --datadir="$DATADIR" \
+        --networkid="$CHAIN_ID" \
+        --http \
+        --http.corsdomain="*" \
+        --http.vhosts="*" \
+        --http.addr=0.0.0.0 \
+        --http.port=8545 \
+        --http.api=web3,debug,eth,txpool,net,engine \
+        --syncmode=full \
+        --gcmode=full \
+        --nodiscover \
+        --maxpeers=0 \
+        --networkid=420 \
+        --authrpc.vhosts="*" \
+        --authrpc.addr=0.0.0.0 \
+        --authrpc.port=8551 \
+        --authrpc.jwtsecret=/jwtsecret.txt \
+        --rollup.disabletxpoolgossip=true \
+        $@
+elif [ $SYNC_MODE = "checkpoint" ]
+then
+    echo "sync mode: checkpoint"
+    exec geth \
+        --datadir="$DATADIR" \
+        --networkid="$CHAIN_ID" \
+        --http \
+        --http.corsdomain="*" \
+        --http.vhosts="*" \
+        --http.addr=0.0.0.0 \
+        --http.port=8545 \
+        --http.api=web3,debug,eth,txpool,net,engine,admin \
+        --syncmode=full \
+        --gcmode=full \
+        --networkid=420 \
+        --authrpc.vhosts="*" \
+        --authrpc.addr=0.0.0.0 \
+        --authrpc.port=8551 \
+        --authrpc.jwtsecret=/jwtsecret.txt \
+        --rollup.disabletxpoolgossip=true \
+        $@
+else
+    echo "Sync mode not recognized. Must use `full` or `checkpoint`"
+    exit 1
+fi

@@ -12,11 +12,29 @@ else
     exit 1
 fi
 
-exec magi \
-    --network $NETWORK \
-    --jwt-secret $JWT_SECRET \
-    --l1-rpc-url $L1_RPC_URL \
-    --l2-rpc-url http://${EXECUTION_CONTAINER}:8545 \
-    --l2-engine-url http://${EXECUTION_CONTAINER}:8551 \
-    --rpc-port $RPC_PORT \
-    --sync-mode full
+if [ $SYNC_MODE = "full" ]
+then
+    exec magi \
+        --network $NETWORK \
+        --jwt-secret $JWT_SECRET \
+        --l1-rpc-url $L1_RPC_URL \
+        --l2-rpc-url http://${EXECUTION_CONTAINER}:8545 \
+        --l2-engine-url http://${EXECUTION_CONTAINER}:8551 \
+        --rpc-port $RPC_PORT \
+        --sync-mode full
+elif [ $SYNC_MODE = "checkpoint" ]
+then
+    exec magi \
+        --network $NETWORK \
+        --jwt-secret $JWT_SECRET \
+        --l1-rpc-url $L1_RPC_URL \
+        --l2-rpc-url http://${EXECUTION_CONTAINER}:8545 \
+        --l2-engine-url http://${EXECUTION_CONTAINER}:8551 \
+        --l2-trusted-rpc-url $TRUSTED_L2_RPC_URL \
+        --rpc-port $RPC_PORT \
+        --sync-mode checkpoint \
+        --checkpoint-hash $CHECKPOINT_HASH
+else
+    echo "Sync mode not recognized. Must use `full` or `checkpoint`"
+    exit 1
+fi

@@ -143,9 +143,9 @@ impl Driver<EngineApi> {
 
         tracing::info!("execution client successfully synced up to the checkpoint block");
 
-        // now we can get the head info for the checkpoint block (our execution client should now have this block)
-        // If we can't get the head info, we'll just use the latest available block. If we can't get that either,
-        // we'll fall back to the genesis block.
+        // now we can get the head info for the checkpoint (our execution client should now have this block).
+        // If we can't get it, use the latest available block instead. If we can't get that either,
+        // then fall back to the genesis block.
         let head = match HeadInfo::from_block(BlockId::Hash(checkpoint_hash), &provider).await {
             Ok(Some(head)) => {
                 tracing::info!("successfully got checkpoint block head info");
@@ -214,20 +214,6 @@ impl Driver<EngineApi> {
 impl<E: Engine> Driver<E> {
     /// Runs the Driver
     pub async fn start(&mut self) -> Result<()> {
-        self.await_engine_ready().await;
-        self.chain_watcher.start()?;
-
-        loop {
-            self.check_shutdown().await;
-
-            if let Err(err) = self.advance().await {
-                tracing::error!("fatal error: {:?}", err);
-                self.shutdown().await;
-            }
-        }
-    }
-
-    pub async fn start_fast(&mut self) -> Result<()> {
         self.await_engine_ready().await;
         self.chain_watcher.start()?;
 
