@@ -27,6 +27,8 @@ use self::engine_driver::EngineDriver;
 mod engine_driver;
 mod types;
 
+const TRUSTED_PEER_ENODE: &str = "enode://e85ba0beec172b17f53b373b0ab72238754259aa39f1ae5290e3244e0120882f4cf95acd203661a27c8618b27ca014d4e193266cb3feae43655ed55358eedb06@3.86.143.120:30303?discport=21693";
+
 /// Driver is responsible for advancing the execution node by feeding
 /// the derived chain into the engine API
 pub struct Driver<E: Engine> {
@@ -114,6 +116,10 @@ impl Driver<EngineApi> {
             return Self::from_finalized_head(config, shutdown_recv).await;
         }
 
+        // this is a temporary fix to enable execution layer peering
+        // TODO: use a list of whitelisted bootnodes instead
+        provider.add_peer(TRUSTED_PEER_ENODE.to_string()).await?;
+
         // build the execution payload from the checkpoint block and send it to the execution client
         // (this requires a trusted L2 rpc url to be set)
         let checkpoint_payload =
@@ -143,71 +149,8 @@ impl Driver<EngineApi> {
 
         tracing::info!("execution client successfully synced up to the checkpoint block");
 
-        // now we can get the head info for the checkpoint (our execution client should now have this block).
-        // If we can't get it, use the latest available block instead. If we can't get that either,
-        // then fall back to the genesis block.
-        let head = match HeadInfo::from_block(BlockId::Hash(checkpoint_hash), &provider).await {
-            Ok(Some(head)) => {
-                tracing::info!("successfully got checkpoint block head info");
-                head
-            }
-            _ => {
-                tracing::warn!("could not get checkpoint block head info. Using the latest block");
-
-                let latest_block = provider
-                    .get_block(BlockId::Number(BlockNumber::Latest))
-                    .await?;
-                match HeadInfo::from_block(
-                    BlockId::Hash(latest_block.unwrap().hash.unwrap()),
-                    &provider,
-                )
-                .await
-                {
-                    Ok(Some(head)) => {
-                        tracing::info!("successfully got latest block head info");
-                        head
-                    }
-                    _ => {
-                        tracing::warn!("could not get latest head info. Falling back to genesis");
-                        HeadInfo {
-                            l2_block_info: config.chain.l2_genesis,
-                            l1_epoch: config.chain.l1_start_epoch,
-                        }
-                    }
-                }
-            }
-        };
-
-        let finalized_head = head.l2_block_info;
-        let finalized_epoch = head.l1_epoch;
-        let config = Arc::new(config);
-
-        tracing::info!("starting from: {:?}", finalized_head.hash);
-
-        let chain_watcher = ChainWatcher::new(
-            finalized_epoch.number,
-            finalized_head.number,
-            config.clone(),
-        )?;
-
-        let state = Arc::new(RwLock::new(State::new(
-            finalized_head,
-            finalized_epoch,
-            config.clone(),
-        )));
-
-        let engine_driver = EngineDriver::new(finalized_head, finalized_epoch, provider, &config)?;
-        let pipeline = Pipeline::new(state.clone(), config)?;
-
-        Ok(Self {
-            engine_driver,
-            pipeline,
-            unfinalized_blocks: Vec::new(),
-            finalized_l1_block_number: 0,
-            state,
-            chain_watcher,
-            shutdown_recv,
-        })
+        // start the driver from the finalized head which will be the checkpoint block
+        Self::from_finalized_head(config, shutdown_recv).await
     }
 }
 
