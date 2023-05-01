@@ -105,19 +105,26 @@ impl Driver<EngineApi> {
         checkpoint_hash: H256,
     ) -> Result<Self> {
         let provider = Provider::try_from(&config.l2_rpc_url)?;
-        let config = Arc::new(config);
-
         let engine_api = EngineApi::new(&config.l2_engine_url, &config.jwt_secret);
 
-        // built the execution payload of the checkpoint block and send it to the execution client
-        let checkpoint_payload = ExecutionPayload::from_block(&config, checkpoint_hash).await?;
+        // if the checkpoint block is already synced, just start from the finalized head instead
+        let current_head = provider.get_block(checkpoint_hash).await?;
+        if current_head.is_some() {
+            tracing::warn!("finalized head is above the checkpoint block, using that instead");
+            return Self::from_finalized_head(config, shutdown_recv).await;
+        }
+
+        // build the execution payload from the checkpoint block and send it to the execution client
+        // (this requires a trusted L2 rpc url to be set)
+        let checkpoint_payload =
+            ExecutionPayload::from_block_hash(&config, checkpoint_hash).await?;
         let payload_res = engine_api.new_payload(checkpoint_payload.clone()).await?;
         if let Status::Invalid | Status::InvalidBlockHash = payload_res.status {
             tracing::error!("the provided checkpoint payload is invalid, exiting");
             process::exit(1);
         }
 
-        // call forkchoice_updated once to make the execution layer start syncing to the checkpoint
+        // call `forkchoice_updated` to make the execution client start syncing up to the checkpoint
         let forkchoice_state = ForkchoiceState::from_single_head(checkpoint_hash);
         let forkchoice_res = engine_api
             .forkchoice_updated(forkchoice_state, None)
@@ -128,29 +135,54 @@ impl Driver<EngineApi> {
         }
 
         tracing::info!(
-            "syncing execution client up to the checkpoint block. This will take a while...",
+            "syncing execution client up to the checkpoint block. This could take a few hours.",
         );
 
-        // wait until the execution layer has synced to the checkpoint
+        // wait until the execution client has synced
         await_syncing(&provider, &shutdown_recv, checkpoint_payload.block_number).await?;
 
-        // now that we've synced, we can get the head info for the checkpoint block
-        // (our l2 rpc should now have this block)
+        tracing::info!("execution client successfully synced up to the checkpoint block");
+
+        // now we can get the head info for the checkpoint block (our execution client should now have this block)
+        // If we can't get the head info, we'll just use the latest available block. If we can't get that either,
+        // we'll fall back to the genesis block.
         let head = match HeadInfo::from_block(BlockId::Hash(checkpoint_hash), &provider).await {
-            Ok(Some(head)) => head,
+            Ok(Some(head)) => {
+                tracing::info!("successfully got checkpoint block head info");
+                head
+            }
             _ => {
-                tracing::warn!("could not get head info. Falling back to the genesis head.");
-                HeadInfo {
-                    l2_block_info: config.chain.l2_genesis,
-                    l1_epoch: config.chain.l1_start_epoch,
+                tracing::warn!("could not get checkpoint block head info. Using the latest block");
+
+                let latest_block = provider
+                    .get_block(BlockId::Number(BlockNumber::Latest))
+                    .await?;
+                match HeadInfo::from_block(
+                    BlockId::Hash(latest_block.unwrap().hash.unwrap()),
+                    &provider,
+                )
+                .await
+                {
+                    Ok(Some(head)) => {
+                        tracing::info!("successfully got latest block head info");
+                        head
+                    }
+                    _ => {
+                        tracing::warn!("could not get latest head info. Falling back to genesis");
+                        HeadInfo {
+                            l2_block_info: config.chain.l2_genesis,
+                            l1_epoch: config.chain.l1_start_epoch,
+                        }
+                    }
                 }
             }
         };
 
         let finalized_head = head.l2_block_info;
         let finalized_epoch = head.l1_epoch;
+        let config = Arc::new(config);
 
-        tracing::info!("starting  from: {:?}", finalized_head.hash);
+        tracing::info!("starting from: {:?}", finalized_head.hash);
 
         let chain_watcher = ChainWatcher::new(
             finalized_epoch.number,
@@ -374,8 +406,8 @@ async fn await_syncing(
             }
         }
 
-        if provider.get_block_number().await? != target_block {
-            sleep(Duration::from_secs(2)).await;
+        if provider.get_block_number().await? < target_block {
+            sleep(Duration::from_secs(5)).await;
         } else {
             return Ok(());
         }

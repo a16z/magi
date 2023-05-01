@@ -50,7 +50,7 @@ impl ExecutionPayload {
     /// Creates a new ExecutionPayload from a block hash.
     /// Requires both an L1 rpc url and a trusted L2 rpc url.
     /// Ported from [op-fast-sync](https://github.com/testinprod-io/op-fast-sync/blob/master/build_payloads.py)
-    pub async fn from_block(config: &Config, block_hash: H256) -> Result<Self> {
+    pub async fn from_block_hash(config: &Config, block_hash: H256) -> Result<Self> {
         let l1_provider = Provider::<Http>::try_from(config.l1_rpc_url.as_str())?;
         let l2_provider = Provider::<Http>::try_from(
             config
@@ -213,7 +213,7 @@ mod tests {
                 rpc_port: 0,
             });
 
-            let payload = ExecutionPayload::from_block(&config, checkpoint_hash).await?;
+            let payload = ExecutionPayload::from_block_hash(&config, checkpoint_hash).await?;
 
             assert_eq!(
                 payload.block_hash,
