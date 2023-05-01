@@ -51,6 +51,8 @@ rand = "0.8.5"
 
 # Networking
 discv5 = { version = "0.2.2", features = ["libp2p"] }
+libp2p = "0.51.3"
+unsigned-varint = "0.7.1"
 
 # CLI
 figment = { version = "0.10.8", features = ["toml", "env"] }
