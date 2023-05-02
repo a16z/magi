@@ -50,8 +50,8 @@ pub fn build_subscriber(verbose: bool, appender: Option<RollingFileAppender>) ->
 
     let stdout_env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| {
         EnvFilter::new(match verbose {
-            true => "magi=debug".to_owned(),
-            false => "magi=info".to_owned(),
+            true => "magi=debug,network=debug".to_owned(),
+            false => "magi=info,network=debug".to_owned(),
         })
     });
 
@@ -63,7 +63,7 @@ pub fn build_subscriber(verbose: bool, appender: Option<RollingFileAppender>) ->
         guards.push(guard);
 
         // Force the file logger to log at `debug` level
-        let file_env_filter = EnvFilter::from("magi=debug");
+        let file_env_filter = EnvFilter::from("magi=debug,network=debug");
 
         tracing_subscriber::registry()
             .with(stdout_formatting_layer)

@@ -16,6 +16,9 @@ pub mod driver;
 /// A module for the L2 Engine API
 pub mod engine;
 
+/// Peer to peer networking
+pub mod network;
+
 /// Application telemetry and logging
 pub mod telemetry;
 
