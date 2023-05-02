@@ -45,11 +45,11 @@ pub struct Driver<E: Engine> {
     /// L1 chain watcher
     chain_watcher: ChainWatcher,
     /// Channel to receive the shutdown signal from
-    shutdown_recv: Receiver<bool>,
+    shutdown_recv: Arc<Receiver<bool>>,
 }
 
 impl Driver<EngineApi> {
-    pub async fn from_config(config: Config, shutdown_recv: Receiver<bool>) -> Result<Self> {
+    pub async fn from_config(config: Config, shutdown_recv: Arc<Receiver<bool>>) -> Result<Self> {
         let provider = Provider::try_from(&config.l2_rpc_url)?;
 
         let block_id = BlockId::Number(BlockNumber::Finalized);
@@ -98,74 +98,74 @@ impl Driver<EngineApi> {
         })
     }
 
-    pub async fn from_checkpoint(
-        config: Config,
-        shutdown_recv: Receiver<bool>,
-        checkpoint_hash: H256,
-    ) -> Result<Self> {
-        let provider = Provider::try_from(&config.l2_rpc_url)?;
-        let engine_api = EngineApi::new(&config.l2_engine_url, &config.jwt_secret);
+    // pub async fn from_checkpoint(
+    //     config: Config,
+    //     shutdown_recv: Receiver<bool>,
+    //     checkpoint_hash: H256,
+    // ) -> Result<Self> {
+    //     let provider = Provider::try_from(&config.l2_rpc_url)?;
+    //     let engine_api = EngineApi::new(&config.l2_engine_url, &config.jwt_secret);
 
-        while !engine_api.is_available().await {
-            if let Ok(shutdown) = shutdown_recv.try_recv() {
-                if shutdown {
-                    process::exit(0);
-                }
-            }
-            sleep(Duration::from_secs(3)).await;
-        }
+    //     while !engine_api.is_available().await {
+    //         if let Ok(shutdown) = shutdown_recv.try_recv() {
+    //             if shutdown {
+    //                 process::exit(0);
+    //             }
+    //         }
+    //         sleep(Duration::from_secs(3)).await;
+    //     }
 
-        // if the checkpoint block is already synced, start from the finalized head
-        if provider.get_block(checkpoint_hash).await?.is_some() {
-            tracing::warn!("finalized head is above the checkpoint block, using that instead");
-            return Self::from_config(config, shutdown_recv).await;
-        }
+    //     // if the checkpoint block is already synced, start from the finalized head
+    //     if provider.get_block(checkpoint_hash).await?.is_some() {
+    //         tracing::warn!("finalized head is above the checkpoint block, using that instead");
+    //         return Self::from_config(config, shutdown_recv).await;
+    //     }
 
-        // this is a temporary fix to allow execution layer peering to work
-        // TODO: use a list of whitelisted bootnodes instead
-        provider.add_peer(TRUSTED_PEER_ENODE.to_string()).await?;
+    //     // this is a temporary fix to allow execution layer peering to work
+    //     // TODO: use a list of whitelisted bootnodes instead
+    //     provider.add_peer(TRUSTED_PEER_ENODE.to_string()).await?;
 
-        // build the execution payload from the checkpoint block and send it to the execution client
-        // (this requires a trusted L2 rpc url)
-        let checkpoint_payload =
-            ExecutionPayload::from_block_hash(&config, checkpoint_hash).await?;
-        let payload_res = engine_api.new_payload(checkpoint_payload.clone()).await?;
-        if let Status::Invalid | Status::InvalidBlockHash = payload_res.status {
-            tracing::error!("the provided checkpoint payload is invalid, exiting");
-            process::exit(1);
-        }
+    //     // build the execution payload from the checkpoint block and send it to the execution client
+    //     // (this requires a trusted L2 rpc url)
+    //     let checkpoint_payload =
+    //         ExecutionPayload::from_block_hash(&config, checkpoint_hash).await?;
+    //     let payload_res = engine_api.new_payload(checkpoint_payload.clone()).await?;
+    //     if let Status::Invalid | Status::InvalidBlockHash = payload_res.status {
+    //         tracing::error!("the provided checkpoint payload is invalid, exiting");
+    //         process::exit(1);
+    //     }
 
-        // make the execution client start syncing up to the checkpoint
-        let forkchoice_state = ForkchoiceState::from_single_head(checkpoint_hash);
-        let forkchoice_res = engine_api
-            .forkchoice_updated(forkchoice_state, None)
-            .await?;
-        if let Status::Invalid | Status::InvalidBlockHash = forkchoice_res.payload_status.status {
-            tracing::error!("could not accept forkchoice, exiting");
-            process::exit(1);
-        }
+    //     // make the execution client start syncing up to the checkpoint
+    //     let forkchoice_state = ForkchoiceState::from_single_head(checkpoint_hash);
+    //     let forkchoice_res = engine_api
+    //         .forkchoice_updated(forkchoice_state, None)
+    //         .await?;
+    //     if let Status::Invalid | Status::InvalidBlockHash = forkchoice_res.payload_status.status {
+    //         tracing::error!("could not accept forkchoice, exiting");
+    //         process::exit(1);
+    //     }
 
-        tracing::info!(
-            "syncing execution client to the checkpoint block. This could take a few hours",
-        );
+    //     tracing::info!(
+    //         "syncing execution client to the checkpoint block. This could take a few hours",
+    //     );
 
-        loop {
-            if let Ok(shutdown) = shutdown_recv.try_recv() {
-                if shutdown {
-                    process::exit(0);
-                }
-            }
+    //     loop {
+    //         if let Ok(shutdown) = shutdown_recv.try_recv() {
+    //             if shutdown {
+    //                 process::exit(0);
+    //             }
+    //         }
 
-            if provider.get_block_number().await? < checkpoint_payload.block_number {
-                sleep(Duration::from_secs(3)).await;
-            } else {
-                break;
-            }
-        }
+    //         if provider.get_block_number().await? < checkpoint_payload.block_number {
+    //             sleep(Duration::from_secs(3)).await;
+    //         } else {
+    //             break;
+    //         }
+    //     }
 
-        tracing::info!("execution client successfully synced to the checkpoint block");
-        Self::from_config(config, shutdown_recv).await
-    }
+    //     tracing::info!("execution client successfully synced to the checkpoint block");
+    //     Self::from_config(config, shutdown_recv).await
+    // }
 }
 
 impl<E: Engine> Driver<E> {
@@ -371,7 +371,7 @@ mod tests {
             let provider = Provider::<Http>::try_from(config.l2_rpc_url.clone())?;
             let finalized_block = provider.get_block(block_id).await?.unwrap();
 
-            let driver = Driver::from_config(config, shutdown_recv).await?;
+            let driver = Driver::from_config(config, Arc::new(shutdown_recv)).await?;
 
             assert_eq!(
                 driver.engine_driver.finalized_head.number,
