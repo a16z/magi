@@ -18,7 +18,7 @@ use unsigned_varint::{decode, encode};
 
 pub fn start(addr: SocketAddr, chain_id: u64) -> Result<Receiver<Peer>> {
     let bootnodes = bootnodes();
-    let mut disc = create_disc()?;
+    let mut disc = create_disc(chain_id)?;
 
     let (sender, recv) = mpsc::channel::<Peer>(256);
 
@@ -63,9 +63,9 @@ fn is_valid_node(node: &Enr<CombinedKey>, chain_id: u64) -> bool {
         .unwrap_or_default()
 }
 
-fn create_disc() -> Result<Discv5> {
+fn create_disc(chain_id: u64) -> Result<Discv5> {
     let opstack = OpStackEnrData {
-        chain_id: 420,
+        chain_id,
         version: 0,
     };
     let opstack_data: Vec<u8> = opstack.into();
