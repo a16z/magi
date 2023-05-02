@@ -21,3 +21,6 @@ pub mod telemetry;
 
 /// RPC module to host rpc server
 pub mod rpc;
+
+/// A module to handle running Magi in different sync modes
+pub mod runner;

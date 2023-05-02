@@ -116,8 +116,7 @@ impl Driver<EngineApi> {
         }
 
         // if the checkpoint block is already synced, start from the finalized head
-        let current_head = provider.get_block(checkpoint_hash).await?;
-        if current_head.is_some() {
+        if provider.get_block(checkpoint_hash).await?.is_some() {
             tracing::warn!("finalized head is above the checkpoint block, using that instead");
             return Self::from_config(config, shutdown_recv).await;
         }

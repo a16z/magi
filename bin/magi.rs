@@ -1,12 +1,10 @@
-use std::sync::mpsc::{channel, Sender};
-
 use clap::Parser;
 use dirs::home_dir;
 use eyre::Result;
 
 use magi::{
     config::{ChainConfig, CliConfig, Config, SyncMode},
-    driver::Driver,
+    runner::Runner,
     telemetry::{self, metrics},
 };
 use serde::Serialize;
@@ -24,47 +22,11 @@ async fn main() -> Result<()> {
     let _guards = telemetry::init(verbose, logs_dir, logs_rotation);
     metrics::init()?;
 
-    match sync_mode {
-        SyncMode::Fast => panic!("fast sync not implemented"),
-        SyncMode::Checkpoint => checkpoint_sync(config, checkpoint_hash).await?,
-        SyncMode::Full => full_sync(config).await?,
-        SyncMode::Challenge => panic!("challenge sync not implemented"),
-    };
+    let runner = Runner::from_config(config)
+        .with_sync_mode(sync_mode)
+        .with_checkpoint_hash(checkpoint_hash);
 
-    Ok(())
-}
-
-pub async fn full_sync(config: Config) -> Result<()> {
-    tracing::info!(target: "magi", "starting full sync");
-    let (shutdown_sender, shutdown_recv) = channel();
-    shutdown_on_ctrlc(shutdown_sender);
-
-    let mut driver = Driver::from_config(config, shutdown_recv).await?;
-
-    if let Err(err) = driver.start().await {
-        tracing::error!(target: "magi", "{}", err);
-        std::process::exit(1);
-    }
-
-    Ok(())
-}
-
-pub async fn checkpoint_sync(config: Config, checkpoint_hash: Option<String>) -> Result<()> {
-    tracing::info!(target: "magi", "starting checkpoint sync");
-    let (shutdown_sender, shutdown_recv) = channel();
-    shutdown_on_ctrlc(shutdown_sender);
-
-    let checkpoint_hash = checkpoint_hash
-        .expect("checkpoint sync requires an L2 block hash to be provided as checkpoint_hash")
-        .parse()
-        .expect("invalid checkpoint hash provided");
-
-    let mut driver = Driver::from_checkpoint(config, shutdown_recv, checkpoint_hash).await?;
-
-    if let Err(err) = driver.start().await {
-        tracing::error!(target: "magi", "{}", err);
-        std::process::exit(1);
-    }
+    runner.run().await?;
 
     Ok(())
 }
@@ -122,12 +84,4 @@ impl From<Cli> for CliConfig {
             rpc_port: value.rpc_port,
         }
     }
-}
-
-fn shutdown_on_ctrlc(shutdown_sender: Sender<bool>) {
-    ctrlc::set_handler(move || {
-        tracing::info!(target: "magi", "shutting down");
-        shutdown_sender.send(true).expect("shutdown failure");
-    })
-    .expect("could not register shutdown handler");
 }
