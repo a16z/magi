@@ -155,6 +155,11 @@ impl EngineApi {
         // This scenario shouldn't occur as the response should always have either data or an error
         eyre::bail!("Failed to parse Engine API response")
     }
+
+    /// Calls the engine to verify it's available to receive requests
+    pub async fn is_available(&self) -> bool {
+        self.post::<Value>("eth_chainId", vec![]).await.is_ok()
+    }
 }
 
 /// Generic Engine API response

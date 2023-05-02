@@ -39,7 +39,7 @@ pub async fn full_sync(config: Config) -> Result<()> {
     let (shutdown_sender, shutdown_recv) = channel();
     shutdown_on_ctrlc(shutdown_sender);
 
-    let mut driver = Driver::from_finalized_head(config, shutdown_recv).await?;
+    let mut driver = Driver::from_config(config, shutdown_recv).await?;
 
     if let Err(err) = driver.start().await {
         tracing::error!(target: "magi", "{}", err);
@@ -59,7 +59,7 @@ pub async fn checkpoint_sync(config: Config, checkpoint_hash: Option<String>) ->
         .parse()
         .expect("invalid checkpoint hash provided");
 
-    let mut driver = Driver::from_checkpoint_hash(config, shutdown_recv, checkpoint_hash).await?;
+    let mut driver = Driver::from_checkpoint(config, shutdown_recv, checkpoint_hash).await?;
 
     if let Err(err) = driver.start().await {
         tracing::error!(target: "magi", "{}", err);
