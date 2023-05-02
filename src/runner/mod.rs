@@ -61,9 +61,9 @@ impl Runner {
     pub async fn run(&self) -> Result<()> {
         match self.sync_mode {
             SyncMode::Fast => self.fast_sync().await,
-            SyncMode::Checkpoint => self.checkpoint_sync().await,
-            SyncMode::Full => self.full_sync().await,
             SyncMode::Challenge => self.challenge_sync().await,
+            SyncMode::Full => self.full_sync().await,
+            SyncMode::Checkpoint => self.checkpoint_sync().await,
         }
     }
 
