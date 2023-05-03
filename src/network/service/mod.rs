@@ -48,11 +48,13 @@ impl ServiceBuilder {
         let addr = NetworkAddress::try_from(self.addr)?;
         let keypair = self.keypair.unwrap_or_else(Keypair::generate_secp256k1);
 
-        let mut swarm = create_swarm(self.chain_id, keypair);
+        let mut swarm = create_swarm(self.chain_id, keypair)?;
         let mut peer_recv = discovery::start(addr, self.chain_id)?;
 
         let multiaddr = Multiaddr::from(addr);
-        swarm.listen_on(multiaddr).unwrap();
+        swarm
+            .listen_on(multiaddr)
+            .map_err(|_| eyre::eyre!("swarm listen failed"))?;
 
         let mut handlers = Vec::new();
         handlers.append(&mut self.handlers);
@@ -63,7 +65,7 @@ impl ServiceBuilder {
                     peer = peer_recv.recv().fuse() => {
                         if let Some(peer) = peer {
                             let peer = Multiaddr::from(peer);
-                            swarm.dial(peer).unwrap();
+                            _ = swarm.dial(peer);
                         }
                     },
                     event = swarm.select_next_some() => {
@@ -105,14 +107,30 @@ fn compute_message_id(msg: &Message) -> MessageId {
     MessageId(id)
 }
 
-fn create_swarm(chain_id: u64, keypair: Keypair) -> Swarm<Behaviour> {
+fn create_swarm(chain_id: u64, keypair: Keypair) -> Result<Swarm<Behaviour>> {
     let transport = tcp::tokio::Transport::new(tcp::Config::default())
         .upgrade(libp2p::core::upgrade::Version::V1Lazy)
-        .authenticate(noise::Config::new(&keypair).unwrap())
+        .authenticate(noise::Config::new(&keypair)?)
         .multiplex(MplexConfig::default())
         .boxed();
 
-    let behaviour = {
+    let behaviour = Behaviour::new(chain_id)?;
+
+    Ok(
+        SwarmBuilder::with_tokio_executor(transport, behaviour, PeerId::from(keypair.public()))
+            .build(),
+    )
+}
+
+#[derive(NetworkBehaviour)]
+#[behaviour(out_event = "Event")]
+struct Behaviour {
+    ping: ping::Behaviour,
+    gossipsub: gossipsub::Behaviour,
+}
+
+impl Behaviour {
+    fn new(chain_id: u64) -> Result<Self> {
         let ping = ping::Behaviour::default();
 
         let gossipsub_config = gossipsub::ConfigBuilder::default()
@@ -129,26 +147,19 @@ fn create_swarm(chain_id: u64, keypair: Keypair) -> Swarm<Behaviour> {
             .validate_messages()
             .message_id_fn(compute_message_id)
             .build()
-            .unwrap();
+            .map_err(|_| eyre::eyre!("gossipsub config creation failed"))?;
 
         let mut gossipsub =
             gossipsub::Behaviour::new(gossipsub::MessageAuthenticity::Anonymous, gossipsub_config)
-                .unwrap();
+                .map_err(|_| eyre::eyre!("gossipsub behaviour creation failed"))?;
 
         let topic = IdentTopic::new(format!("/optimism/{}/0/blocks", chain_id));
-        gossipsub.subscribe(&topic).unwrap();
+        gossipsub
+            .subscribe(&topic)
+            .map_err(|_| eyre::eyre!("subscription failed"))?;
 
-        Behaviour { ping, gossipsub }
-    };
-
-    SwarmBuilder::with_tokio_executor(transport, behaviour, PeerId::from(keypair.public())).build()
-}
-
-#[derive(NetworkBehaviour)]
-#[behaviour(out_event = "Event")]
-struct Behaviour {
-    ping: ping::Behaviour,
-    gossipsub: gossipsub::Behaviour,
+        Ok(Self { ping, gossipsub })
+    }
 }
 
 enum Event {
