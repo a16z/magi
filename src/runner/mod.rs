@@ -192,7 +192,8 @@ impl Runner {
         }
 
         tracing::info!("execution client successfully synced to the checkpoint block");
-        Driver::from_config(self.config.clone(), self.shutdown_recv.clone()).await?;
+
+        self.start_driver().await?;
         Ok(())
     }
 
