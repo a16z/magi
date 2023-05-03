@@ -2,12 +2,23 @@ use std::net::SocketAddr;
 
 use eyre::Result;
 
-use magi::{network::discovery, telemetry};
+use magi::{
+    network::{self, discovery},
+    telemetry,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let _guards = telemetry::init(false, None, None);
 
+    // get_peers().await?;
+
+    network::run().await.unwrap();
+
+    Ok(())
+}
+
+async fn get_peers() -> Result<()> {
     let addr = "0.0.0.0:9000".parse::<SocketAddr>()?;
     let chain_id = 420;
 
