@@ -1,65 +1,78 @@
-use std::{time::Duration, net::SocketAddr};
+use std::{net::SocketAddr, time::Duration};
 
 use eyre::Result;
+use futures::{prelude::*, select};
 use libp2p::{
+    gossipsub::{self, IdentTopic, Message, MessageId},
     mplex::MplexConfig,
-    gossipsub::{self, IdentTopic, Event, MessageAcceptance, Message, MessageId},
     noise, ping,
-    swarm::{keep_alive, NetworkBehaviour, SwarmBuilder, SwarmEvent},
-    tcp, Multiaddr, PeerId, Transport, Swarm,
+    swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent},
+    tcp, Multiaddr, PeerId, Swarm, Transport,
 };
 use libp2p_identity::Keypair;
-use futures::{prelude::*, select};
 use openssl::sha::sha256;
 
-use super::discovery;
+use super::{discovery, handlers::Handler, types::NetworkAddress};
 
-pub async fn start(chain_id: u64, keypair: Keypair) -> Result<()> {
-    let mut swarm = create_swarm(chain_id, keypair);
+pub struct ServiceBuilder {
+    handlers: Vec<Box<dyn Handler>>,
+    addr: SocketAddr,
+    chain_id: u64,
+    keypair: Option<Keypair>,
+}
 
-    swarm.listen_on("/ip4/0.0.0.0/tcp/9000".parse()?).unwrap();
+impl ServiceBuilder {
+    pub fn new(addr: SocketAddr, chain_id: u64) -> Self {
+        Self {
+            handlers: Vec::new(),
+            addr,
+            chain_id,
+            keypair: None,
+        }
+    }
 
-    let addr = "0.0.0.0:9001".parse::<SocketAddr>()?;
-    let chain_id = 420;
+    pub fn add_handler(mut self, handler: Box<dyn Handler>) -> Self {
+        self.handlers.push(handler);
+        self
+    }
 
-    let mut peer_recv = discovery::start(addr, chain_id)?;
+    pub fn set_keypair(mut self, keypair: Keypair) -> Self {
+        self.keypair = Some(keypair);
+        self
+    }
 
-    loop {
-        select! {
-            peer = peer_recv.recv().fuse() => {
-                if let Some(peer) = peer {
-                    let peer: Multiaddr = format!("/ip4/{}/tcp/{}", peer.ip, peer.port).parse()?;
-                    swarm.dial(peer).unwrap();
-                }
-            },
-            event = swarm.select_next_some() => {
-                match event {
-                    SwarmEvent::Behaviour(BehaviourEvent::Gossipsub(event)) => {
-                        match event {
-                            Event::Message { message_id, propagation_source, message } => {
-                                swarm.behaviour_mut().gossipsub.report_message_validation_result(
-                                    &message_id,
-                                    &propagation_source,
-                                    MessageAcceptance::Accept,
-                                ).unwrap();
+    pub fn start(mut self) -> Result<()> {
+        let addr = NetworkAddress::try_from(self.addr)?;
+        let keypair = self.keypair.unwrap_or_else(Keypair::generate_secp256k1);
 
-                                tracing::info!("data: {}", hex::encode(message.data));
-                            },
+        let mut swarm = create_swarm(self.chain_id, keypair);
+        let mut peer_recv = discovery::start(addr, self.chain_id)?;
 
-                            default => tracing::info!("{:?}", default),
+        let multiaddr = Multiaddr::from(addr);
+        swarm.listen_on(multiaddr).unwrap();
+
+        let mut handlers = Vec::new();
+        handlers.append(&mut self.handlers);
+
+        tokio::spawn(async move {
+            loop {
+                select! {
+                    peer = peer_recv.recv().fuse() => {
+                        if let Some(peer) = peer {
+                            let peer = Multiaddr::from(peer);
+                            swarm.dial(peer).unwrap();
                         }
                     },
-                    SwarmEvent::ConnectionClosed { peer_id, cause, .. } => {
-                        cause.unwrap();
-
+                    event = swarm.select_next_some() => {
+                        if let SwarmEvent::Behaviour(event) = event {
+                            event.handle(&mut swarm, &handlers);
+                        }
                     },
-                    SwarmEvent::Behaviour(BehaviourEvent::Ping(_)) => {
-
-                    },
-                    default => tracing::info!("{:?}", default),
                 }
-            },
-        }
+            }
+        });
+
+        Ok(())
     }
 }
 
@@ -68,12 +81,22 @@ fn compute_message_id(msg: &Message) -> MessageId {
     let id = match decoder.decompress_vec(&msg.data) {
         Ok(data) => {
             let domain_valid_snappy: Vec<u8> = vec![0x1, 0x0, 0x0, 0x0];
-            sha256([domain_valid_snappy.as_slice(), data.as_slice()].concat().as_slice())[..20].to_vec()
-        },
+            sha256(
+                [domain_valid_snappy.as_slice(), data.as_slice()]
+                    .concat()
+                    .as_slice(),
+            )[..20]
+                .to_vec()
+        }
         Err(_) => {
             let domain_invalid_snappy: Vec<u8> = vec![0x0, 0x0, 0x0, 0x0];
-            sha256([domain_invalid_snappy.as_slice(), msg.data.as_slice()].concat().as_slice())[..20].to_vec()
-        },
+            sha256(
+                [domain_invalid_snappy.as_slice(), msg.data.as_slice()]
+                    .concat()
+                    .as_slice(),
+            )[..20]
+                .to_vec()
+        }
     };
 
     MessageId(id)
@@ -87,9 +110,8 @@ fn create_swarm(chain_id: u64, keypair: Keypair) -> Swarm<Behaviour> {
         .boxed();
 
     let behaviour = {
-        let keep_alive = keep_alive::Behaviour::default();
         let ping = ping::Behaviour::default();
-        
+
         let gossipsub_config = gossipsub::ConfigBuilder::default()
             .mesh_n(8)
             .mesh_n_low(6)
@@ -106,28 +128,60 @@ fn create_swarm(chain_id: u64, keypair: Keypair) -> Swarm<Behaviour> {
             .build()
             .unwrap();
 
-        let mut gossipsub = gossipsub::Behaviour::new(gossipsub::MessageAuthenticity::Anonymous, gossipsub_config).unwrap();
+        let mut gossipsub =
+            gossipsub::Behaviour::new(gossipsub::MessageAuthenticity::Anonymous, gossipsub_config)
+                .unwrap();
 
         let topic = IdentTopic::new(format!("/optimism/{}/0/blocks", chain_id));
         gossipsub.subscribe(&topic).unwrap();
 
-        Behaviour {
-            ping,
-            keep_alive,
-            gossipsub,
-        }
+        Behaviour { ping, gossipsub }
     };
 
-    SwarmBuilder::with_tokio_executor(
-        transport,
-        behaviour,
-        PeerId::from(keypair.public())
-    ).build()
+    SwarmBuilder::with_tokio_executor(transport, behaviour, PeerId::from(keypair.public())).build()
 }
 
 #[derive(NetworkBehaviour)]
+#[behaviour(out_event = "Event")]
 struct Behaviour {
-    keep_alive: keep_alive::Behaviour,
     ping: ping::Behaviour,
     gossipsub: gossipsub::Behaviour,
+}
+
+enum Event {
+    Ping(ping::Event),
+    Gossipsub(gossipsub::Event),
+}
+
+impl Event {
+    fn handle(self, swarm: &mut Swarm<Behaviour>, handlers: &[Box<dyn Handler>]) {
+        if let Self::Gossipsub(gossipsub::Event::Message {
+            propagation_source,
+            message_id,
+            message,
+        }) = self
+        {
+            let handler = handlers.iter().find(|h| h.topic() == message.topic);
+            if let Some(handler) = handler {
+                let status = handler.handle(message);
+
+                _ = swarm
+                    .behaviour_mut()
+                    .gossipsub
+                    .report_message_validation_result(&message_id, &propagation_source, status);
+            }
+        }
+    }
+}
+
+impl From<ping::Event> for Event {
+    fn from(value: ping::Event) -> Self {
+        Event::Ping(value)
+    }
+}
+
+impl From<gossipsub::Event> for Event {
+    fn from(value: gossipsub::Event) -> Self {
+        Event::Gossipsub(value)
+    }
 }

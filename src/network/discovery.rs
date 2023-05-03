@@ -1,8 +1,4 @@
-use std::{
-    net::{Ipv4Addr, SocketAddr},
-    str::FromStr,
-    time::Duration,
-};
+use std::{str::FromStr, time::Duration};
 
 use discv5::{
     enr::{CombinedKey, Enr, EnrBuilder, NodeId},
@@ -16,7 +12,9 @@ use tokio::{
 };
 use unsigned_varint::{decode, encode};
 
-pub fn start(addr: SocketAddr, chain_id: u64) -> Result<Receiver<Peer>> {
+use super::types::{NetworkAddress, Peer};
+
+pub fn start(addr: NetworkAddress, chain_id: u64) -> Result<Receiver<Peer>> {
     let bootnodes = bootnodes();
     let mut disc = create_disc(chain_id)?;
 
@@ -24,7 +22,7 @@ pub fn start(addr: SocketAddr, chain_id: u64) -> Result<Receiver<Peer>> {
 
     tokio::spawn(async move {
         bootnodes.into_iter().for_each(|enr| _ = disc.add_enr(enr));
-        disc.start(addr).await.unwrap();
+        disc.start(addr.into()).await.unwrap();
 
         tracing::info!("started peer discovery");
 
@@ -77,23 +75,6 @@ fn create_disc(chain_id: u64) -> Result<Discv5> {
     let config = Discv5Config::default();
 
     Discv5::new(enr, key, config).map_err(|_| eyre::eyre!("could not create disc service"))
-}
-
-#[derive(Debug)]
-pub struct Peer {
-    pub ip: Ipv4Addr,
-    pub port: u16,
-}
-
-impl TryFrom<&Enr<CombinedKey>> for Peer {
-    type Error = eyre::Report;
-
-    fn try_from(value: &Enr<CombinedKey>) -> Result<Self> {
-        let ip = value.ip4().ok_or(eyre::eyre!("missing ip"))?;
-        let port = value.tcp4().ok_or(eyre::eyre!("missing port"))?;
-
-        Ok(Self { ip, port })
-    }
 }
 
 #[derive(Debug)]

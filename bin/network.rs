@@ -1,8 +1,8 @@
 use eyre::Result;
 
-use libp2p_identity::Keypair;
+use futures::future;
 use magi::{
-    network::service,
+    network::{handlers::block_handler::BlockHandler, service::ServiceBuilder},
     telemetry,
 };
 
@@ -10,10 +10,15 @@ use magi::{
 async fn main() -> Result<()> {
     let _guards = telemetry::init(false, None, None);
 
+    let addr = "0.0.0.0:9876".parse()?;
     let chain_id = 420;
-    let keypair = Keypair::generate_secp256k1();
+    let block_handler = BlockHandler::new(chain_id);
 
-    service::start(chain_id, keypair).await?;
+    ServiceBuilder::new(addr, chain_id)
+        .add_handler(Box::new(block_handler))
+        .start()?;
+
+    future::pending::<()>().await;
 
     Ok(())
 }
