@@ -51,9 +51,9 @@ pub struct Cli {
     #[clap(long)]
     jwt_secret: Option<String>,
     #[clap(short = 'v', long)]
-    rpc_port: Option<u16>,
-    #[clap(short = 'p', long)]
     verbose: bool,
+    #[clap(short = 'p', long)]
+    rpc_port: Option<u16>,
     #[clap(long)]
     logs_dir: Option<String>,
     #[clap(long)]

@@ -139,6 +139,8 @@ impl Runner {
             }
         };
 
+        tracing::info!("using checkpoint block {}", checkpoint_hash);
+
         let engine_api = EngineApi::new(&self.config.l2_engine_url, &self.config.jwt_secret);
         while !engine_api.is_available().await {
             self.check_shutdown()?;
