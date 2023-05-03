@@ -39,7 +39,7 @@ exec geth \
   --http.vhosts="*" \
   --http.addr=0.0.0.0 \
   --http.port=8545 \
-  --http.api=web3,debug,eth,txpool,net,engine,admin \
+  --http.api=web3,debug,eth,txpool,net,engine\
   --syncmode=full \
   --gcmode=full \
   --networkid=420 \
