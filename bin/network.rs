@@ -1,9 +1,8 @@
-use std::net::SocketAddr;
-
 use eyre::Result;
 
+use libp2p_identity::Keypair;
 use magi::{
-    network::{self, discovery},
+    network::service,
     telemetry,
 };
 
@@ -11,22 +10,10 @@ use magi::{
 async fn main() -> Result<()> {
     let _guards = telemetry::init(false, None, None);
 
-    // get_peers().await?;
-
-    network::run().await.unwrap();
-
-    Ok(())
-}
-
-async fn get_peers() -> Result<()> {
-    let addr = "0.0.0.0:9000".parse::<SocketAddr>()?;
     let chain_id = 420;
+    let keypair = Keypair::generate_secp256k1();
 
-    let mut recv = discovery::start(addr, chain_id)?;
-
-    while let Some(peer) = recv.recv().await {
-        tracing::info!("found peer: {:?}", peer);
-    }
+    service::start(chain_id, keypair).await?;
 
     Ok(())
 }
