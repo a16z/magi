@@ -12,7 +12,10 @@ use libp2p::{
 use libp2p_identity::Keypair;
 use openssl::sha::sha256;
 
-use super::{discovery, handlers::Handler, types::NetworkAddress};
+use super::{handlers::Handler, service::types::NetworkAddress};
+
+mod discovery;
+mod types;
 
 pub struct ServiceBuilder {
     handlers: Vec<Box<dyn Handler>>,
