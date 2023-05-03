@@ -55,6 +55,7 @@ discv5 = "0.2.2"
 libp2p = { version = "0.51.3", features = ["macros", "tokio", "tcp", "mplex", "noise", "gossipsub", "ping"] }
 libp2p-identity = { version = "0.1.2", features = ["secp256k1"] }
 unsigned-varint = "0.7.1"
+snap = "1"
 
 # CLI
 figment = { version = "0.10.8", features = ["toml", "env"] }

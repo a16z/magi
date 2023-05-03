@@ -10,6 +10,7 @@ use libp2p::{
 };
 use libp2p_identity::Keypair;
 use futures::{prelude::*, select};
+use openssl::sha::sha256;
 
 pub mod discovery;
 
@@ -37,6 +38,7 @@ pub async fn run() -> Result<()> {
             .duplicate_cache_time(Duration::from_secs(65))
             .validation_mode(gossipsub::ValidationMode::None)
             .validate_messages()
+            .message_id_fn(message_id)
             .build()
             .unwrap();
 
@@ -103,6 +105,22 @@ pub async fn run() -> Result<()> {
     }
 
     // Ok(())
+}
+
+fn message_id(msg: &Message) -> MessageId {
+    let mut decoder = snap::raw::Decoder::new();
+    let id = match decoder.decompress_vec(&msg.data) {
+        Ok(data) => {
+            let domain_valid_snappy: Vec<u8> = vec![0x1, 0x0, 0x0, 0x0];
+            sha256([domain_valid_snappy.as_slice(), data.as_slice()].concat().as_slice())[..20].to_vec()
+        },
+        Err(_) => {
+            let domain_invalid_snappy: Vec<u8> = vec![0x0, 0x0, 0x0, 0x0];
+            sha256([domain_invalid_snappy.as_slice(), msg.data.as_slice()].concat().as_slice())[..20].to_vec()
+        },
+    };
+
+    MessageId(id)
 }
 
 #[derive(NetworkBehaviour)]
