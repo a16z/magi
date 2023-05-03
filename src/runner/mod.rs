@@ -9,7 +9,7 @@ use std::{
 
 use ethers::{
     providers::{Middleware, Provider},
-    types::H256,
+    types::{BlockNumber, H256},
 };
 use eyre::Result;
 use tokio::time::sleep;
@@ -68,10 +68,12 @@ impl Runner {
     }
 
     pub async fn fast_sync(&self) -> Result<()> {
+        tracing::error!("fast sync is not implemented yet");
         unimplemented!();
     }
 
     pub async fn challenge_sync(&self) -> Result<()> {
+        tracing::error!("challenge sync is not implemented yet");
         unimplemented!();
     }
 
@@ -85,32 +87,66 @@ impl Runner {
     pub async fn checkpoint_sync(&self) -> Result<()> {
         tracing::info!("starting checkpoint sync");
 
+        let l1_provider = Provider::try_from(&self.config.l1_rpc_url)?;
+        let l2_provider = Provider::try_from(&self.config.l2_rpc_url)?;
+        let l2_trusted_provider = Provider::try_from(
+            &self
+                .config
+                .l2_trusted_rpc_url
+                .clone()
+                .expect("a trusted L2 rpc url is required for checkpoint sync"),
+        )?;
+
         let checkpoint_hash = match self.checkpoint_hash {
             Some(ref checkpoint) => checkpoint
                 .parse()
                 .expect("invalid checkpoint block hash provided"),
             None => {
-                tracing::info!("fetching latest checkpoint from the L2 chain");
+                tracing::info!("using the latest epoch boundary as checkpoint block");
 
-                // TODO: get epoch boundary L2 block hash nearest to the finalized head
-                H256::zero()
+                let mut block_number = BlockNumber::Latest;
+                loop {
+                    self.check_shutdown()?;
+
+                    let l2_block = l2_trusted_provider
+                        .get_block_with_txs(block_number)
+                        .await?
+                        .unwrap_or_default();
+
+                    let set_l1_block_values_tx = l2_block
+                        .transactions
+                        .iter()
+                        .find(|tx| tx.to.unwrap() == self.config.chain.l1_block)
+                        .expect("could not find setL1BlockValues tx in the fetched block");
+
+                    let sequence_number = &set_l1_block_values_tx
+                        .clone()
+                        .input
+                        .into_iter()
+                        .skip(132)
+                        .take(32)
+                        .collect::<Vec<u8>>();
+
+                    if H256::from_slice(sequence_number) != H256::zero() {
+                        block_number = BlockNumber::Number(
+                            l2_block.number.expect("fetched block has no number") - 1,
+                        );
+                        continue;
+                    }
+
+                    break l2_block.hash.expect("fetched block has no hash");
+                }
             }
         };
 
-        let provider = Provider::try_from(&self.config.l2_rpc_url)?;
         let engine_api = EngineApi::new(&self.config.l2_engine_url, &self.config.jwt_secret);
-
         while !engine_api.is_available().await {
-            if let Ok(shutdown) = self.shutdown_recv.try_recv() {
-                if shutdown {
-                    process::exit(0);
-                }
-            }
+            self.check_shutdown()?;
             sleep(Duration::from_secs(3)).await;
         }
 
         // if the checkpoint block is already synced, start from the finalized head
-        if provider.get_block(checkpoint_hash).await?.is_some() {
+        if l2_provider.get_block(checkpoint_hash).await?.is_some() {
             tracing::warn!("finalized head is above the checkpoint block");
             self.start_driver().await?;
             return Ok(());
@@ -118,12 +154,18 @@ impl Runner {
 
         // this is a temporary fix to allow execution layer peering to work
         // TODO: use a list of whitelisted bootnodes instead
-        provider.add_peer(TRUSTED_PEER_ENODE.to_string()).await?;
+        tracing::info!("adding trusted peer to the execution layer");
+        l2_provider.add_peer(TRUSTED_PEER_ENODE.to_string()).await?;
 
         // build the execution payload from the checkpoint block and send it to the execution client
-        // (this requires a trusted L2 rpc url)
-        let checkpoint_payload =
-            ExecutionPayload::from_block_hash(&self.config, checkpoint_hash).await?;
+        let checkpoint_payload = ExecutionPayload::from_block_hash(
+            &self.config,
+            checkpoint_hash,
+            l1_provider,
+            l2_trusted_provider,
+        )
+        .await?;
+
         let payload_res = engine_api.new_payload(checkpoint_payload.clone()).await?;
         if let Status::Invalid | Status::InvalidBlockHash = payload_res.status {
             tracing::error!("the provided checkpoint payload is invalid, exiting");
@@ -144,18 +186,9 @@ impl Runner {
             "syncing execution client to the checkpoint block. This could take a few hours",
         );
 
-        loop {
-            if let Ok(shutdown) = self.shutdown_recv.try_recv() {
-                if shutdown {
-                    process::exit(0);
-                }
-            }
-
-            if provider.get_block_number().await? < checkpoint_payload.block_number {
-                sleep(Duration::from_secs(3)).await;
-            } else {
-                break;
-            }
+        while l2_provider.get_block_number().await? < checkpoint_payload.block_number {
+            self.check_shutdown()?;
+            sleep(Duration::from_secs(3)).await;
         }
 
         tracing::info!("execution client successfully synced to the checkpoint block");
@@ -170,6 +203,17 @@ impl Runner {
         if let Err(err) = driver.start().await {
             tracing::error!("driver failure: {}", err);
             std::process::exit(1);
+        }
+
+        Ok(())
+    }
+
+    fn check_shutdown(&self) -> Result<()> {
+        if let Ok(shutdown) = self.shutdown_recv.try_recv() {
+            if shutdown {
+                tracing::warn!("shutting down");
+                process::exit(0);
+            }
         }
 
         Ok(())

@@ -50,22 +50,18 @@ impl ExecutionPayload {
     /// Creates a new ExecutionPayload from a block hash.
     /// Requires both an L1 rpc url and a trusted L2 rpc url.
     /// Ported from [op-fast-sync](https://github.com/testinprod-io/op-fast-sync/blob/master/build_payloads.py)
-    pub async fn from_block_hash(config: &Config, block_hash: H256) -> Result<Self> {
-        let l1_provider = Provider::<Http>::try_from(config.l1_rpc_url.as_str())?;
-        let l2_provider = Provider::<Http>::try_from(
-            config
-                .l2_trusted_rpc_url
-                .clone()
-                .expect("trusted l2 rpc url is required to build a payload from a block hash")
-                .as_str(),
-        )?;
-
-        let l2_block = l2_provider
+    pub async fn from_block_hash(
+        config: &Config,
+        block_hash: H256,
+        l1_provider: Provider<Http>,
+        l2_trusted_provider: Provider<Http>,
+    ) -> Result<Self> {
+        let l2_block = l2_trusted_provider
             .get_block_with_txs(block_hash)
             .await?
             .expect("l2 block not found");
 
-        let l1_block_number_raw = l2_provider
+        let l1_block_number_raw = l2_trusted_provider
             .get_storage_at(
                 config.chain.l1_block,
                 H256::zero(),
@@ -188,6 +184,7 @@ pub enum Status {
 mod tests {
     use std::sync::Arc;
 
+    use ethers::providers::{Http, Provider};
     use eyre::Result;
 
     use crate::{
@@ -204,16 +201,25 @@ mod tests {
             let rpc = std::env::var("L1_TEST_RPC_URL")?;
             let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
             let config = Arc::new(Config {
-                l1_rpc_url: rpc,
+                l1_rpc_url: rpc.clone(),
                 l2_rpc_url: l2_rpc.clone(),
                 chain: ChainConfig::optimism_goerli(),
                 l2_engine_url: String::new(),
                 jwt_secret: String::new(),
-                l2_trusted_rpc_url: Some(l2_rpc),
+                l2_trusted_rpc_url: Some(l2_rpc.clone()),
                 rpc_port: 0,
             });
 
-            let payload = ExecutionPayload::from_block_hash(&config, checkpoint_hash).await?;
+            let l1_provider = Provider::<Http>::try_from(rpc)?;
+            let l2_trusted_provider = Provider::<Http>::try_from(l2_rpc)?;
+
+            let payload = ExecutionPayload::from_block_hash(
+                &config,
+                checkpoint_hash,
+                l1_provider,
+                l2_trusted_provider,
+            )
+            .await?;
 
             assert_eq!(
                 payload.block_hash,

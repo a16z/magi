@@ -1,3 +1,5 @@
+use std::process;
+
 use clap::Parser;
 use dirs::home_dir;
 use eyre::Result;
@@ -26,7 +28,10 @@ async fn main() -> Result<()> {
         .with_sync_mode(sync_mode)
         .with_checkpoint_hash(checkpoint_hash);
 
-    runner.run().await?;
+    if let Err(err) = runner.run().await {
+        tracing::error!(target: "magi", "{}", err);
+        process::exit(1);
+    }
 
     Ok(())
 }
