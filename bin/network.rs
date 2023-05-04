@@ -1,21 +1,24 @@
-use std::net::SocketAddr;
-
 use eyre::Result;
 
-use magi::{network::discovery, telemetry};
+use futures::future;
+use magi::{
+    network::{handlers::block_handler::BlockHandler, service::Service},
+    telemetry,
+};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let _guards = telemetry::init(false, None, None);
 
-    let addr = "0.0.0.0:9000".parse::<SocketAddr>()?;
+    let addr = "0.0.0.0:9876".parse()?;
     let chain_id = 420;
+    let block_handler = BlockHandler::new(chain_id);
 
-    let mut recv = discovery::start(addr, chain_id)?;
+    Service::new(addr, chain_id)
+        .add_handler(Box::new(block_handler))
+        .start()?;
 
-    while let Some(peer) = recv.recv().await {
-        tracing::info!("found peer: {:?}", peer);
-    }
+    future::pending::<()>().await;
 
     Ok(())
 }
