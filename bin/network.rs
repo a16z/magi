@@ -2,7 +2,7 @@ use eyre::Result;
 
 use futures::future;
 use magi::{
-    network::{handlers::block_handler::BlockHandler, service::ServiceBuilder},
+    network::{handlers::block_handler::BlockHandler, service::Service},
     telemetry,
 };
 
@@ -14,7 +14,7 @@ async fn main() -> Result<()> {
     let chain_id = 420;
     let block_handler = BlockHandler::new(chain_id);
 
-    ServiceBuilder::new(addr, chain_id)
+    Service::new(addr, chain_id)
         .add_handler(Box::new(block_handler))
         .start()?;
 

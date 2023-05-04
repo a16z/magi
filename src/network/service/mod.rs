@@ -17,14 +17,14 @@ use super::{handlers::Handler, service::types::NetworkAddress};
 mod discovery;
 mod types;
 
-pub struct ServiceBuilder {
+pub struct Service {
     handlers: Vec<Box<dyn Handler>>,
     addr: SocketAddr,
     chain_id: u64,
     keypair: Option<Keypair>,
 }
 
-impl ServiceBuilder {
+impl Service {
     pub fn new(addr: SocketAddr, chain_id: u64) -> Self {
         Self {
             handlers: Vec::new(),
