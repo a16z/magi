@@ -255,7 +255,7 @@ impl ChainConfig {
             channel_timeout: 100,
             seq_window_size: 3600,
             max_seq_drift: 600,
-            regolith_time: u64::MAX,
+            regolith_time: 1683219600,
             blocktime: 2,
         }
     }
