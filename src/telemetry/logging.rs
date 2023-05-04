@@ -28,7 +28,8 @@ pub fn init(
     // If a directory is provided, log to file and stdout
     if let Some(dir) = logs_dir {
         let directory = PathBuf::from(dir);
-        let rotation = get_rotation_strategy(&logs_rotation.unwrap_or(DEFAULT_ROTATION.into()));
+        let rotation =
+            get_rotation_strategy(&logs_rotation.unwrap_or_else(|| DEFAULT_ROTATION.into()));
         let appender = Some(get_rolling_file_appender(
             directory,
             rotation,
