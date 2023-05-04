@@ -48,7 +48,7 @@ impl Service {
         let addr = NetworkAddress::try_from(self.addr)?;
         let keypair = self.keypair.unwrap_or_else(Keypair::generate_secp256k1);
 
-        let mut swarm = create_swarm(self.chain_id, keypair)?;
+        let mut swarm = create_swarm(keypair, &self.handlers)?;
         let mut peer_recv = discovery::start(addr, self.chain_id)?;
 
         let multiaddr = Multiaddr::from(addr);
@@ -107,14 +107,14 @@ fn compute_message_id(msg: &Message) -> MessageId {
     MessageId(id)
 }
 
-fn create_swarm(chain_id: u64, keypair: Keypair) -> Result<Swarm<Behaviour>> {
+fn create_swarm(keypair: Keypair, handlers: &[Box<dyn Handler>]) -> Result<Swarm<Behaviour>> {
     let transport = tcp::tokio::Transport::new(tcp::Config::default())
         .upgrade(libp2p::core::upgrade::Version::V1Lazy)
         .authenticate(noise::Config::new(&keypair)?)
         .multiplex(MplexConfig::default())
         .boxed();
 
-    let behaviour = Behaviour::new(chain_id)?;
+    let behaviour = Behaviour::new(handlers)?;
 
     Ok(
         SwarmBuilder::with_tokio_executor(transport, behaviour, PeerId::from(keypair.public()))
@@ -130,7 +130,7 @@ struct Behaviour {
 }
 
 impl Behaviour {
-    fn new(chain_id: u64) -> Result<Self> {
+    fn new(handlers: &[Box<dyn Handler>]) -> Result<Self> {
         let ping = ping::Behaviour::default();
 
         let gossipsub_config = gossipsub::ConfigBuilder::default()
@@ -153,10 +153,15 @@ impl Behaviour {
             gossipsub::Behaviour::new(gossipsub::MessageAuthenticity::Anonymous, gossipsub_config)
                 .map_err(|_| eyre::eyre!("gossipsub behaviour creation failed"))?;
 
-        let topic = IdentTopic::new(format!("/optimism/{}/0/blocks", chain_id));
-        gossipsub
-            .subscribe(&topic)
-            .map_err(|_| eyre::eyre!("subscription failed"))?;
+        handlers
+            .iter()
+            .map(|handler| {
+                let topic = IdentTopic::new(handler.topic().into_string());
+                gossipsub
+                    .subscribe(&topic)
+                    .map_err(|_| eyre::eyre!("subscription failed"))
+            })
+            .collect::<Result<Vec<bool>>>()?;
 
         Ok(Self { ping, gossipsub })
     }
