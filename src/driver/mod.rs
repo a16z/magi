@@ -51,8 +51,8 @@ impl Driver<EngineApi> {
         let provider = Provider::try_from(&config.l2_rpc_url)?;
 
         let block_id = BlockId::Number(BlockNumber::Finalized);
-        let head = match HeadInfo::from_block(block_id, &provider).await {
-            Ok(Some(head)) => head,
+        let head = match HeadInfo::from_block(block_id, &provider).await? {
+            Some(head) => head,
             _ => {
                 tracing::warn!("could not get head info. Falling back to the genesis head.");
                 HeadInfo {
