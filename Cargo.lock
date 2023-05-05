@@ -3566,6 +3566,7 @@ dependencies = [
  "serde",
  "serde_json",
  "snap",
+ "ssz_rs",
  "tokio",
  "tracing",
  "tracing-appender",
@@ -5558,6 +5559,32 @@ checksum = "37a5be806ab6f127c3da44b7378837ebf01dadca8510a0e572460216b228bd0e"
 dependencies = [
  "base64ct",
  "der 0.7.5",
+]
+
+[[package]]
+name = "ssz_rs"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f923762d556417668b192ac2fdc9827ea21e6df011d8a0a7e68f3d5da095a675"
+dependencies = [
+ "bitvec 1.0.1",
+ "hex",
+ "num-bigint",
+ "serde",
+ "sha2 0.9.9",
+ "ssz_rs_derive",
+ "thiserror",
+]
+
+[[package]]
+name = "ssz_rs_derive"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c679ebd9c1ceeb0f9e5b839952b4a71bfe35a791b431ef7b3ee0b71b7588b565"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]

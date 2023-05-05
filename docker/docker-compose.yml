@@ -32,7 +32,7 @@ services:
     <<: *logging
 
   op-geth:
-    image: us-docker.pkg.dev/oplabs-tools-artifacts/images/op-geth:24ae687be390aecb369be6b642e270188e850d81
+    image: us-docker.pkg.dev/oplabs-tools-artifacts/images/op-geth:3fa9e812447af947c0208838453268a8ea33444b
     container_name: op-geth
     profiles:
       - op-geth
