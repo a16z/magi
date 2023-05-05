@@ -9,7 +9,7 @@ use ethers::{
     types::{BlockId, BlockNumber},
 };
 use eyre::Result;
-use tokio::{time::sleep, sync::mpsc::Receiver};
+use tokio::time::sleep;
 
 use crate::{
     common::{BlockInfo, Epoch},
@@ -18,8 +18,9 @@ use crate::{
     driver::types::HeadInfo,
     engine::{Engine, EngineApi, ExecutionPayload},
     l1::{BlockUpdate, ChainWatcher},
+    network::{handlers::block_handler::BlockHandler, service::Service},
     rpc,
-    telemetry::metrics, network::{handlers::block_handler::BlockHandler, service::Service},
+    telemetry::metrics,
 };
 
 use self::engine_driver::EngineDriver;
@@ -38,6 +39,8 @@ pub struct Driver<E: Engine> {
     unfinalized_blocks: Vec<(BlockInfo, Epoch, u64, u64)>,
     /// Current finalized L1 block number
     finalized_l1_block_number: u64,
+    /// List of unsafe blocks that have not been applied yet
+    future_unsafe_blocks: Vec<ExecutionPayload>,
     /// State struct to keep track of global state
     state: Arc<RwLock<State>>,
     /// L1 chain watcher
@@ -98,12 +101,12 @@ impl Driver<EngineApi> {
             .add_handler(Box::new(block_handler))
             .start()?;
 
-
         Ok(Self {
             engine_driver,
             pipeline,
             unfinalized_blocks: Vec::new(),
             finalized_l1_block_number: 0,
+            future_unsafe_blocks: Vec::new(),
             state,
             chain_watcher,
             shutdown_recv,
@@ -191,7 +194,14 @@ impl<E: Engine> Driver<E> {
         }
 
         while let Ok(payload) = self.unsafe_block_recv.try_recv() {
-            self.engine_driver.handle_unsafe_payload(payload).await?;
+            self.future_unsafe_blocks.push(payload);
+            self.future_unsafe_blocks.retain(|payload| {
+                payload.block_number.as_u64() > self.engine_driver.unsafe_head.number
+            });
+
+            for payload in &self.future_unsafe_blocks {
+                self.engine_driver.handle_unsafe_payload(payload).await?;
+            }
         }
 
         Ok(())

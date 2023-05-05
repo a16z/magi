@@ -49,7 +49,7 @@ impl<E: Engine> EngineDriver<E> {
         }
     }
 
-    pub async fn handle_unsafe_payload(&mut self, payload: ExecutionPayload) -> Result<()> {
+    pub async fn handle_unsafe_payload(&mut self, payload: &ExecutionPayload) -> Result<()> {
         if payload.parent_hash == self.unsafe_head.hash {
             self.push_payload(payload.clone()).await?;
             self.unsafe_head.hash = payload.block_hash;
