@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     common::{Epoch, RawTransaction},
-    config::Config,
+    config::{Config, SystemAccounts},
 };
 
 /// ## ExecutionPayload
@@ -87,7 +87,7 @@ impl ExecutionPayload {
 
         Ok(ExecutionPayload {
             parent_hash: l2_block.parent_hash,
-            fee_recipient: config.chain.sequencer_fee_vault,
+            fee_recipient: SystemAccounts::default().fee_vault,
             state_root: l2_block.state_root,
             receipts_root: l2_block.receipts_root,
             logs_bloom: l2_block.logs_bloom.unwrap().as_bytes().to_vec().into(),

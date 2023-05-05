@@ -142,8 +142,6 @@ pub struct ChainConfig {
     pub l2_to_l1_message_passer: Address,
     /// The L1 block contract on L2
     pub l1_block: Address,
-    /// The sequencer fee vault contract
-    pub sequencer_fee_vault: Address,
 }
 
 /// Optimism system config contract values
@@ -234,7 +232,6 @@ impl ChainConfig {
             l2_output_oracle: addr("0xE6Dfba0953616Bacab0c9A8ecb3a9BBa77FC15c0"),
             l2_to_l1_message_passer: addr("0xEF2ec5A5465f075E010BE70966a8667c94BCe15a"),
             l1_block: addr("0x4200000000000000000000000000000000000015"),
-            sequencer_fee_vault: addr("0x4200000000000000000000000000000000000011"),
             max_channel_size: 100_000_000,
             channel_timeout: 300,
             seq_window_size: 3600,
@@ -269,7 +266,6 @@ impl ChainConfig {
             l2_output_oracle: addr("0x2A35891ff30313CcFa6CE88dcf3858bb075A2298"),
             l2_to_l1_message_passer: addr("0x4200000000000000000000000000000000000016"),
             l1_block: addr("0x4200000000000000000000000000000000000015"),
-            sequencer_fee_vault: addr("0x4200000000000000000000000000000000000011"),
             max_channel_size: 100_000_000,
             channel_timeout: 100,
             seq_window_size: 3600,
