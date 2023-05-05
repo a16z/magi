@@ -8,14 +8,14 @@ use std::{
 };
 
 use ethers::{
-    providers::{Middleware, Provider},
-    types::{BlockNumber, H256},
+    providers::{Http, Middleware, Provider},
+    types::{BlockId, BlockNumber},
 };
 use eyre::Result;
 use tokio::time::sleep;
 
 use crate::{
-    config::{Config, SyncMode},
+    config::{Config, SyncMode, SystemAccounts},
     driver::Driver,
     engine::{Engine, EngineApi, ExecutionPayload, ForkchoiceState, Status},
 };
@@ -89,53 +89,40 @@ impl Runner {
 
         let l1_provider = Provider::try_from(&self.config.l1_rpc_url)?;
         let l2_provider = Provider::try_from(&self.config.l2_rpc_url)?;
-        let l2_trusted_provider = Provider::try_from(
-            &self
-                .config
-                .l2_trusted_rpc_url
-                .clone()
-                .expect("a trusted L2 rpc url is required for checkpoint sync"),
-        )?;
+        let l2_trusted_provider =
+            Provider::try_from(self.config.l2_trusted_rpc_url.as_ref().ok_or(eyre::eyre!(
+                "a trusted L2 rpc url is required for checkpoint sync"
+            ))?)?;
 
         let checkpoint_hash = match self.checkpoint_hash {
-            Some(ref checkpoint) => checkpoint
-                .parse()
-                .expect("invalid checkpoint block hash provided"),
-            None => {
-                tracing::info!("using the latest epoch boundary as checkpoint block");
+            Some(ref checkpoint) => {
+                let block_hash = checkpoint
+                    .parse()
+                    .expect("invalid checkpoint block hash provided");
 
-                let mut block_number = BlockNumber::Latest;
-                loop {
-                    self.check_shutdown()?;
-
-                    let l2_block = l2_trusted_provider
-                        .get_block_with_txs(block_number)
-                        .await?
-                        .unwrap_or_default();
-
-                    let set_l1_block_values_tx = l2_block
-                        .transactions
-                        .iter()
-                        .find(|tx| tx.to.unwrap() == self.config.chain.l1_block)
-                        .expect("could not find setL1BlockValues tx in the fetched block");
-
-                    let sequence_number = &set_l1_block_values_tx
-                        .clone()
-                        .input
-                        .into_iter()
-                        .skip(132)
-                        .take(32)
-                        .collect::<Vec<u8>>();
-
-                    if H256::from_slice(sequence_number) != H256::zero() {
-                        block_number = BlockNumber::Number(
-                            l2_block.number.expect("fetched block has no number") - 1,
-                        );
-                        continue;
+                match Self::is_epoch_boundary(block_hash, &l2_trusted_provider).await? {
+                    true => block_hash,
+                    false => {
+                        tracing::error!("the provided checkpoint block is not an epoch boundary");
+                        process::exit(1);
                     }
-
-                    break l2_block.hash.expect("fetched block has no hash");
                 }
+            }
+            None => {
+                tracing::info!("finding the latest epoch boundary to use as checkpoint");
+
+                let mut block_number = l2_trusted_provider.get_block_number().await?;
+                while !Self::is_epoch_boundary(block_number, &l2_trusted_provider).await? {
+                    self.check_shutdown()?;
+                    block_number -= 1.into();
+                }
+
+                let block = l2_trusted_provider
+                    .get_block(BlockId::Number(BlockNumber::Number(block_number)))
+                    .await?
+                    .expect("could not get block");
+
+                block.hash.expect("block hash is missing")
             }
         };
 
@@ -160,13 +147,9 @@ impl Runner {
         l2_provider.add_peer(TRUSTED_PEER_ENODE.to_string()).await?;
 
         // build the execution payload from the checkpoint block and send it to the execution client
-        let checkpoint_payload = ExecutionPayload::from_block_hash(
-            &self.config,
-            checkpoint_hash,
-            l1_provider,
-            l2_trusted_provider,
-        )
-        .await?;
+        let checkpoint_payload =
+            ExecutionPayload::from_block_hash(checkpoint_hash, l1_provider, l2_trusted_provider)
+                .await?;
 
         let payload_res = engine_api.new_payload(checkpoint_payload.clone()).await?;
         if let Status::Invalid | Status::InvalidBlockHash = payload_res.status {
@@ -184,9 +167,7 @@ impl Runner {
             process::exit(1);
         }
 
-        tracing::info!(
-            "syncing execution client to the checkpoint block. This could take a few hours",
-        );
+        tracing::info!("syncing execution client to the checkpoint block...",);
 
         while l2_provider.get_block_number().await? < checkpoint_payload.block_number {
             self.check_shutdown()?;
@@ -220,5 +201,29 @@ impl Runner {
         }
 
         Ok(())
+    }
+
+    async fn is_epoch_boundary<T: Into<BlockId> + Send + Sync>(
+        block: T,
+        l2_trusted_provider: &Provider<Http>,
+    ) -> Result<bool> {
+        let l2_block = l2_trusted_provider
+            .get_block_with_txs(block)
+            .await?
+            .ok_or_else(|| eyre::eyre!("could not find block"))?;
+
+        let sequence_number = &l2_block
+            .transactions
+            .iter()
+            .find(|tx| tx.to.unwrap() == SystemAccounts::default().attributes_predeploy)
+            .expect("could not find setL1BlockValues tx in the epoch boundary search")
+            .input
+            .clone()
+            .into_iter()
+            .skip(132)
+            .take(32)
+            .collect::<Vec<u8>>();
+
+        Ok(sequence_number == &[0; 32])
     }
 }

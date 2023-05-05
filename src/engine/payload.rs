@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     common::{Epoch, RawTransaction},
-    config::{Config, SystemAccounts},
+    config::SystemAccounts,
 };
 
 /// ## ExecutionPayload
@@ -51,7 +51,6 @@ impl ExecutionPayload {
     /// Requires both an L1 rpc url and a trusted L2 rpc url.
     /// Ported from [op-fast-sync](https://github.com/testinprod-io/op-fast-sync/blob/master/build_payloads.py)
     pub async fn from_block_hash(
-        config: &Config,
         block_hash: H256,
         l1_provider: Provider<Http>,
         l2_trusted_provider: Provider<Http>,
@@ -63,7 +62,7 @@ impl ExecutionPayload {
 
         let l1_block_number_raw = l2_trusted_provider
             .get_storage_at(
-                config.chain.l1_block,
+                SystemAccounts::default().attributes_predeploy,
                 H256::zero(),
                 Some(BlockId::Number(l2_block.number.unwrap().into())),
             )
@@ -182,15 +181,11 @@ pub enum Status {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Arc;
 
     use ethers::providers::{Http, Provider};
     use eyre::Result;
 
-    use crate::{
-        config::{ChainConfig, Config},
-        engine::ExecutionPayload,
-    };
+    use crate::engine::ExecutionPayload;
 
     #[tokio::test]
     async fn test_from_block_hash_to_execution_paylaod() -> Result<()> {
@@ -200,21 +195,11 @@ mod tests {
 
             let rpc = std::env::var("L1_TEST_RPC_URL")?;
             let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
-            let config = Arc::new(Config {
-                l1_rpc_url: rpc.clone(),
-                l2_rpc_url: l2_rpc.clone(),
-                chain: ChainConfig::optimism_goerli(),
-                l2_engine_url: String::new(),
-                jwt_secret: String::new(),
-                l2_trusted_rpc_url: Some(l2_rpc.clone()),
-                rpc_port: 0,
-            });
 
             let l1_provider = Provider::<Http>::try_from(rpc)?;
             let l2_trusted_provider = Provider::<Http>::try_from(l2_rpc)?;
 
             let payload = ExecutionPayload::from_block_hash(
-                &config,
                 checkpoint_hash,
                 l1_provider,
                 l2_trusted_provider,
