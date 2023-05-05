@@ -1,7 +1,4 @@
-use ethers::{
-    providers::{Http, Middleware, Provider},
-    types::{Block, BlockId, Transaction},
-};
+use ethers::types::{Block, Transaction};
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 
@@ -14,25 +11,6 @@ pub struct HeadInfo {
     pub l2_block_info: BlockInfo,
     /// L1 batch epoch of the head L2 block
     pub l1_epoch: Epoch,
-}
-
-impl HeadInfo {
-    pub async fn from_block<T: Into<BlockId> + Send + Sync + Copy>(
-        block_id: T,
-        provider: &Provider<Http>,
-    ) -> Result<Option<Self>> {
-        match provider.get_block_with_txs(block_id).await {
-            Ok(Some(block)) => Ok(Some(block.try_into()?)),
-            Ok(None) => {
-                tracing::warn!("No block found at {:?}", block_id.into());
-                Ok(None)
-            }
-            Err(err) => {
-                tracing::error!("Error fetching block: {:?}", err);
-                Err(err.into())
-            }
-        }
-    }
 }
 
 impl TryFrom<Block<Transaction>> for HeadInfo {
@@ -62,7 +40,7 @@ mod tests {
         use std::str::FromStr;
 
         use ethers::{
-            providers::Provider,
+            providers::{Middleware, Provider},
             types::{Block, Transaction, H256},
         };
         use eyre::Result;
@@ -218,14 +196,13 @@ mod tests {
                 let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
                 let provider = Provider::try_from(l2_rpc)?;
 
-                let head = HeadInfo::from_block(l2_block_hash, &provider).await?;
+                let l2_block = provider.get_block_with_txs(l2_block_hash).await?.unwrap();
+                let head = HeadInfo::try_from(l2_block)?;
 
-                // Assert
-                assert!(head.is_some());
                 let HeadInfo {
                     l2_block_info,
                     l1_epoch,
-                } = head.unwrap();
+                } = head;
 
                 assert_eq!(l2_block_info.number, expected_l2_block_number);
                 assert_eq!(l2_block_info.timestamp, expected_l2_block_timestamp);

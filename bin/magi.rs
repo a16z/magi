@@ -61,7 +61,7 @@ pub struct Cli {
     #[clap(long)]
     checkpoint_hash: Option<String>,
     #[clap(long)]
-    l2_trusted_rpc_url: Option<String>,
+    checkpoint_sync_url: Option<String>,
 }
 
 impl Cli {
@@ -85,7 +85,7 @@ impl From<Cli> for CliConfig {
             l2_rpc_url: value.l2_rpc_url,
             l2_engine_url: value.l2_engine_url,
             jwt_secret: value.jwt_secret,
-            l2_trusted_rpc_url: value.l2_trusted_rpc_url,
+            checkpoint_sync_url: value.checkpoint_sync_url,
             rpc_port: value.rpc_port,
         }
     }

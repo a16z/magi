@@ -395,7 +395,7 @@ mod tests {
             jwt_secret: String::new(),
             rpc_port: 9545,
             chain: ChainConfig::optimism_goerli(),
-            l2_trusted_rpc_url: None,
+            checkpoint_sync_url: None,
         };
 
         let (tx, rx) = mpsc::channel();

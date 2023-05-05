@@ -1,7 +1,4 @@
-use ethers::{
-    providers::{Http, Middleware, Provider},
-    types::{BlockId, Bytes, H160, H256, U64},
-};
+use ethers::types::{Block, Bytes, Transaction, H160, H256, U64};
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 
@@ -44,40 +41,11 @@ pub struct ExecutionPayload {
     pub transactions: Vec<RawTransaction>,
 }
 
-impl ExecutionPayload {
-    /// ## from_block
-    ///
-    /// Creates a new ExecutionPayload from a block hash.
-    /// Requires both an L1 rpc url and a trusted L2 rpc url.
-    /// Ported from [op-fast-sync](https://github.com/testinprod-io/op-fast-sync/blob/master/build_payloads.py)
-    pub async fn from_block_hash(
-        block_hash: H256,
-        l1_provider: Provider<Http>,
-        l2_trusted_provider: Provider<Http>,
-    ) -> Result<Self> {
-        let l2_block = l2_trusted_provider
-            .get_block_with_txs(block_hash)
-            .await?
-            .expect("l2 block not found");
+impl TryFrom<Block<Transaction>> for ExecutionPayload {
+    type Error = eyre::Report;
 
-        let l1_block_number_raw = l2_trusted_provider
-            .get_storage_at(
-                SystemAccounts::default().attributes_predeploy,
-                H256::zero(),
-                Some(BlockId::Number(l2_block.number.unwrap().into())),
-            )
-            .await?;
-
-        let l1_block_number_raw = &format!("{:x}", l1_block_number_raw);
-        let l1_block_number_raw = &l1_block_number_raw[48..];
-        let l1_block_number = U64::from_str_radix(l1_block_number_raw, 16)?;
-
-        let l1_block = l1_provider
-            .get_block(l1_block_number)
-            .await?
-            .expect("l1 block not found");
-
-        let encoded_txs = (*l2_block
+    fn try_from(value: Block<Transaction>) -> Result<Self> {
+        let encoded_txs = (*value
             .transactions
             .into_iter()
             .map(|tx| RawTransaction(tx.rlp().to_vec()))
@@ -85,23 +53,23 @@ impl ExecutionPayload {
         .to_vec();
 
         Ok(ExecutionPayload {
-            parent_hash: l2_block.parent_hash,
+            parent_hash: value.parent_hash,
             fee_recipient: SystemAccounts::default().fee_vault,
-            state_root: l2_block.state_root,
-            receipts_root: l2_block.receipts_root,
-            logs_bloom: l2_block.logs_bloom.unwrap().as_bytes().to_vec().into(),
-            prev_randao: l1_block.mix_hash.unwrap(),
-            block_number: l2_block.number.unwrap(),
-            gas_limit: l2_block.gas_limit.as_u64().into(),
-            gas_used: l2_block.gas_used.as_u64().into(),
-            timestamp: l2_block.timestamp.as_u64().into(),
-            extra_data: l2_block.extra_data.clone(),
-            base_fee_per_gas: l2_block
+            state_root: value.state_root,
+            receipts_root: value.receipts_root,
+            logs_bloom: value.logs_bloom.unwrap().as_bytes().to_vec().into(),
+            prev_randao: value.mix_hash.unwrap(),
+            block_number: value.number.unwrap(),
+            gas_limit: value.gas_limit.as_u64().into(),
+            gas_used: value.gas_used.as_u64().into(),
+            timestamp: value.timestamp.as_u64().into(),
+            extra_data: value.extra_data.clone(),
+            base_fee_per_gas: value
                 .base_fee_per_gas
                 .unwrap_or(0u64.into())
                 .as_u64()
                 .into(),
-            block_hash: l2_block.hash.unwrap(),
+            block_hash: value.hash.unwrap(),
             transactions: encoded_txs,
         })
     }
@@ -182,7 +150,10 @@ pub enum Status {
 #[cfg(test)]
 mod tests {
 
-    use ethers::providers::{Http, Provider};
+    use ethers::{
+        providers::{Http, Middleware, Provider},
+        types::H256,
+    };
     use eyre::Result;
 
     use crate::engine::ExecutionPayload;
@@ -190,21 +161,17 @@ mod tests {
     #[tokio::test]
     async fn test_from_block_hash_to_execution_paylaod() -> Result<()> {
         if std::env::var("L1_TEST_RPC_URL").is_ok() && std::env::var("L2_TEST_RPC_URL").is_ok() {
-            let checkpoint_hash =
+            let checkpoint_hash: H256 =
                 "0xc2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973".parse()?;
 
-            let rpc = std::env::var("L1_TEST_RPC_URL")?;
             let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
+            let checkpoint_sync_url = Provider::<Http>::try_from(l2_rpc)?;
+            let checkpoint_block = checkpoint_sync_url
+                .get_block_with_txs(checkpoint_hash)
+                .await?
+                .unwrap();
 
-            let l1_provider = Provider::<Http>::try_from(rpc)?;
-            let l2_trusted_provider = Provider::<Http>::try_from(l2_rpc)?;
-
-            let payload = ExecutionPayload::from_block_hash(
-                checkpoint_hash,
-                l1_provider,
-                l2_trusted_provider,
-            )
-            .await?;
+            let payload = ExecutionPayload::try_from(checkpoint_block)?;
 
             assert_eq!(
                 payload.block_hash,

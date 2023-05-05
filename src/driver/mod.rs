@@ -5,7 +5,7 @@ use std::{
 };
 
 use ethers::{
-    providers::Provider,
+    providers::{Middleware, Provider},
     types::{BlockId, BlockNumber},
 };
 use eyre::Result;
@@ -51,8 +51,13 @@ impl Driver<EngineApi> {
         let provider = Provider::try_from(&config.l2_rpc_url)?;
 
         let block_id = BlockId::Number(BlockNumber::Finalized);
-        let head = match HeadInfo::from_block(block_id, &provider).await? {
-            Some(head) => head,
+        let finalized_block = provider
+            .get_block_with_txs(block_id)
+            .await?
+            .expect("could not find finalized block");
+
+        let head = match HeadInfo::try_from(finalized_block) {
+            Ok(head) => head,
             _ => {
                 tracing::warn!("could not get head info. Falling back to the genesis head.");
                 HeadInfo {
@@ -290,7 +295,7 @@ mod tests {
                 jwt_secret: Some(
                     "d195a64e08587a3f1560686448867220c2727550ce3e0c95c7200d0ade0f9167".to_owned(),
                 ),
-                l2_trusted_rpc_url: Some(l2_rpc.to_owned()),
+                checkpoint_sync_url: Some(l2_rpc.to_owned()),
                 rpc_port: None,
             };
             let config = Config::new(&config_path, cli_config, ChainConfig::optimism_goerli());

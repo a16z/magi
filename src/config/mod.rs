@@ -51,7 +51,7 @@ pub struct Config {
     /// This is used to authenticate with the engine API
     pub jwt_secret: String,
     /// A trusted L2 RPC URL to use for fast/checkpoint syncing
-    pub l2_trusted_rpc_url: Option<String>,
+    pub checkpoint_sync_url: Option<String>,
     /// The port of RPC server
     pub rpc_port: u16,
 }
@@ -101,7 +101,7 @@ pub struct CliConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jwt_secret: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub l2_trusted_rpc_url: Option<String>,
+    pub checkpoint_sync_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc_port: Option<u16>,
 }
@@ -123,8 +123,6 @@ pub struct ChainConfig {
     pub deposit_contract: Address,
     /// The L1 system config contract
     pub system_config_contract: Address,
-    /// The L2 output oracle contract on L1
-    pub l2_output_oracle: Address,
     /// The maximum byte size of all pending channels
     pub max_channel_size: u64,
     /// The max timeout for a channel (as measured by the frame L1 block number)
@@ -227,7 +225,6 @@ impl ChainConfig {
             system_config_contract: addr("0xAe851f927Ee40dE99aaBb7461C00f9622ab91d60"),
             batch_inbox: addr("0xff00000000000000000000000000000000000420"),
             deposit_contract: addr("0x5b47E1A08Ea6d985D6649300584e6722Ec4B1383"),
-            l2_output_oracle: addr("0xE6Dfba0953616Bacab0c9A8ecb3a9BBa77FC15c0"),
             l2_to_l1_message_passer: addr("0xEF2ec5A5465f075E010BE70966a8667c94BCe15a"),
             max_channel_size: 100_000_000,
             channel_timeout: 300,
@@ -260,7 +257,6 @@ impl ChainConfig {
             system_config_contract: addr("0xb15eea247ece011c68a614e4a77ad648ff495bc1"),
             batch_inbox: addr("0x8453100000000000000000000000000000000000"),
             deposit_contract: addr("0xe93c8cd0d409341205a592f8c4ac1a5fe5585cfa"),
-            l2_output_oracle: addr("0x2A35891ff30313CcFa6CE88dcf3858bb075A2298"),
             l2_to_l1_message_passer: addr("0x4200000000000000000000000000000000000016"),
             max_channel_size: 100_000_000,
             channel_timeout: 100,
