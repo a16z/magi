@@ -106,6 +106,7 @@ mod tests {
                 chain: ChainConfig::optimism_goerli(),
                 l2_engine_url: String::new(),
                 jwt_secret: String::new(),
+                checkpoint_sync_url: None,
                 rpc_port: 9545,
             });
 

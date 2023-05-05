@@ -14,6 +14,8 @@ use crate::common::{BlockInfo, Epoch};
 pub enum SyncMode {
     /// Fast sync mode
     Fast,
+    /// Checkpoint sync mode
+    Checkpoint,
     /// Challenge sync mode
     Challenge,
     /// Full sync mode
@@ -26,6 +28,7 @@ impl FromStr for SyncMode {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
             "fast" => Ok(Self::Fast),
+            "checkpoint" => Ok(Self::Checkpoint),
             "challenge" => Ok(Self::Challenge),
             "full" => Ok(Self::Full),
             _ => Err("invalid sync mode".to_string()),
@@ -47,6 +50,8 @@ pub struct Config {
     /// Engine API JWT Secret
     /// This is used to authenticate with the engine API
     pub jwt_secret: String,
+    /// A trusted L2 RPC URL to use for fast/checkpoint syncing
+    pub checkpoint_sync_url: Option<String>,
     /// The port of RPC server
     pub rpc_port: u16,
 }
@@ -95,6 +100,8 @@ pub struct CliConfig {
     pub l2_engine_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jwt_secret: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_sync_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc_port: Option<u16>,
 }

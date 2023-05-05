@@ -43,30 +43,34 @@ pub struct Driver<E: Engine> {
     /// L1 chain watcher
     chain_watcher: ChainWatcher,
     /// Channel to receive the shutdown signal from
-    shutdown_recv: Receiver<bool>,
+    shutdown_recv: Arc<Receiver<bool>>,
 }
 
 impl Driver<EngineApi> {
-    pub async fn from_config(config: Config, shutdown_recv: Receiver<bool>) -> Result<Self> {
+    pub async fn from_config(config: Config, shutdown_recv: Arc<Receiver<bool>>) -> Result<Self> {
         let provider = Provider::try_from(&config.l2_rpc_url)?;
 
-        let head: Option<HeadInfo> = provider
-            .get_block_with_txs(BlockId::Number(BlockNumber::Finalized))
-            .await
-            .ok()
-            .flatten()
-            .and_then(|block| block.try_into().ok());
+        let block_id = BlockId::Number(BlockNumber::Finalized);
+        let finalized_block = provider
+            .get_block_with_txs(block_id)
+            .await?
+            .expect("could not find finalized block");
 
-        let finalized_head = head
-            .as_ref()
-            .map(|h| h.l2_block_info)
-            .unwrap_or(config.chain.l2_genesis);
+        let head = match HeadInfo::try_from(finalized_block) {
+            Ok(head) => head,
+            _ => {
+                tracing::warn!("could not get head info. Falling back to the genesis head.");
+                HeadInfo {
+                    l2_block_info: config.chain.l2_genesis,
+                    l1_epoch: config.chain.l1_start_epoch,
+                }
+            }
+        };
 
-        let finalized_epoch = head
-            .map(|h| h.l1_epoch)
-            .unwrap_or(config.chain.l1_start_epoch);
+        let finalized_head = head.l2_block_info;
+        let finalized_epoch = head.l1_epoch;
 
-        tracing::info!("syncing from: {:?}", finalized_head.hash);
+        tracing::info!("starting from head: {:?}", finalized_head.hash);
 
         let config = Arc::new(config);
         let chain_watcher = ChainWatcher::new(
@@ -108,7 +112,7 @@ impl<E: Engine> Driver<E> {
             self.check_shutdown().await;
 
             if let Err(err) = self.advance().await {
-                tracing::error!(target: "magi", "fatal error: {:?}", err);
+                tracing::error!("fatal error: {:?}", err);
                 self.shutdown().await;
             }
         }
@@ -156,7 +160,6 @@ impl<E: Engine> Driver<E> {
                 .await?;
 
             tracing::info!(
-                target: "magi",
                 "head updated: {} {:?}",
                 self.engine_driver.safe_head.number,
                 self.engine_driver.safe_head.hash
@@ -265,5 +268,50 @@ impl<E: Engine> Driver<E> {
         metrics::FINALIZED_HEAD.set(self.engine_driver.finalized_head.number as i64);
         metrics::SAFE_HEAD.set(self.engine_driver.safe_head.number as i64);
         metrics::SYNCED.set(!self.unfinalized_blocks.is_empty() as i64);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{path::PathBuf, str::FromStr, sync::mpsc::channel};
+
+    use ethers::providers::{Http, Middleware};
+    use eyre::Result;
+
+    use crate::config::{ChainConfig, CliConfig};
+
+    use super::*;
+
+    #[tokio::test]
+    async fn test_new_driver_from_finalized_head() -> Result<()> {
+        if std::env::var("L1_TEST_RPC_URL").is_ok() && std::env::var("L2_TEST_RPC_URL").is_ok() {
+            let config_path = PathBuf::from_str("config.toml")?;
+            let rpc = std::env::var("L1_TEST_RPC_URL")?;
+            let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
+            let cli_config = CliConfig {
+                l1_rpc_url: Some(rpc.to_owned()),
+                l2_rpc_url: Some(l2_rpc.to_owned()),
+                l2_engine_url: None,
+                jwt_secret: Some(
+                    "d195a64e08587a3f1560686448867220c2727550ce3e0c95c7200d0ade0f9167".to_owned(),
+                ),
+                checkpoint_sync_url: Some(l2_rpc.to_owned()),
+                rpc_port: None,
+            };
+            let config = Config::new(&config_path, cli_config, ChainConfig::optimism_goerli());
+            let (_shutdown_sender, shutdown_recv) = channel();
+
+            let block_id = BlockId::Number(BlockNumber::Finalized);
+            let provider = Provider::<Http>::try_from(config.l2_rpc_url.clone())?;
+            let finalized_block = provider.get_block(block_id).await?.unwrap();
+
+            let driver = Driver::from_config(config, Arc::new(shutdown_recv)).await?;
+
+            assert_eq!(
+                driver.engine_driver.finalized_head.number,
+                finalized_block.number.unwrap().as_u64()
+            );
+        }
+        Ok(())
     }
 }

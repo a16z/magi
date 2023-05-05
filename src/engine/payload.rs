@@ -1,7 +1,11 @@
-use ethers::types::{Bytes, H160, H256, U64};
+use ethers::types::{Block, Bytes, Transaction, H160, H256, U64};
+use eyre::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::common::{Epoch, RawTransaction};
+use crate::{
+    common::{Epoch, RawTransaction},
+    config::SystemAccounts,
+};
 
 /// ## ExecutionPayload
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -35,6 +39,40 @@ pub struct ExecutionPayload {
     pub block_hash: H256,
     /// An array of transaction objects where each object is a byte list
     pub transactions: Vec<RawTransaction>,
+}
+
+impl TryFrom<Block<Transaction>> for ExecutionPayload {
+    type Error = eyre::Report;
+
+    fn try_from(value: Block<Transaction>) -> Result<Self> {
+        let encoded_txs = (*value
+            .transactions
+            .into_iter()
+            .map(|tx| RawTransaction(tx.rlp().to_vec()))
+            .collect::<Vec<_>>())
+        .to_vec();
+
+        Ok(ExecutionPayload {
+            parent_hash: value.parent_hash,
+            fee_recipient: SystemAccounts::default().fee_vault,
+            state_root: value.state_root,
+            receipts_root: value.receipts_root,
+            logs_bloom: value.logs_bloom.unwrap().as_bytes().to_vec().into(),
+            prev_randao: value.mix_hash.unwrap(),
+            block_number: value.number.unwrap(),
+            gas_limit: value.gas_limit.as_u64().into(),
+            gas_used: value.gas_used.as_u64().into(),
+            timestamp: value.timestamp.as_u64().into(),
+            extra_data: value.extra_data.clone(),
+            base_fee_per_gas: value
+                .base_fee_per_gas
+                .unwrap_or(0u64.into())
+                .as_u64()
+                .into(),
+            block_hash: value.hash.unwrap(),
+            transactions: encoded_txs,
+        })
+    }
 }
 
 /// ## PayloadAttributes
@@ -107,4 +145,42 @@ pub enum Status {
     Accepted,
     /// Payload contains an invalid block hash
     InvalidBlockHash,
+}
+
+#[cfg(test)]
+mod tests {
+
+    use ethers::{
+        providers::{Http, Middleware, Provider},
+        types::H256,
+    };
+    use eyre::Result;
+
+    use crate::engine::ExecutionPayload;
+
+    #[tokio::test]
+    async fn test_from_block_hash_to_execution_paylaod() -> Result<()> {
+        if std::env::var("L1_TEST_RPC_URL").is_ok() && std::env::var("L2_TEST_RPC_URL").is_ok() {
+            let checkpoint_hash: H256 =
+                "0xc2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973".parse()?;
+
+            let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
+            let checkpoint_sync_url = Provider::<Http>::try_from(l2_rpc)?;
+            let checkpoint_block = checkpoint_sync_url
+                .get_block_with_txs(checkpoint_hash)
+                .await?
+                .unwrap();
+
+            let payload = ExecutionPayload::try_from(checkpoint_block)?;
+
+            assert_eq!(
+                payload.block_hash,
+                "0xc2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973".parse()?
+            );
+            assert_eq!(payload.block_number, 8453214u64.into());
+            assert_eq!(payload.base_fee_per_gas, 50u64.into());
+        }
+
+        Ok(())
+    }
 }

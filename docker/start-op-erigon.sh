@@ -33,4 +33,3 @@ erigon \
     --externalcl \
     --authrpc.jwtsecret=/jwtsecret.txt \
     --rollup.sequencerhttp="https://goerli.optimism.io" \
-    --nodiscover

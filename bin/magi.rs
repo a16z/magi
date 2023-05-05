@@ -1,4 +1,4 @@
-use std::sync::mpsc::channel;
+use std::process;
 
 use clap::Parser;
 use dirs::home_dir;
@@ -6,7 +6,7 @@ use eyre::Result;
 
 use magi::{
     config::{ChainConfig, CliConfig, Config, SyncMode},
-    driver::Driver,
+    runner::Runner,
     telemetry::{self, metrics},
 };
 use serde::Serialize;
@@ -18,36 +18,19 @@ async fn main() -> Result<()> {
     let verbose = cli.verbose;
     let logs_dir = cli.logs_dir.clone();
     let logs_rotation = cli.logs_rotation.clone();
+    let checkpoint_hash = cli.checkpoint_hash.clone();
     let config = cli.to_config();
 
     let _guards = telemetry::init(verbose, logs_dir, logs_rotation);
     metrics::init()?;
 
-    match sync_mode {
-        SyncMode::Fast => panic!("fast sync not implemented"),
-        SyncMode::Full => full_sync(config).await?,
-        SyncMode::Challenge => panic!("challenge sync not implemented"),
-    };
+    let runner = Runner::from_config(config)
+        .with_sync_mode(sync_mode)
+        .with_checkpoint_hash(checkpoint_hash);
 
-    Ok(())
-}
-
-pub async fn full_sync(config: Config) -> Result<()> {
-    tracing::info!(target: "magi", "starting full sync");
-    let (shutdown_sender, shutdown_recv) = channel();
-
-    let mut driver = Driver::from_config(config, shutdown_recv).await?;
-
-    ctrlc::set_handler(move || {
-        tracing::info!(target: "magi", "shutting down");
-        shutdown_sender.send(true).expect("shutdown failure");
-    })
-    .expect("could not register shutdown handler");
-
-    // Run the driver
-    if let Err(err) = driver.start().await {
+    if let Err(err) = runner.run().await {
         tracing::error!(target: "magi", "{}", err);
-        std::process::exit(1);
+        process::exit(1);
     }
 
     Ok(())
@@ -68,13 +51,17 @@ pub struct Cli {
     #[clap(long)]
     jwt_secret: Option<String>,
     #[clap(short = 'v', long)]
-    rpc_port: Option<u16>,
-    #[clap(short = 'p', long)]
     verbose: bool,
+    #[clap(short = 'p', long)]
+    rpc_port: Option<u16>,
     #[clap(long)]
     logs_dir: Option<String>,
     #[clap(long)]
     logs_rotation: Option<String>,
+    #[clap(long)]
+    checkpoint_hash: Option<String>,
+    #[clap(long)]
+    checkpoint_sync_url: Option<String>,
 }
 
 impl Cli {
@@ -98,6 +85,7 @@ impl From<Cli> for CliConfig {
             l2_rpc_url: value.l2_rpc_url,
             l2_engine_url: value.l2_engine_url,
             jwt_secret: value.jwt_secret,
+            checkpoint_sync_url: value.checkpoint_sync_url,
             rpc_port: value.rpc_port,
         }
     }
