@@ -17,6 +17,8 @@ pub struct BlockHandler {
 
 impl Handler for BlockHandler {
     fn handle(&self, msg: Message) -> MessageAcceptance {
+        tracing::debug!("received block");
+
         match decode_block_msg(msg.data) {
             Ok(payload) => {
                 if block_valid(&payload) {
