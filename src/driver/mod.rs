@@ -173,9 +173,9 @@ impl<E: Engine> Driver<E> {
                 .await?;
 
             tracing::info!(
-                "head updated: {} {:?}",
+                "safe head updated: {} {:?}",
                 self.engine_driver.safe_head.number,
-                self.engine_driver.safe_head.hash
+                self.engine_driver.safe_head.hash,
             );
 
             let new_safe_head = self.engine_driver.safe_head;

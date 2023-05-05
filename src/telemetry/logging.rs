@@ -56,7 +56,7 @@ pub fn build_subscriber(verbose: bool, appender: Option<RollingFileAppender>) ->
         })
     });
 
-    let stdout_formatting_layer = AnsiTermLayer.with_filter(stdout_env_filter);
+    let stdout_formatting_layer = AnsiTermLayer { verbose }.with_filter(stdout_env_filter);
 
     // If a file appender is provided, log to it and stdout, otherwise just log to stdout
     if let Some(appender) = appender {
@@ -124,7 +124,9 @@ impl tracing::field::Visit for AnsiVisitor {
 
 /// An Ansi Term layer for tracing
 #[derive(Debug)]
-pub struct AnsiTermLayer;
+pub struct AnsiTermLayer {
+    verbose: bool,
+}
 
 impl<S> Layer<S> for AnsiTermLayer
 where
@@ -136,13 +138,15 @@ where
         _ctx: tracing_subscriber::layer::Context<'_, S>,
     ) {
         // Print the timestamp
-        let utc: chrono::DateTime<chrono::Utc> = chrono::Utc::now();
-        print!("[{}] ", Cyan.paint(utc.to_rfc2822()));
+        let utc: String = chrono::Utc::now().to_rfc2822();
+        let strip_len = utc.find(|c| c == '+').unwrap_or(utc.len());
+        let formatted_utc = utc[..strip_len].trim_end();
+        print!("[{}] ", Cyan.paint(formatted_utc));
 
         // Print the level prefix
         match *event.metadata().level() {
             Level::ERROR => {
-                eprint!("{}: ", Red.paint("ERROR"));
+                print!("{}: ", Red.paint("ERROR"));
             }
             Level::WARN => {
                 print!("{}: ", Yellow.paint("WARN"));
@@ -158,47 +162,52 @@ where
             }
         }
 
-        print!("{} ", Purple.paint(event.metadata().target()));
+        if self.verbose {
+            print!("{} ", Purple.paint(event.metadata().target()));
 
-        let original_location = event
-            .metadata()
-            .name()
-            .split(' ')
-            .last()
-            .unwrap_or_default();
-        let relative_path = current_dir()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string();
+            let original_location = event
+                .metadata()
+                .name()
+                .split(' ')
+                .last()
+                .unwrap_or_default();
 
-        // Remove common prefixes from the location and relative path
-        let location_path = std::path::Path::new(original_location);
-        let relative_path_path = std::path::Path::new(&relative_path);
-        let common_prefix = location_path
-            .ancestors()
-            .collect::<Vec<&Path>>()
-            .iter()
-            .cloned()
-            .rev()
-            .zip(
-                relative_path_path
-                    .ancestors()
-                    .collect::<Vec<&Path>>()
-                    .iter()
-                    .cloned()
-                    .rev(),
-            )
-            .take_while(|(a, b)| a == b)
-            .last()
-            .map(|(a, _)| a)
-            .unwrap_or_else(|| std::path::Path::new(""));
-        let location = location_path
-            .strip_prefix(common_prefix)
-            .unwrap_or(location_path)
-            .to_str()
-            .unwrap_or(original_location);
-        let location = location.strip_prefix('/').unwrap_or(location);
-        print!("at {} ", Cyan.paint(location.to_string()));
+            let relative_path = current_dir()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+
+            // Remove common prefixes from the location and relative path
+            let location_path = std::path::Path::new(original_location);
+            let relative_path_path = std::path::Path::new(&relative_path);
+            let common_prefix = location_path
+                .ancestors()
+                .collect::<Vec<&Path>>()
+                .iter()
+                .cloned()
+                .rev()
+                .zip(
+                    relative_path_path
+                        .ancestors()
+                        .collect::<Vec<&Path>>()
+                        .iter()
+                        .cloned()
+                        .rev(),
+                )
+                .take_while(|(a, b)| a == b)
+                .last()
+                .map(|(a, _)| a)
+                .unwrap_or_else(|| std::path::Path::new(""));
+
+            let location = location_path
+                .strip_prefix(common_prefix)
+                .unwrap_or(location_path)
+                .to_str()
+                .unwrap_or(original_location);
+
+            let location = location.strip_prefix('/').unwrap_or(location);
+            print!("at {} ", Cyan.paint(location.to_string()));
+        }
 
         let mut visitor = AnsiVisitor;
         event.record(&mut visitor);

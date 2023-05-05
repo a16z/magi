@@ -39,7 +39,6 @@ impl<E: Engine> EngineDriver<E> {
 
         if let Some(block) = block {
             if should_skip(&block, &attributes)? {
-                tracing::info!("skipping block");
                 self.skip_attributes(attributes, block)
             } else {
                 self.process_attributes(attributes).await
@@ -55,7 +54,11 @@ impl<E: Engine> EngineDriver<E> {
             self.unsafe_head.hash = payload.block_hash;
             self.update_forkchoice();
 
-            tracing::info!("unsafe head updated: {:?}", self.unsafe_head.hash);
+            tracing::info!(
+                "head updated: {} {:?}",
+                self.unsafe_head.number,
+                self.unsafe_head.hash,
+            );
         }
 
         Ok(())
