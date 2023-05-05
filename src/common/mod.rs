@@ -78,7 +78,7 @@ impl From<Epoch> for Value {
 }
 
 impl From<&ExecutionPayload> for BlockInfo {
-    fn from(value: ExecutionPayload) -> Self {
+    fn from(value: &ExecutionPayload) -> Self {
         Self {
             number: value.block_number.as_u64(),
             hash: value.block_hash,
