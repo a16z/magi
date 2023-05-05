@@ -111,6 +111,8 @@ pub struct CliConfig {
 pub struct ChainConfig {
     /// The network name
     pub network: String,
+    /// The chain id
+    pub chain_id: u64,
     /// The L1 block referenced by the L2 chain
     pub l1_start_epoch: Epoch,
     /// The L2 genesis block info
@@ -203,6 +205,7 @@ impl ChainConfig {
     pub fn optimism_goerli() -> Self {
         Self {
             network: "optimism-goerli".to_string(),
+            chain_id: 420,
             l1_start_epoch: Epoch {
                 hash: hash("0x6ffc1bf3754c01f6bb9fe057c1578b87a8571ce2e9be5ca14bace6eccfd336c7"),
                 number: 8300214,
@@ -237,6 +240,7 @@ impl ChainConfig {
     pub fn base_goerli() -> Self {
         Self {
             network: "base-goerli".to_string(),
+            chain_id: 84531,
             l1_start_epoch: Epoch {
                 number: 8410981,
                 hash: hash("0x73d89754a1e0387b89520d989d3be9c37c1f32495a88faf1ea05c61121ab0d19"),

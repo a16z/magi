@@ -9,17 +9,17 @@ use ethers::{
     types::{BlockId, BlockNumber},
 };
 use eyre::Result;
-use tokio::time::sleep;
+use tokio::{time::sleep, sync::mpsc::Receiver};
 
 use crate::{
     common::{BlockInfo, Epoch},
     config::Config,
     derive::{state::State, Pipeline},
     driver::types::HeadInfo,
-    engine::{Engine, EngineApi},
+    engine::{Engine, EngineApi, ExecutionPayload},
     l1::{BlockUpdate, ChainWatcher},
     rpc,
-    telemetry::metrics,
+    telemetry::metrics, network::{handlers::block_handler::BlockHandler, service::Service},
 };
 
 use self::engine_driver::EngineDriver;
@@ -44,6 +44,8 @@ pub struct Driver<E: Engine> {
     chain_watcher: ChainWatcher,
     /// Channel to receive the shutdown signal from
     shutdown_recv: Arc<Receiver<bool>>,
+    /// Channel to receive unsafe block from
+    unsafe_block_recv: tokio::sync::mpsc::Receiver<ExecutionPayload>,
 }
 
 impl Driver<EngineApi> {
@@ -88,7 +90,14 @@ impl Driver<EngineApi> {
         let engine_driver = EngineDriver::new(finalized_head, finalized_epoch, provider, &config)?;
         let pipeline = Pipeline::new(state.clone(), config.clone())?;
 
-        let _addr = rpc::run_server(config).await?;
+        let _addr = rpc::run_server(config.clone()).await?;
+
+        let (block_handler, unsafe_block_recv) = BlockHandler::new(config.chain.chain_id);
+
+        Service::new("0.0.0.0:9876".parse()?, config.chain.chain_id)
+            .add_handler(Box::new(block_handler))
+            .start()?;
+
 
         Ok(Self {
             engine_driver,
@@ -98,6 +107,7 @@ impl Driver<EngineApi> {
             state,
             chain_watcher,
             shutdown_recv,
+            unsafe_block_recv,
         })
     }
 }
@@ -178,6 +188,10 @@ impl<E: Engine> Driver<E> {
             self.update_finalized();
 
             self.update_metrics();
+        }
+
+        while let Ok(payload) = self.unsafe_block_recv.try_recv() {
+            self.engine_driver.handle_unsafe_payload(payload).await?;
         }
 
         Ok(())

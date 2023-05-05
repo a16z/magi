@@ -21,11 +21,13 @@ pub struct EngineDriver<E: Engine> {
     provider: Provider<Http>,
     /// Blocktime of the L2 chain
     blocktime: u64,
-    /// Most recent block hash that can be derived from L1 data
+    /// Most recent block found on the p2p network
+    pub unsafe_head: BlockInfo,
+    /// Most recent block that can be derived from L1 data
     pub safe_head: BlockInfo,
     /// Batch epoch of the safe head
     pub safe_epoch: Epoch,
-    /// Most recent block hash that can be derived from finalized L1 data
+    /// Most recent block that can be derived from finalized L1 data
     pub finalized_head: BlockInfo,
     /// Batch epoch of the finalized head
     pub finalized_epoch: Epoch,
@@ -47,12 +49,25 @@ impl<E: Engine> EngineDriver<E> {
         }
     }
 
+    pub async fn handle_unsafe_payload(&mut self, payload: ExecutionPayload) -> Result<()> {
+        if payload.parent_hash == self.unsafe_head.hash {
+            self.push_payload(payload.clone()).await?;
+            self.unsafe_head.hash = payload.block_hash;
+            self.update_forkchoice();
+
+            tracing::info!("unsafe head updated: {:?}", self.unsafe_head.hash);
+        }
+
+        Ok(())
+    }
+
     pub fn update_finalized(&mut self, head: BlockInfo, epoch: Epoch) {
         self.finalized_head = head;
         self.finalized_epoch = epoch;
     }
 
     pub fn reorg(&mut self) {
+        self.unsafe_head = self.finalized_head;
         self.safe_head = self.finalized_head;
         self.safe_epoch = self.finalized_epoch;
     }
@@ -143,12 +158,16 @@ impl<E: Engine> EngineDriver<E> {
             self.safe_epoch = new_epoch;
         }
 
+        if self.safe_head.number > self.unsafe_head.number {
+            self.unsafe_head = new_head;
+        }
+
         Ok(())
     }
 
     fn create_forkchoice_state(&self) -> ForkchoiceState {
         ForkchoiceState {
-            head_block_hash: self.safe_head.hash,
+            head_block_hash: self.unsafe_head.hash,
             safe_block_hash: self.safe_head.hash,
             finalized_block_hash: self.finalized_head.hash,
         }
@@ -204,6 +223,7 @@ impl EngineDriver<EngineApi> {
             engine,
             provider,
             blocktime: config.chain.blocktime,
+            unsafe_head: finalized_head,
             safe_head: finalized_head,
             safe_epoch: finalized_epoch,
             finalized_head,
