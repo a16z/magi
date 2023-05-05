@@ -9,5 +9,5 @@ exec magi \
     --l2-engine-url http://${EXECUTION_CLIENT}:8551 \
     --rpc-port $RPC_PORT \
     --sync-mode $SYNC_MODE \
-    --checkpoint-sync-url $TRUSTED_L2_RPC_URL \
+    --checkpoint-sync-url $CHECKPOINT_SYNC_URL \
     --checkpoint-hash $CHECKPOINT_HASH
