@@ -119,8 +119,8 @@ where
     /// Removes a pending channel from the bank
     fn remove(&mut self) -> Option<PendingChannel> {
         match self.pending_channels.is_empty() {
-            true => Some(self.pending_channels.remove(0)),
-            false => None,
+            true => None,
+            false => Some(self.pending_channels.remove(0)),
         }
     }
 
