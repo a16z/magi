@@ -11,13 +11,13 @@ async fn main() -> Result<()> {
 
     let addr = "0.0.0.0:9876".parse()?;
     let chain_id = 420;
-    let (block_handler, mut block_recv) = BlockHandler::new(chain_id);
+    let (block_handler, block_recv) = BlockHandler::new(chain_id);
 
     Service::new(addr, chain_id)
         .add_handler(Box::new(block_handler))
         .start()?;
 
-    while let Some(payload) = block_recv.recv().await {
+    while let Ok(payload) = block_recv.recv() {
         tracing::info!("received unsafe block with hash: {:?}", payload.block_hash);
     }
 

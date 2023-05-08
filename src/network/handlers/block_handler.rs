@@ -1,10 +1,10 @@
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::SystemTime;
 
 use ethers::types::{Bytes, H256};
 use eyre::Result;
 use libp2p::gossipsub::{IdentTopic, Message, MessageAcceptance, TopicHash};
 use ssz_rs::{prelude::*, List, Vector, U256};
-use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 use crate::{common::RawTransaction, engine::ExecutionPayload};
 
@@ -22,7 +22,7 @@ impl Handler for BlockHandler {
         match decode_block_msg(msg.data) {
             Ok(payload) => {
                 if block_valid(&payload) {
-                    _ = self.block_sender.try_send(payload);
+                    _ = self.block_sender.send(payload);
                     MessageAcceptance::Accept
                 } else {
                     tracing::warn!("invalid unsafe block");
@@ -43,7 +43,7 @@ impl Handler for BlockHandler {
 
 impl BlockHandler {
     pub fn new(chain_id: u64) -> (Self, Receiver<ExecutionPayload>) {
-        let (sender, recv) = channel(256);
+        let (sender, recv) = channel();
 
         let handler = Self {
             chain_id,

@@ -66,7 +66,7 @@ impl TryFrom<Block<Transaction>> for ExecutionPayload {
             extra_data: value.extra_data.clone(),
             base_fee_per_gas: value
                 .base_fee_per_gas
-                .unwrap_or(0u64.into())
+                .unwrap_or_else(|| 0u64.into())
                 .as_u64()
                 .into(),
             block_hash: value.hash.unwrap(),

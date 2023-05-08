@@ -6,7 +6,6 @@ use ethers::{
     utils::keccak256,
 };
 use eyre::Result;
-use tokio::spawn;
 
 use crate::{
     common::{BlockInfo, Epoch},
@@ -142,7 +141,7 @@ impl<E: Engine> EngineDriver<E> {
         let forkchoice = self.create_forkchoice_state();
         let engine = self.engine.clone();
 
-        spawn(async move {
+        tokio::spawn(async move {
             let update = engine.forkchoice_updated(forkchoice, None).await?;
             if update.payload_status.status != Status::Valid {
                 eyre::bail!(
@@ -155,7 +154,12 @@ impl<E: Engine> EngineDriver<E> {
         });
     }
 
-    fn update_safe_head(&mut self, new_head: BlockInfo, new_epoch: Epoch, reorg_unsafe: bool) -> Result<()> {
+    fn update_safe_head(
+        &mut self,
+        new_head: BlockInfo,
+        new_epoch: Epoch,
+        reorg_unsafe: bool,
+    ) -> Result<()> {
         if self.safe_head != new_head {
             self.safe_head = new_head;
             self.safe_epoch = new_epoch;
