@@ -48,17 +48,15 @@ impl<E: Engine> EngineDriver<E> {
     }
 
     pub async fn handle_unsafe_payload(&mut self, payload: &ExecutionPayload) -> Result<()> {
-        if payload.parent_hash == self.unsafe_head.hash {
-            self.push_payload(payload.clone()).await?;
-            self.unsafe_head = payload.into();
-            self.update_forkchoice();
+        self.push_payload(payload.clone()).await?;
+        self.unsafe_head = payload.into();
+        self.update_forkchoice();
 
-            tracing::info!(
-                "head updated: {} {:?}",
-                self.unsafe_head.number,
-                self.unsafe_head.hash,
-            );
-        }
+        tracing::info!(
+            "head updated: {} {:?}",
+            self.unsafe_head.number,
+            self.unsafe_head.hash,
+        );
 
         Ok(())
     }

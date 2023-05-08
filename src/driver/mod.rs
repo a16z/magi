@@ -214,10 +214,10 @@ impl<E: Engine> Driver<E> {
             let next_unsafe_payload = self
                 .future_unsafe_blocks
                 .iter()
-                .find(|p| p.block_hash == self.engine_driver.unsafe_head.parent_hash);
+                .find(|p| p.parent_hash == self.engine_driver.unsafe_head.hash);
 
             if let Some(payload) = next_unsafe_payload {
-                self.engine_driver.handle_unsafe_payload(payload).await?;
+                _ = self.engine_driver.handle_unsafe_payload(payload).await;
             }
         }
 
