@@ -100,7 +100,11 @@ impl<E: Engine> EngineDriver<E> {
         Ok(())
     }
 
-    async fn skip_attributes(&mut self, attributes: PayloadAttributes, block: Block<H256>) -> Result<()> {
+    async fn skip_attributes(
+        &mut self,
+        attributes: PayloadAttributes,
+        block: Block<H256>,
+    ) -> Result<()> {
         let new_epoch = *attributes.epoch.as_ref().unwrap();
         let new_head = BlockInfo::try_from(block)?;
         self.update_safe_head(new_head, new_epoch, false)?;
