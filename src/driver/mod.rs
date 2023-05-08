@@ -16,8 +16,9 @@ use crate::{
     config::Config,
     derive::{state::State, Pipeline},
     driver::types::HeadInfo,
-    engine::{Engine, EngineApi},
+    engine::{Engine, EngineApi, ExecutionPayload},
     l1::{BlockUpdate, ChainWatcher},
+    network::{handlers::block_handler::BlockHandler, service::Service},
     rpc,
     telemetry::metrics,
 };
@@ -38,16 +39,20 @@ pub struct Driver<E: Engine> {
     unfinalized_blocks: Vec<(BlockInfo, Epoch, u64, u64)>,
     /// Current finalized L1 block number
     finalized_l1_block_number: u64,
+    /// List of unsafe blocks that have not been applied yet
+    future_unsafe_blocks: Vec<ExecutionPayload>,
     /// State struct to keep track of global state
     state: Arc<RwLock<State>>,
     /// L1 chain watcher
     chain_watcher: ChainWatcher,
     /// Channel to receive the shutdown signal from
-    shutdown_recv: Arc<Receiver<bool>>,
+    shutdown_recv: Arc<Receiver<()>>,
+    /// Channel to receive unsafe block from
+    unsafe_block_recv: Receiver<ExecutionPayload>,
 }
 
 impl Driver<EngineApi> {
-    pub async fn from_config(config: Config, shutdown_recv: Arc<Receiver<bool>>) -> Result<Self> {
+    pub async fn from_config(config: Config, shutdown_recv: Arc<Receiver<()>>) -> Result<Self> {
         let provider = Provider::try_from(&config.l2_rpc_url)?;
 
         let block_id = BlockId::Number(BlockNumber::Finalized);
@@ -88,16 +93,24 @@ impl Driver<EngineApi> {
         let engine_driver = EngineDriver::new(finalized_head, finalized_epoch, provider, &config)?;
         let pipeline = Pipeline::new(state.clone(), config.clone())?;
 
-        let _addr = rpc::run_server(config).await?;
+        let _addr = rpc::run_server(config.clone()).await?;
+
+        let (block_handler, unsafe_block_recv) = BlockHandler::new(config.chain.chain_id);
+
+        Service::new("0.0.0.0:9876".parse()?, config.chain.chain_id)
+            .add_handler(Box::new(block_handler))
+            .start()?;
 
         Ok(Self {
             engine_driver,
             pipeline,
             unfinalized_blocks: Vec::new(),
             finalized_l1_block_number: 0,
+            future_unsafe_blocks: Vec::new(),
             state,
             chain_watcher,
             shutdown_recv,
+            unsafe_block_recv,
         })
     }
 }
@@ -125,10 +138,8 @@ impl<E: Engine> Driver<E> {
 
     /// Checks for shutdown signal and shuts down if received
     async fn check_shutdown(&self) {
-        if let Ok(shutdown) = self.shutdown_recv.try_recv() {
-            if shutdown {
-                self.shutdown().await;
-            }
+        if self.shutdown_recv.try_recv().is_ok() {
+            self.shutdown().await;
         }
     }
 
@@ -139,14 +150,26 @@ impl<E: Engine> Driver<E> {
         }
     }
 
+    /// Attempts to advance the execution node forward using either L1 info our
+    /// blocks received on the p2p network.
+    async fn advance(&mut self) -> Result<()> {
+        self.advance_safe_head().await?;
+        self.advance_unsafe_head().await?;
+
+        self.update_finalized();
+        self.update_metrics();
+
+        Ok(())
+    }
+
     /// Attempts to advance the execution node forward one L1 block using derived
     /// L1 data. Errors if the most recent PayloadAttributes from the pipeline
     /// does not successfully advance the node
-    async fn advance(&mut self) -> Result<()> {
+    async fn advance_safe_head(&mut self) -> Result<()> {
         self.handle_next_block_update().await?;
         self.update_state_head()?;
 
-        while let Some(next_attributes) = self.pipeline.next() {
+        for next_attributes in self.pipeline.by_ref() {
             let l1_inclusion_block = next_attributes
                 .l1_inclusion_block
                 .ok_or(eyre::eyre!("attributes without inclusion block"))?;
@@ -160,9 +183,9 @@ impl<E: Engine> Driver<E> {
                 .await?;
 
             tracing::info!(
-                "head updated: {} {:?}",
+                "safe head updated: {} {:?}",
                 self.engine_driver.safe_head.number,
-                self.engine_driver.safe_head.hash
+                self.engine_driver.safe_head.hash,
             );
 
             let new_safe_head = self.engine_driver.safe_head;
@@ -174,10 +197,28 @@ impl<E: Engine> Driver<E> {
                 l1_inclusion_block,
                 seq_number,
             );
-            self.unfinalized_blocks.push(unfinalized_entry);
-            self.update_finalized();
 
-            self.update_metrics();
+            self.unfinalized_blocks.push(unfinalized_entry);
+        }
+
+        Ok(())
+    }
+
+    async fn advance_unsafe_head(&mut self) -> Result<()> {
+        while let Ok(payload) = self.unsafe_block_recv.try_recv() {
+            self.future_unsafe_blocks.push(payload);
+            self.future_unsafe_blocks.retain(|payload| {
+                payload.block_number.as_u64() > self.engine_driver.unsafe_head.number
+            });
+
+            let next_unsafe_payload = self
+                .future_unsafe_blocks
+                .iter()
+                .find(|p| p.parent_hash == self.engine_driver.unsafe_head.hash);
+
+            if let Some(payload) = next_unsafe_payload {
+                _ = self.engine_driver.handle_unsafe_payload(payload).await;
+            }
         }
 
         Ok(())

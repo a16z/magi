@@ -26,7 +26,7 @@ pub struct Runner {
     config: Config,
     sync_mode: SyncMode,
     checkpoint_hash: Option<String>,
-    shutdown_recv: Arc<Receiver<bool>>,
+    shutdown_recv: Arc<Receiver<()>>,
 }
 
 impl Runner {
@@ -35,7 +35,7 @@ impl Runner {
         ctrlc::set_handler(move || {
             tracing::info!("shutting down");
             shutdown_sender
-                .send(true)
+                .send(())
                 .expect("could not send shutdown signal");
         })
         .expect("could not register shutdown handler");
@@ -197,11 +197,9 @@ impl Runner {
     }
 
     fn check_shutdown(&self) -> Result<()> {
-        if let Ok(shutdown) = self.shutdown_recv.try_recv() {
-            if shutdown {
-                tracing::warn!("shutting down");
-                process::exit(0);
-            }
+        if self.shutdown_recv.try_recv().is_ok() {
+            tracing::warn!("shutting down");
+            process::exit(0);
         }
 
         Ok(())

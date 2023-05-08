@@ -10,6 +10,8 @@ use eyre::Result;
 use figment::value::{Dict, Tag, Value};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 
+use crate::engine::ExecutionPayload;
+
 /// Selected block header info
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct BlockInfo {
@@ -72,6 +74,17 @@ impl From<Epoch> for Value {
         dict.insert("number".to_string(), Value::from(value.number));
         dict.insert("timestamp".to_string(), Value::from(value.timestamp));
         Value::Dict(Tag::Default, dict)
+    }
+}
+
+impl From<&ExecutionPayload> for BlockInfo {
+    fn from(value: &ExecutionPayload) -> Self {
+        Self {
+            number: value.block_number.as_u64(),
+            hash: value.block_hash,
+            parent_hash: value.parent_hash,
+            timestamp: value.timestamp.as_u64(),
+        }
     }
 }
 

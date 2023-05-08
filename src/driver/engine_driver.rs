@@ -6,7 +6,6 @@ use ethers::{
     utils::keccak256,
 };
 use eyre::Result;
-use tokio::spawn;
 
 use crate::{
     common::{BlockInfo, Epoch},
@@ -21,11 +20,13 @@ pub struct EngineDriver<E: Engine> {
     provider: Provider<Http>,
     /// Blocktime of the L2 chain
     blocktime: u64,
-    /// Most recent block hash that can be derived from L1 data
+    /// Most recent block found on the p2p network
+    pub unsafe_head: BlockInfo,
+    /// Most recent block that can be derived from L1 data
     pub safe_head: BlockInfo,
     /// Batch epoch of the safe head
     pub safe_epoch: Epoch,
-    /// Most recent block hash that can be derived from finalized L1 data
+    /// Most recent block that can be derived from finalized L1 data
     pub finalized_head: BlockInfo,
     /// Batch epoch of the finalized head
     pub finalized_epoch: Epoch,
@@ -37,7 +38,6 @@ impl<E: Engine> EngineDriver<E> {
 
         if let Some(block) = block {
             if should_skip(&block, &attributes)? {
-                tracing::info!("skipping block");
                 self.skip_attributes(attributes, block)
             } else {
                 self.process_attributes(attributes).await
@@ -47,12 +47,27 @@ impl<E: Engine> EngineDriver<E> {
         }
     }
 
+    pub async fn handle_unsafe_payload(&mut self, payload: &ExecutionPayload) -> Result<()> {
+        self.push_payload(payload.clone()).await?;
+        self.unsafe_head = payload.into();
+        self.update_forkchoice();
+
+        tracing::info!(
+            "head updated: {} {:?}",
+            self.unsafe_head.number,
+            self.unsafe_head.hash,
+        );
+
+        Ok(())
+    }
+
     pub fn update_finalized(&mut self, head: BlockInfo, epoch: Epoch) {
         self.finalized_head = head;
         self.finalized_epoch = epoch;
     }
 
     pub fn reorg(&mut self) {
+        self.unsafe_head = self.finalized_head;
         self.safe_head = self.finalized_head;
         self.safe_epoch = self.finalized_epoch;
     }
@@ -78,7 +93,7 @@ impl<E: Engine> EngineDriver<E> {
         };
 
         self.push_payload(payload).await?;
-        self.update_safe_head(new_head, new_epoch)?;
+        self.update_safe_head(new_head, new_epoch, true)?;
         self.update_forkchoice();
 
         Ok(())
@@ -87,7 +102,7 @@ impl<E: Engine> EngineDriver<E> {
     fn skip_attributes(&mut self, attributes: PayloadAttributes, block: Block<H256>) -> Result<()> {
         let new_epoch = *attributes.epoch.as_ref().unwrap();
         let new_head = BlockInfo::try_from(block)?;
-        self.update_safe_head(new_head, new_epoch)?;
+        self.update_safe_head(new_head, new_epoch, false)?;
 
         Ok(())
     }
@@ -124,7 +139,7 @@ impl<E: Engine> EngineDriver<E> {
         let forkchoice = self.create_forkchoice_state();
         let engine = self.engine.clone();
 
-        spawn(async move {
+        tokio::spawn(async move {
             let update = engine.forkchoice_updated(forkchoice, None).await?;
             if update.payload_status.status != Status::Valid {
                 eyre::bail!(
@@ -137,10 +152,19 @@ impl<E: Engine> EngineDriver<E> {
         });
     }
 
-    fn update_safe_head(&mut self, new_head: BlockInfo, new_epoch: Epoch) -> Result<()> {
+    fn update_safe_head(
+        &mut self,
+        new_head: BlockInfo,
+        new_epoch: Epoch,
+        reorg_unsafe: bool,
+    ) -> Result<()> {
         if self.safe_head != new_head {
             self.safe_head = new_head;
             self.safe_epoch = new_epoch;
+        }
+
+        if reorg_unsafe || self.safe_head.number > self.unsafe_head.number {
+            self.unsafe_head = new_head;
         }
 
         Ok(())
@@ -148,7 +172,7 @@ impl<E: Engine> EngineDriver<E> {
 
     fn create_forkchoice_state(&self) -> ForkchoiceState {
         ForkchoiceState {
-            head_block_hash: self.safe_head.hash,
+            head_block_hash: self.unsafe_head.hash,
             safe_block_hash: self.safe_head.hash,
             finalized_block_hash: self.finalized_head.hash,
         }
@@ -204,6 +228,7 @@ impl EngineDriver<EngineApi> {
             engine,
             provider,
             blocktime: config.chain.blocktime,
+            unsafe_head: finalized_head,
             safe_head: finalized_head,
             safe_epoch: finalized_epoch,
             finalized_head,
