@@ -38,8 +38,9 @@ impl<E: Engine> EngineDriver<E> {
 
         if let Some(block) = block {
             if should_skip(&block, &attributes)? {
-                self.skip_attributes(attributes, block)
+                self.skip_attributes(attributes, block).await
             } else {
+                self.unsafe_head = self.safe_head;
                 self.process_attributes(attributes).await
             }
         } else {
@@ -50,7 +51,7 @@ impl<E: Engine> EngineDriver<E> {
     pub async fn handle_unsafe_payload(&mut self, payload: &ExecutionPayload) -> Result<()> {
         self.push_payload(payload.clone()).await?;
         self.unsafe_head = payload.into();
-        self.update_forkchoice();
+        self.update_forkchoice().await?;
 
         tracing::info!(
             "head updated: {} {:?}",
@@ -94,15 +95,20 @@ impl<E: Engine> EngineDriver<E> {
 
         self.push_payload(payload).await?;
         self.update_safe_head(new_head, new_epoch, true)?;
-        self.update_forkchoice();
+        self.update_forkchoice().await?;
 
         Ok(())
     }
 
-    fn skip_attributes(&mut self, attributes: PayloadAttributes, block: Block<H256>) -> Result<()> {
+    async fn skip_attributes(
+        &mut self,
+        attributes: PayloadAttributes,
+        block: Block<H256>,
+    ) -> Result<()> {
         let new_epoch = *attributes.epoch.as_ref().unwrap();
         let new_head = BlockInfo::try_from(block)?;
         self.update_safe_head(new_head, new_epoch, false)?;
+        self.update_forkchoice().await?;
 
         Ok(())
     }
@@ -135,21 +141,18 @@ impl<E: Engine> EngineDriver<E> {
         Ok(())
     }
 
-    fn update_forkchoice(&self) {
+    async fn update_forkchoice(&self) -> Result<()> {
         let forkchoice = self.create_forkchoice_state();
-        let engine = self.engine.clone();
 
-        tokio::spawn(async move {
-            let update = engine.forkchoice_updated(forkchoice, None).await?;
-            if update.payload_status.status != Status::Valid {
-                eyre::bail!(
-                    "could not accept new forkchoice: {:?}",
-                    update.payload_status.validation_error
-                );
-            }
+        let update = self.engine.forkchoice_updated(forkchoice, None).await?;
+        if update.payload_status.status != Status::Valid {
+            eyre::bail!(
+                "could not accept new forkchoice: {:?}",
+                update.payload_status.validation_error
+            );
+        }
 
-            Ok(())
-        });
+        Ok(())
     }
 
     fn update_safe_head(
