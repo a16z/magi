@@ -38,7 +38,7 @@ impl<E: Engine> EngineDriver<E> {
 
         if let Some(block) = block {
             if should_skip(&block, &attributes)? {
-                self.skip_attributes(attributes, block)
+                self.skip_attributes(attributes, block).await
             } else {
                 self.unsafe_head = self.safe_head;
                 self.process_attributes(attributes).await
@@ -100,10 +100,11 @@ impl<E: Engine> EngineDriver<E> {
         Ok(())
     }
 
-    fn skip_attributes(&mut self, attributes: PayloadAttributes, block: Block<H256>) -> Result<()> {
+    async fn skip_attributes(&mut self, attributes: PayloadAttributes, block: Block<H256>) -> Result<()> {
         let new_epoch = *attributes.epoch.as_ref().unwrap();
         let new_head = BlockInfo::try_from(block)?;
         self.update_safe_head(new_head, new_epoch, false)?;
+        self.update_forkchoice().await?;
 
         Ok(())
     }
