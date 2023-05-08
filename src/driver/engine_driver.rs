@@ -96,7 +96,7 @@ impl<E: Engine> EngineDriver<E> {
         };
 
         self.push_payload(payload).await?;
-        self.update_safe_head(new_head, new_epoch)?;
+        self.update_safe_head(new_head, new_epoch, true)?;
         self.update_forkchoice();
 
         Ok(())
@@ -105,7 +105,7 @@ impl<E: Engine> EngineDriver<E> {
     fn skip_attributes(&mut self, attributes: PayloadAttributes, block: Block<H256>) -> Result<()> {
         let new_epoch = *attributes.epoch.as_ref().unwrap();
         let new_head = BlockInfo::try_from(block)?;
-        self.update_safe_head(new_head, new_epoch)?;
+        self.update_safe_head(new_head, new_epoch, false)?;
 
         Ok(())
     }
@@ -155,13 +155,13 @@ impl<E: Engine> EngineDriver<E> {
         });
     }
 
-    fn update_safe_head(&mut self, new_head: BlockInfo, new_epoch: Epoch) -> Result<()> {
+    fn update_safe_head(&mut self, new_head: BlockInfo, new_epoch: Epoch, reorg_unsafe: bool) -> Result<()> {
         if self.safe_head != new_head {
             self.safe_head = new_head;
             self.safe_epoch = new_epoch;
         }
 
-        if self.safe_head.number > self.unsafe_head.number {
+        if reorg_unsafe || self.safe_head.number > self.unsafe_head.number {
             self.unsafe_head = new_head;
         }
 
