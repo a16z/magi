@@ -59,8 +59,7 @@ impl Driver<EngineApi> {
         let finalized_block = provider.get_block_with_txs(block_id).await?;
 
         let head = finalized_block
-            .map(|block| HeadInfo::try_from(block).ok())
-            .flatten()
+            .and_then(|block| HeadInfo::try_from(block).ok())
             .unwrap_or_else(|| {
                 tracing::warn!("could not get head info. Falling back to the genesis head.");
                 HeadInfo {
@@ -210,8 +209,6 @@ impl<E: Engine> Driver<E> {
 
                 unsafe_block_num > synced_block_num && unsafe_block_num - synced_block_num < 256
             });
-
-            tracing::info!("unsafe blocks size: {}", self.future_unsafe_blocks.len());
 
             let next_unsafe_payload = self
                 .future_unsafe_blocks
