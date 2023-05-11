@@ -56,21 +56,18 @@ impl Driver<EngineApi> {
         let provider = Provider::try_from(&config.l2_rpc_url)?;
 
         let block_id = BlockId::Number(BlockNumber::Finalized);
-        let finalized_block = provider
-            .get_block_with_txs(block_id)
-            .await?
-            .expect("could not find finalized block");
+        let finalized_block = provider.get_block_with_txs(block_id).await?;
 
-        let head = match HeadInfo::try_from(finalized_block) {
-            Ok(head) => head,
-            _ => {
+        let head = finalized_block
+            .map(|block| HeadInfo::try_from(block).ok())
+            .flatten()
+            .unwrap_or_else(|| {
                 tracing::warn!("could not get head info. Falling back to the genesis head.");
                 HeadInfo {
                     l2_block_info: config.chain.l2_genesis,
                     l1_epoch: config.chain.l1_start_epoch,
                 }
-            }
-        };
+            });
 
         let finalized_head = head.l2_block_info;
         let finalized_epoch = head.l1_epoch;
@@ -208,8 +205,13 @@ impl<E: Engine> Driver<E> {
         while let Ok(payload) = self.unsafe_block_recv.try_recv() {
             self.future_unsafe_blocks.push(payload);
             self.future_unsafe_blocks.retain(|payload| {
-                payload.block_number.as_u64() > self.engine_driver.unsafe_head.number
+                let unsafe_block_num = payload.block_number.as_u64();
+                let synced_block_num = self.engine_driver.unsafe_head.number;
+
+                unsafe_block_num > synced_block_num && unsafe_block_num - synced_block_num < 256
             });
+
+            tracing::info!("unsafe blocks size: {}", self.future_unsafe_blocks.len());
 
             let next_unsafe_payload = self
                 .future_unsafe_blocks
