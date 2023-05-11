@@ -203,21 +203,22 @@ impl<E: Engine> Driver<E> {
     async fn advance_unsafe_head(&mut self) -> Result<()> {
         while let Ok(payload) = self.unsafe_block_recv.try_recv() {
             self.future_unsafe_blocks.push(payload);
-            self.future_unsafe_blocks.retain(|payload| {
-                let unsafe_block_num = payload.block_number.as_u64();
-                let synced_block_num = self.engine_driver.unsafe_head.number;
+        }
 
-                unsafe_block_num > synced_block_num && unsafe_block_num - synced_block_num < 256
-            });
+        self.future_unsafe_blocks.retain(|payload| {
+            let unsafe_block_num = payload.block_number.as_u64();
+            let synced_block_num = self.engine_driver.unsafe_head.number;
 
-            let next_unsafe_payload = self
-                .future_unsafe_blocks
-                .iter()
-                .find(|p| p.parent_hash == self.engine_driver.unsafe_head.hash);
+            unsafe_block_num > synced_block_num && unsafe_block_num - synced_block_num < 256
+        });
 
-            if let Some(payload) = next_unsafe_payload {
-                _ = self.engine_driver.handle_unsafe_payload(payload).await;
-            }
+        let next_unsafe_payload = self
+            .future_unsafe_blocks
+            .iter()
+            .find(|p| p.parent_hash == self.engine_driver.unsafe_head.hash);
+
+        if let Some(payload) = next_unsafe_payload {
+            _ = self.engine_driver.handle_unsafe_payload(payload).await;
         }
 
         Ok(())
