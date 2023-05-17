@@ -2,7 +2,7 @@ use ethers::types::{Block, Transaction};
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::common::{BlockInfo, Epoch};
+use crate::common::{AttributesDepositedCall, BlockInfo, Epoch};
 
 /// Block info for the current head of the chain
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -11,6 +11,8 @@ pub struct HeadInfo {
     pub l2_block_info: BlockInfo,
     /// L1 batch epoch of the head L2 block
     pub l1_epoch: Epoch,
+    /// Sequencer number of head block
+    pub sequence_number: u64,
 }
 
 impl TryFrom<Block<Transaction>> for HeadInfo {
@@ -26,16 +28,18 @@ impl TryFrom<Block<Transaction>> for HeadInfo {
             .input
             .clone();
 
+        let call = AttributesDepositedCall::try_from(tx_calldata)?;
+
         Ok(Self {
             l2_block_info: value.try_into()?,
-            l1_epoch: tx_calldata.try_into()?,
+            l1_epoch: Epoch::from(&call),
+            sequence_number: call.sequence_number,
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
-
     mod head_info {
         use std::str::FromStr;
 
@@ -163,6 +167,7 @@ mod tests {
             let HeadInfo {
                 l2_block_info,
                 l1_epoch,
+                sequence_number,
             } = head.unwrap();
 
             assert_eq!(l2_block_info.hash, expected_l2_block_hash);
@@ -172,6 +177,8 @@ mod tests {
             assert_eq!(l1_epoch.hash, expected_l1_epoch_hash);
             assert_eq!(l1_epoch.number, expected_l1_epoch_block_number);
             assert_eq!(l1_epoch.timestamp, expected_l1_epoch_timestamp);
+
+            assert_eq!(sequence_number, 5);
 
             Ok(())
         }
@@ -202,6 +209,7 @@ mod tests {
                 let HeadInfo {
                     l2_block_info,
                     l1_epoch,
+                    sequence_number,
                 } = head;
 
                 assert_eq!(l2_block_info.number, expected_l2_block_number);
@@ -210,6 +218,8 @@ mod tests {
                 assert_eq!(l1_epoch.hash, expected_l1_epoch_hash);
                 assert_eq!(l1_epoch.number, expected_l1_epoch_block_number);
                 assert_eq!(l1_epoch.timestamp, expected_l1_epoch_timestamp);
+
+                assert_eq!(sequence_number, 0);
             }
 
             Ok(())

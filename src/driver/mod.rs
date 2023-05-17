@@ -65,11 +65,13 @@ impl Driver<EngineApi> {
                 HeadInfo {
                     l2_block_info: config.chain.l2_genesis,
                     l1_epoch: config.chain.l1_start_epoch,
+                    sequence_number: 0,
                 }
             });
 
         let finalized_head = head.l2_block_info;
         let finalized_epoch = head.l1_epoch;
+        let finalized_seq = head.sequence_number;
 
         tracing::info!("starting from head: {:?}", finalized_head.hash);
 
@@ -87,7 +89,7 @@ impl Driver<EngineApi> {
         )));
 
         let engine_driver = EngineDriver::new(finalized_head, finalized_epoch, provider, &config)?;
-        let pipeline = Pipeline::new(state.clone(), config.clone())?;
+        let pipeline = Pipeline::new(state.clone(), config.clone(), finalized_seq)?;
 
         let _addr = rpc::run_server(config.clone()).await?;
 
