@@ -46,13 +46,14 @@ impl Attributes {
         batch_iter: Box<dyn PurgeableIterator<Item = Batch>>,
         state: Arc<RwLock<State>>,
         config: Arc<Config>,
+        seq: u64,
     ) -> Self {
         let epoch_hash = state.read().unwrap().safe_epoch.hash;
 
         Self {
             batch_iter,
             state,
-            sequence_number: 0,
+            sequence_number: seq,
             epoch_hash,
             config,
         }

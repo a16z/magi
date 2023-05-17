@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use ethers::providers::{Http, Middleware, Provider};
+use ethers::types::Transaction;
 use ethers::{
     types::{Block, H256},
     utils::keccak256,
@@ -34,7 +35,7 @@ pub struct EngineDriver<E: Engine> {
 
 impl<E: Engine> EngineDriver<E> {
     pub async fn handle_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
-        let block: Option<Block<H256>> = self.block_at(attributes.timestamp.as_u64()).await;
+        let block: Option<Block<Transaction>> = self.block_at(attributes.timestamp.as_u64()).await;
 
         if let Some(block) = block {
             if should_skip(&block, &attributes)? {
@@ -103,7 +104,7 @@ impl<E: Engine> EngineDriver<E> {
     async fn skip_attributes(
         &mut self,
         attributes: PayloadAttributes,
-        block: Block<H256>,
+        block: Block<Transaction>,
     ) -> Result<()> {
         let new_epoch = *attributes.epoch.as_ref().unwrap();
         let new_head = BlockInfo::try_from(block)?;
@@ -181,15 +182,18 @@ impl<E: Engine> EngineDriver<E> {
         }
     }
 
-    async fn block_at(&self, timestamp: u64) -> Option<Block<H256>> {
+    async fn block_at(&self, timestamp: u64) -> Option<Block<Transaction>> {
         let time_diff = timestamp as i64 - self.finalized_head.timestamp as i64;
         let blocks = time_diff / self.blocktime as i64;
         let block_num = self.finalized_head.number as i64 + blocks;
-        self.provider.get_block(block_num as u64).await.ok()?
+        self.provider
+            .get_block_with_txs(block_num as u64)
+            .await
+            .ok()?
     }
 }
 
-fn should_skip(block: &Block<H256>, attributes: &PayloadAttributes) -> Result<bool> {
+fn should_skip(block: &Block<Transaction>, attributes: &PayloadAttributes) -> Result<bool> {
     tracing::debug!(
         "comparing block at {} with attributes at {}",
         block.timestamp,
@@ -207,9 +211,15 @@ fn should_skip(block: &Block<H256>, attributes: &PayloadAttributes) -> Result<bo
         .map(|tx| H256(keccak256(&tx.0)))
         .collect::<Vec<_>>();
 
+    let block_hashes = block
+        .transactions
+        .iter()
+        .map(|tx| tx.hash())
+        .collect::<Vec<_>>();
+
     tracing::debug!("attribute hashes: {:?}", attributes_hashes);
 
-    let is_same = attributes_hashes == block.transactions
+    let is_same = attributes_hashes == block_hashes
         && attributes.timestamp.as_u64() == block.timestamp.as_u64()
         && attributes.prev_randao == block.mix_hash.unwrap()
         && attributes.suggested_fee_recipient == block.author.unwrap()

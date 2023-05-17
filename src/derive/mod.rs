@@ -39,12 +39,12 @@ impl Iterator for Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(state: Arc<RwLock<State>>, config: Arc<Config>) -> Result<Self> {
+    pub fn new(state: Arc<RwLock<State>>, config: Arc<Config>, seq: u64) -> Result<Self> {
         let (tx, rx) = mpsc::channel();
         let batcher_transactions = BatcherTransactions::new(rx);
         let channels = Channels::new(batcher_transactions, config.clone());
         let batches = Batches::new(channels, state.clone(), config.clone());
-        let attributes = Attributes::new(Box::new(batches), state, config);
+        let attributes = Attributes::new(Box::new(batches), state, config, seq);
 
         Ok(Self {
             batcher_transaction_sender: tx,
@@ -125,7 +125,7 @@ mod tests {
                 config.clone(),
             )));
 
-            let mut pipeline = Pipeline::new(state.clone(), config.clone()).unwrap();
+            let mut pipeline = Pipeline::new(state.clone(), config.clone(), 0).unwrap();
 
             chain_watcher.block_update_receiver.recv().unwrap();
             let update = chain_watcher.block_update_receiver.recv().unwrap();
