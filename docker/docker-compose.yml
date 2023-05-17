@@ -51,7 +51,7 @@ services:
     <<: *logging
 
   op-erigon:
-    image: testinprod/op-erigon
+    image: testinprod/op-erigon:latest
     container_name: op-erigon
     profiles:
       - op-erigon

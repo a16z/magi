@@ -9,7 +9,7 @@ then
     then
         # apk update && apk install tar
         mkdir $DATADIR
-        wget "https://op-erigon-genesis.s3.amazonaws.com/erigon.tar.gz" -O erigon.tar.gz
+        wget "https://backup.goerli.op-erigon.testinprod.io" -O erigon.tar.gz
         tar -zxvf erigon.tar.gz -C /tmp
         mv /tmp/chaindata $DATADIR
     fi
