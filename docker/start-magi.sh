@@ -2,6 +2,7 @@
 set -e
 
 if [ $SYNC_MODE = "full" ] 
+then
     exec magi \
         --network $NETWORK \
         --jwt-secret $JWT_SECRET \
@@ -9,8 +10,7 @@ if [ $SYNC_MODE = "full" ]
         --l2-rpc-url http://${EXECUTION_CLIENT}:8545 \
         --l2-engine-url http://${EXECUTION_CLIENT}:8551 \
         --rpc-port $RPC_PORT \
-        --sync-mode $SYNC_MODE \
-then
+        --sync-mode $SYNC_MODE
 elif [ $SYNC_MODE = "checkpoint"]
 then
     exec magi \
