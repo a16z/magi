@@ -21,7 +21,7 @@ then
         exec geth init --datadir=$DATADIR ./genesis-l2.json
     fi
 else
-    echo "Network not recognized. Available options optimism-goerli and base-goerli"
+    echo "Network not recognized. Available options are optimism-goerli and base-goerli"
     exit 1
 fi
 
