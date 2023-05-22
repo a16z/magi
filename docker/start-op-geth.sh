@@ -40,6 +40,11 @@ exec geth \
   --http.addr=0.0.0.0 \
   --http.port=8545 \
   --http.api=web3,debug,eth,txpool,net,engine,admin \
+  --ws \
+  --ws.origins="*" \
+  --ws.addr=0.0.0.0 \
+  --ws.port=8546 \
+  --ws.api=eth,net,web3,txpool \
   --syncmode=full \
   --gcmode=full \
   --networkid=420 \
