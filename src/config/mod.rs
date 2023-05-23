@@ -153,6 +153,8 @@ pub struct SystemConfig {
     pub l1_fee_overhead: U256,
     /// Fee scalar
     pub l1_fee_scalar: U256,
+    /// Sequencer's signer for unsafe blocks
+    pub unsafe_block_singer: Address,
 }
 
 impl SystemConfig {
@@ -224,6 +226,7 @@ impl ChainConfig {
                 gas_limit: U256::from(25_000_000),
                 l1_fee_overhead: U256::from(2100),
                 l1_fee_scalar: U256::from(1000000),
+                unsafe_block_singer: addr("0x715b7219D986641DF9eFd9C7Ef01218D528e19ec"),
             },
             system_config_contract: addr("0xAe851f927Ee40dE99aaBb7461C00f9622ab91d60"),
             batch_inbox: addr("0xff00000000000000000000000000000000000420"),
@@ -257,6 +260,7 @@ impl ChainConfig {
                 gas_limit: U256::from(25_000_000),
                 l1_fee_overhead: U256::from(2100),
                 l1_fee_scalar: U256::from(1000000),
+                unsafe_block_singer: addr("0x32a4e99A72c11E9DD3dC159909a2D7BD86C1Bc51"),
             },
             system_config_contract: addr("0xb15eea247ece011c68a614e4a77ad648ff495bc1"),
             batch_inbox: addr("0x8453100000000000000000000000000000000000"),

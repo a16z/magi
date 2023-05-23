@@ -1,10 +1,13 @@
+use std::str::FromStr;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::SystemTime;
 
-use ethers::types::{Bytes, H256};
+use ethers::types::{Address, Bytes, Signature, H256};
+use ethers::utils::keccak256;
 use eyre::Result;
 use libp2p::gossipsub::{IdentTopic, Message, MessageAcceptance, TopicHash};
 use ssz_rs::{prelude::*, List, Vector, U256};
+use tokio::sync::watch;
 
 use crate::{common::RawTransaction, engine::ExecutionPayload};
 
@@ -13,6 +16,7 @@ use super::Handler;
 pub struct BlockHandler {
     chain_id: u64,
     block_sender: Sender<ExecutionPayload>,
+    unsafe_signer_recv: watch::Receiver<Address>,
 }
 
 impl Handler for BlockHandler {
@@ -20,8 +24,8 @@ impl Handler for BlockHandler {
         tracing::debug!("received block");
 
         match decode_block_msg(msg.data) {
-            Ok(payload) => {
-                if block_valid(&payload) {
+            Ok((payload, signature, payload_hash)) => {
+                if self.block_valid(&payload, signature, payload_hash) {
                     _ = self.block_sender.send(payload);
                     MessageAcceptance::Accept
                 } else {
@@ -42,46 +46,93 @@ impl Handler for BlockHandler {
 }
 
 impl BlockHandler {
-    pub fn new(chain_id: u64) -> (Self, Receiver<ExecutionPayload>) {
+    pub fn new(
+        chain_id: u64,
+        unsafe_recv: watch::Receiver<Address>,
+    ) -> (Self, Receiver<ExecutionPayload>) {
         let (sender, recv) = channel();
 
         let handler = Self {
             chain_id,
             block_sender: sender,
+            unsafe_signer_recv: unsafe_recv,
         };
 
         (handler, recv)
     }
+
+    fn block_valid(
+        &self,
+        payload: &ExecutionPayload,
+        sig: Signature,
+        payload_hash: PayloadHash,
+    ) -> bool {
+        let current_timestamp = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let is_future = payload.timestamp.as_u64() > current_timestamp + 5;
+        let is_past = payload.timestamp.as_u64() < current_timestamp - 60;
+        let time_valid = !(is_future || is_past);
+
+        let msg = payload_hash.signature_message(self.chain_id);
+        let block_signer = self.unsafe_signer_recv.borrow().clone();
+        let sig_valid = sig.verify(msg, block_signer).is_ok();
+
+        time_valid && sig_valid
+    }
 }
 
-fn block_valid(payload: &ExecutionPayload) -> bool {
-    let current_timestamp = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-
-    let is_future = payload.timestamp.as_u64() > current_timestamp + 5;
-    let is_past = payload.timestamp.as_u64() < current_timestamp - 60;
-
-    !(is_future || is_past)
-}
-
-fn decode_block_msg(data: Vec<u8>) -> Result<ExecutionPayload> {
+fn decode_block_msg(data: Vec<u8>) -> Result<(ExecutionPayload, Signature, PayloadHash)> {
     let mut decoder = snap::raw::Decoder::new();
     let decompressed = decoder.decompress_vec(&data)?;
+    let sig_data = &decompressed[..65];
     let block_data = &decompressed[65..];
+
+    let signature = Signature::try_from(sig_data)?;
+
     let payload: ExecutionPayloadSSZ = deserialize(block_data)?;
-    Ok(ExecutionPayload::from(payload))
+    let payload: ExecutionPayload = ExecutionPayload::from(payload);
+
+    let payload_hash = PayloadHash::from(block_data);
+
+    Ok((payload, signature, payload_hash))
+}
+
+struct PayloadHash(H256);
+
+impl From<&[u8]> for PayloadHash {
+    fn from(value: &[u8]) -> Self {
+        Self(keccak256(value).into())
+    }
+}
+
+impl PayloadHash {
+    fn signature_message(&self, chain_id: u64) -> H256 {
+        let domain = H256::zero();
+        let chain_id = H256::from_low_u64_be(chain_id);
+        let payload_hash = self.0;
+
+        let data: Vec<u8> = [
+            domain.as_bytes(),
+            chain_id.as_bytes(),
+            payload_hash.as_bytes(),
+        ]
+        .concat();
+
+        keccak256(data).into()
+    }
 }
 
 type Bytes32 = Vector<u8, 32>;
-type Address = Vector<u8, 20>;
+type VecAddress = Vector<u8, 20>;
 type Transaction = List<u8, 1073741824>;
 
 #[derive(SimpleSerialize, Default)]
 struct ExecutionPayloadSSZ {
     pub parent_hash: Bytes32,
-    pub fee_recipient: Address,
+    pub fee_recipient: VecAddress,
     pub state_root: Bytes32,
     pub receipts_root: Bytes32,
     pub logs_bloom: Vector<u8, 256>,
@@ -121,8 +172,8 @@ fn convert_hash(bytes: Bytes32) -> H256 {
     H256::from_slice(bytes.as_slice())
 }
 
-fn convert_address(address: Address) -> ethers::types::Address {
-    ethers::types::Address::from_slice(address.as_slice())
+fn convert_address(address: VecAddress) -> Address {
+    Address::from_slice(address.as_slice())
 }
 
 fn convert_byte_vector<const N: usize>(vector: Vector<u8, N>) -> Bytes {
