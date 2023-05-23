@@ -1,4 +1,3 @@
-use std::str::FromStr;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::SystemTime;
 
@@ -77,7 +76,7 @@ impl BlockHandler {
         let time_valid = !(is_future || is_past);
 
         let msg = payload_hash.signature_message(self.chain_id);
-        let block_signer = self.unsafe_signer_recv.borrow().clone();
+        let block_signer = *self.unsafe_signer_recv.borrow();
         let sig_valid = sig.verify(msg, block_signer).is_ok();
 
         time_valid && sig_valid
