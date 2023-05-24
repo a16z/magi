@@ -30,6 +30,5 @@ erigon \
     --authrpc.addr=0.0.0.0 \
     --authrpc.port=8551 \
     --authrpc.vhosts="*" \
-    --externalcl \
     --authrpc.jwtsecret=/jwtsecret.txt \
     --rollup.sequencerhttp="https://goerli.optimism.io" \

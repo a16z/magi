@@ -216,6 +216,8 @@ impl InnerWatcher {
                 l1_fee_overhead,
                 l1_fee_scalar,
                 gas_limit: block.gas_limit,
+                // TODO: fetch from contract
+                unsafe_block_singer: config.chain.system_config.unsafe_block_singer,
             }
         };
 
@@ -321,6 +323,9 @@ impl InnerWatcher {
                     }
                     SystemConfigUpdate::Gas(gas) => {
                         config.gas_limit = gas;
+                    }
+                    SystemConfigUpdate::UnsafeBlockSigner(addr) => {
+                        config.unsafe_block_singer = addr;
                     }
                 }
 
@@ -500,6 +505,7 @@ enum SystemConfigUpdate {
     BatchSender(Address),
     Fees(U256, U256),
     Gas(U256),
+    UnsafeBlockSigner(Address),
 }
 
 impl TryFrom<Log> for SystemConfigUpdate {
@@ -556,6 +562,15 @@ impl TryFrom<Log> for SystemConfigUpdate {
 
                 let gas = U256::from_big_endian(gas_bytes);
                 Ok(Self::Gas(gas))
+            }
+            3 => {
+                let addr_bytes = log
+                    .data
+                    .get(76..96)
+                    .ok_or(eyre::eyre!("invalid system config update"))?;
+
+                let addr = Address::from_slice(addr_bytes);
+                Ok(Self::UnsafeBlockSigner(addr))
             }
             _ => Err(eyre::eyre!("invalid system config update")),
         }

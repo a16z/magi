@@ -6,10 +6,13 @@ use std::{
 
 use ethers::{
     providers::{Middleware, Provider},
-    types::{BlockId, BlockNumber},
+    types::{Address, BlockId, BlockNumber},
 };
 use eyre::Result;
-use tokio::time::sleep;
+use tokio::{
+    sync::watch::{self, Sender},
+    time::sleep,
+};
 
 use crate::{
     common::{BlockInfo, Epoch},
@@ -49,6 +52,10 @@ pub struct Driver<E: Engine> {
     shutdown_recv: Arc<Receiver<()>>,
     /// Channel to receive unsafe block from
     unsafe_block_recv: Receiver<ExecutionPayload>,
+    /// Channel to send unsafe signer updated to block handler
+    unsafe_block_signer_sender: Sender<Address>,
+    /// Networking service
+    network_service: Option<Service>,
 }
 
 impl Driver<EngineApi> {
@@ -93,11 +100,14 @@ impl Driver<EngineApi> {
 
         let _addr = rpc::run_server(config.clone()).await?;
 
-        let (block_handler, unsafe_block_recv) = BlockHandler::new(config.chain.chain_id);
+        let (unsafe_block_signer_sender, unsafe_block_signer_recv) =
+            watch::channel(config.chain.system_config.unsafe_block_singer);
 
-        Service::new("0.0.0.0:9876".parse()?, config.chain.chain_id)
-            .add_handler(Box::new(block_handler))
-            .start()?;
+        let (block_handler, unsafe_block_recv) =
+            BlockHandler::new(config.chain.chain_id, unsafe_block_signer_recv);
+
+        let service = Service::new("0.0.0.0:9876".parse()?, config.chain.chain_id)
+            .add_handler(Box::new(block_handler));
 
         Ok(Self {
             engine_driver,
@@ -109,6 +119,8 @@ impl Driver<EngineApi> {
             chain_watcher,
             shutdown_recv,
             unsafe_block_recv,
+            unsafe_block_signer_sender,
+            network_service: Some(service),
         })
     }
 }
@@ -156,6 +168,7 @@ impl<E: Engine> Driver<E> {
 
         self.update_finalized();
         self.update_metrics();
+        self.try_start_networking()?;
 
         Ok(())
     }
@@ -252,6 +265,10 @@ impl<E: Engine> Driver<E> {
                 match update {
                     BlockUpdate::NewBlock(l1_info) => {
                         let num = l1_info.block_info.number;
+
+                        self.unsafe_block_signer_sender
+                            .send(l1_info.system_config.unsafe_block_singer)?;
+
                         self.pipeline
                             .push_batcher_transactions(l1_info.batcher_transactions.clone(), num)?;
 
@@ -307,10 +324,24 @@ impl<E: Engine> Driver<E> {
             .retain(|(_, _, inclusion, _)| *inclusion > self.finalized_l1_block_number);
     }
 
+    fn try_start_networking(&mut self) -> Result<()> {
+        if self.synced() {
+            if let Some(service) = self.network_service.take() {
+                service.start()?;
+            }
+        }
+
+        Ok(())
+    }
+
     fn update_metrics(&self) {
         metrics::FINALIZED_HEAD.set(self.engine_driver.finalized_head.number as i64);
         metrics::SAFE_HEAD.set(self.engine_driver.safe_head.number as i64);
-        metrics::SYNCED.set(!self.unfinalized_blocks.is_empty() as i64);
+        metrics::SYNCED.set(self.synced() as i64);
+    }
+
+    fn synced(&self) -> bool {
+        !self.unfinalized_blocks.is_empty()
     }
 }
 
