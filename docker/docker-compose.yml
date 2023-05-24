@@ -74,6 +74,8 @@ services:
     container_name: op-challenger
     profiles:
       - challenger
+    depends_on:
+      - op-geth
     restart: unless-stopped
     stop_grace_period: 3m
     entrypoint: /scripts/start-op-challenger.sh
