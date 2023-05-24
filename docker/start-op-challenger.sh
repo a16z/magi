@@ -9,7 +9,7 @@ echo "Starting op-challenger"
 
 exec op-challenger \
     -vv \
-    --l1-ws-endpoint ws://${EXECUTION_CLIENT}:8546 \
+    --l1-ws-endpoint ${L1_WS_RPC_URL}:8546 \
     --trusted-op-node-endpoint http://magi:${RPC_PORT} \
     --signer-key $CHALLENGER_SIGNER_KEY \
     --dispute-game-factory $DISPUTE_GAME_FACTORY \
