@@ -8,7 +8,7 @@ L2_OUTPUT_ORACLE=0xE6Dfba0953616Bacab0c9A8ecb3a9BBa77FC15c0
 echo "Starting op-challenger"
 
 exec op-challenger \
-    --l1-ws-endpoint ${L1_WS_RPC_URL}:8546 \
+    --l1-ws-endpoint ${L1_WS_RPC_URL} \
     --trusted-op-node-endpoint http://magi:${RPC_PORT} \
     --signer-key $CHALLENGER_SIGNER_KEY \
     --dispute-game-factory $DISPUTE_GAME_FACTORY \
