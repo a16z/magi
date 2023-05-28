@@ -79,6 +79,8 @@ services:
     entrypoint: /scripts/start-op-challenger.sh
     env_file:
       - .env
+    ports:
+      - 9201:9201
     volumes:
       - ./:/scripts
       - data:/data
