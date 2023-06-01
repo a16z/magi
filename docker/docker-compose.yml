@@ -69,6 +69,23 @@ services:
       - data:/data
     <<: *logging
 
+  op-challenger:
+    image: merklefruit/op-challenger:latest
+    container_name: op-challenger
+    profiles:
+      - challenger
+    restart: unless-stopped
+    stop_grace_period: 3m
+    entrypoint: /scripts/start-op-challenger.sh
+    env_file:
+      - .env
+    ports:
+      - 9201:9201
+    volumes:
+      - ./:/scripts
+      - data:/data
+    <<: *logging
+
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus

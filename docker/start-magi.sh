@@ -11,7 +11,7 @@ then
         --l2-engine-url http://${EXECUTION_CLIENT}:8551 \
         --rpc-port $RPC_PORT \
         --sync-mode $SYNC_MODE
-elif [ $SYNC_MODE = "checkpoint"]
+elif [ $SYNC_MODE = "checkpoint" ]
 then
     exec magi \
         --network $NETWORK \
