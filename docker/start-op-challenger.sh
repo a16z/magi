@@ -1,9 +1,18 @@
 #!/bin/sh
 set -e
 
-# how do we want to handle network-dependant configs here?
-DISPUTE_GAME_FACTORY=0x5a20cD16d4E51D3B2A6b2Ab460Ac735Fe421b820
-L2_OUTPUT_ORACLE=0xE6Dfba0953616Bacab0c9A8ecb3a9BBa77FC15c0
+if [ $NETWORK = "optimism-goerli" ]
+then
+    DISPUTE_GAME_FACTORY=0x000000000000000000000000000000000000dEaD
+    L2_OUTPUT_ORACLE=0xE6Dfba0953616Bacab0c9A8ecb3a9BBa77FC15c0
+elif [ $NETWORK = "base-goerli" ]
+then 
+    DISPUTE_GAME_FACTORY=0x000000000000000000000000000000000000dEaD
+    L2_OUTPUT_ORACLE=0x2A35891ff30313CcFa6CE88dcf3858bb075A2298
+else
+    echo "Network not recognized. Available options are optimism-goerli and base-goerli"
+    exit 1
+fi
 
 if [ $OP_CHALLENGER_MODE = "listen-only" ] 
 then
