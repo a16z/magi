@@ -80,22 +80,40 @@ When constructed in the [`Pipeline`](../src/derive/mod.rs), the [`ChainWatcher`]
 
 Note, when the `ChainWatcher` object is dropped, it will abort tasks associated with its handlers using [`tokio::task::JoinHandle::abort`](https://docs.rs/tokio/1.13.0/tokio/task/struct.JoinHandle.html#method.abort).
 
+### Sync modes
+
+Magi supports different [SyncModes](../src/config/mod.rs#L14) to sync the L2 chain. The sync mode can be set when calling the main binary with the `--sync-mode` flag. The following sync modes are supported:
+
+- `full`: The full sync mode will sync the L2 chain from the genesis block. This is the default sync mode.
+- `checkpoint`: The checkpoint sync mode will use a trusted L2 RPC endpoint to bootstrap the sync phase. It works by sending a forkchoice update request to the engine API to the latest block, which will make the execution client start the sync process using its p2p network, which is faster than syncing each block via L1. Once the execution client has synced, Magi takes over and starts the driver as normal.
+
 ### Config
 
 The [Config](../src/config/mod.rs) object contains the system configuration for the `magi` node.
 
 **Config**
-- `l1_rpc`: The L1 RPC endpoint to use for the L1 chain watcher.
-- `max_channels`: The maximum number of channels to use in the [Pipeline](../src/derive/mod.rs).
-- `max_timeout`: The maximum timeout for a channel, measured by the frame's corresponding L1 block number.
+- `l1_rpc_url`: The L1 RPC endpoint to use for the L1 chain watcher.
+- `l2_rpc_url`: The L2 chain RPC endpoint
+- `l2_engine_url`: The L2 chain engine API URL (see [Engine API](#engine-api)).
 - `chain`: A `ChainConfig` object detailed below.
+- `jwt_secret`: A hex-encoded secret string used to authenticate requests to the engine API.
+- `checkpoint_sync_url`: The URL of the trusted L2 RPC endpoint to use for checkpoint syncing.
+- `rpc_port`: The port to use for the Magi RPC server.
 
 **ChainConfig**
+- `network`: The network name.
+- `chain_id`: The chain id.
 - `l1_start_epoch`: The L1 block number to start the L1 chain watcher at.
 - `l2_genesis`: The L2 genesis block.
-- `batch_sender`: The L1 address of the batch sender.
+- `system_config`: The initial system config struct.
 - `batch_inbox`: The batch inbox address.
 - `deposit_contract`: The L1 address of the deposit contract.
+- `system_config_contract`: The L1 address of the system config contract.
+- `max_channel_size`: The maximum byte size of all pending channels.
+- `channel_timeout`: The max timeout for a channel (as measured by the frame L1 block number).
+- `seq_window_size`: Number of L1 blocks in a sequence window.
+- `max_seq_drift`: Maximum timestamp drift.
+- `regolith_time`: Timestamp of the regolith hardfork.
 - `blocktime`: The L2 blocktime.
 
-The [ChainConfig](../src/config/mod.rs) contains default implementations for certain chains. For example, a `goerli` [ChainConfig](../src/config/mod.rs) instance can be created by calling `ChainConfig::goerli()`.
+The [ChainConfig](../src/config/mod.rs) contains default implementations for certain chains. For example, an `optimism-goerli` [ChainConfig](../src/config/mod.rs) instance can be created by calling `ChainConfig::optimism_goerli()`, and a `base-goerli` instance can be created by calling `ChainConfig::base_goerli()`.
