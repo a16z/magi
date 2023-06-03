@@ -219,7 +219,7 @@ mod tests {
                 assert_eq!(l1_epoch.number, expected_l1_epoch_block_number);
                 assert_eq!(l1_epoch.timestamp, expected_l1_epoch_timestamp);
 
-                assert_eq!(sequence_number, 0);
+                assert_eq!(sequence_number, 4);
             }
 
             Ok(())
