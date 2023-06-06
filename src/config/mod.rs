@@ -232,7 +232,7 @@ impl ChainConfig {
             deposit_contract: addr("0xbEb5Fc579115071764c7423A4f12eDde41f106Ed"),
             system_config_contract: addr("0x229047fed2591dbec1eF1118d64F7aF3dB9EB290"),
             // TODO: replace with correct address
-            l2_to_l1_message_passer: addr("0x0000000000000000000000000000000000000000"),
+            l2_to_l1_message_passer: addr("0x4200000000000000000000000000000000000016"),
             max_channel_size: 100_000_000,
             channel_timeout: 300,
             seq_window_size: 3600,
