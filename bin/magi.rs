@@ -67,6 +67,7 @@ pub struct Cli {
 impl Cli {
     pub fn to_config(self) -> Config {
         let chain = match self.network.as_str() {
+            "optimism" => ChainConfig::optimism(),
             "optimism-goerli" => ChainConfig::optimism_goerli(),
             "base-goerli" => ChainConfig::base_goerli(),
             _ => panic!("network not recognized"),
