@@ -69,7 +69,7 @@ where
         if let Some(channel) = channel {
             let batches = decode_batches(&channel)?;
             batches.into_iter().for_each(|batch| {
-                tracing::debug!("saw batch: {:?}", batch);
+                tracing::debug!("saw batch: t={}, ph={:?}", batch.timestamp, batch.parent_hash);
                 self.batches.insert(batch.timestamp, batch);
             });
         }
