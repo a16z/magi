@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::time::{SystemTime, Duration};
+use std::time::{Duration, SystemTime};
 
 use eyre::Result;
 use reqwest::{header, Client};

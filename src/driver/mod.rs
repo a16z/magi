@@ -5,10 +5,11 @@ use std::{
 };
 
 use ethers::{
-    providers::{Middleware, Provider},
+    providers::{Http, Middleware, Provider},
     types::{Address, BlockId, BlockNumber},
 };
 use eyre::Result;
+use reqwest::Url;
 use tokio::{
     sync::watch::{self, Sender},
     time::sleep,
@@ -62,7 +63,12 @@ pub struct Driver<E: Engine> {
 
 impl Driver<EngineApi> {
     pub async fn from_config(config: Config, shutdown_recv: Arc<Receiver<()>>) -> Result<Self> {
-        let provider = Provider::try_from(&config.l2_rpc_url)?;
+        let client = reqwest::ClientBuilder::new()
+            .timeout(Duration::from_secs(5))
+            .build()?;
+
+        let http = Http::new_with_client(Url::parse(&config.l2_rpc_url)?, client);
+        let provider = Provider::new(http);
 
         let block_id = BlockId::Number(BlockNumber::Finalized);
         let finalized_block = provider.get_block_with_txs(block_id).await?;
