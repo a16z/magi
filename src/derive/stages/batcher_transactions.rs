@@ -119,6 +119,8 @@ impl Frame {
             l1_inclusion_block,
         };
 
+        println!("block: {}, number: {}, is_last: {}", l1_inclusion_block, frame_number, is_last);
+
         Ok((frame, offset + data.len()))
     }
 }
