@@ -191,6 +191,7 @@ where
                                 return BatchStatus::Drop;
                             }
                         } else {
+                            tracing::debug!("sequencer drift undecided");
                             return BatchStatus::Undecided;
                         }
                     }
@@ -200,6 +201,7 @@ where
                 }
             }
         } else {
+            tracing::debug!("batch origin not known");
             return BatchStatus::Undecided;
         }
 
