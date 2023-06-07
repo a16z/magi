@@ -84,7 +84,7 @@ impl Driver<EngineApi> {
 
         let config = Arc::new(config);
         let chain_watcher = ChainWatcher::new(
-            finalized_epoch.number - 1,
+            finalized_epoch.number - 32,
             finalized_head.number,
             config.clone(),
         )?;

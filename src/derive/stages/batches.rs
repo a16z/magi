@@ -87,7 +87,6 @@ where
                         self.batches.remove(&timestamp);
                     }
                     BatchStatus::Future | BatchStatus::Undecided => {
-                        tracing::debug!("future or undecided");
                         break None;
                     }
                 }
