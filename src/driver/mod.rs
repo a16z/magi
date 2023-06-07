@@ -56,6 +56,8 @@ pub struct Driver<E: Engine> {
     unsafe_block_signer_sender: Sender<Address>,
     /// Networking service
     network_service: Option<Service>,
+    /// Channel timeout length
+    channel_timeout: u64,
 }
 
 impl Driver<EngineApi> {
@@ -84,7 +86,7 @@ impl Driver<EngineApi> {
 
         let config = Arc::new(config);
         let chain_watcher = ChainWatcher::new(
-            finalized_epoch.number,
+            finalized_epoch.number - config.chain.channel_timeout,
             finalized_head.number,
             config.clone(),
         )?;
@@ -121,6 +123,7 @@ impl Driver<EngineApi> {
             unsafe_block_recv,
             unsafe_block_signer_sender,
             network_service: Some(service),
+            channel_timeout: config.chain.channel_timeout,
         })
     }
 }
@@ -282,7 +285,7 @@ impl<E: Engine> Driver<E> {
 
                         self.unfinalized_blocks.clear();
                         self.chain_watcher.restart(
-                            self.engine_driver.finalized_epoch.number,
+                            self.engine_driver.finalized_epoch.number - self.channel_timeout,
                             self.engine_driver.finalized_head.number,
                         )?;
 
