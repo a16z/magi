@@ -57,4 +57,5 @@ exec geth \
   --authrpc.port=8551 \
   --authrpc.jwtsecret=/jwtsecret.txt \
   --rollup.disabletxpoolgossip=true \
+  --snapshot=false 
   $@
