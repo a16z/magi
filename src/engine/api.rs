@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::time::SystemTime;
+use std::time::{SystemTime, Duration};
 
 use eyre::Result;
 use reqwest::{header, Client};
@@ -53,6 +53,7 @@ impl EngineApi {
                     header::HeaderValue::from_static("application/json"),
                 )])
             })
+            .timeout(Duration::from_secs(5))
             .build()
             .expect("reqwest::Client could not be built, TLS backend could not be initialized");
 
