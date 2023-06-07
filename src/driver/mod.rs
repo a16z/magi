@@ -84,7 +84,7 @@ impl Driver<EngineApi> {
 
         let config = Arc::new(config);
         let chain_watcher = ChainWatcher::new(
-            finalized_epoch.number - 32,
+            finalized_epoch.number,
             finalized_head.number,
             config.clone(),
         )?;
@@ -282,7 +282,7 @@ impl<E: Engine> Driver<E> {
 
                         self.unfinalized_blocks.clear();
                         self.chain_watcher.restart(
-                            self.engine_driver.finalized_epoch.number - 32,
+                            self.engine_driver.finalized_epoch.number,
                             self.engine_driver.finalized_head.number,
                         )?;
 
