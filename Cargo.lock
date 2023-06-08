@@ -137,6 +137,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "again"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "05802a5ad4d172eaf796f7047b42d0af9db513585d16d4169660a21613d34b93"
+dependencies = [
+ "log",
+ "rand 0.7.3",
+ "wasm-timer",
+]
+
+[[package]]
 name = "ahash"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3617,6 +3628,7 @@ dependencies = [
 name = "magi"
 version = "0.1.0"
 dependencies = [
+ "again",
  "ansi_term",
  "async-trait",
  "bytes",

@@ -1,13 +1,14 @@
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
+use again::RetryPolicy;
 use eyre::Result;
+use futures::prelude::*;
+use futures_timer::TryFutureExt;
 use reqwest::{header, Client};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use futures::prelude::*;
-use futures_timer::TryFutureExt;
 
 use crate::engine::DEFAULT_AUTH_PORT;
 use crate::engine::ENGINE_GET_PAYLOAD_V1;
@@ -136,17 +137,24 @@ impl EngineApi {
             .encode(&claims)
             .map_err(|_| eyre::eyre!("EngineApi failed to encode jwt with claims!"))?;
 
+        let policy = RetryPolicy::fixed(Duration::from_secs(1)).with_max_retries(3);
+
         // Send the request
-        let res = client
-            .post(&self.base_url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", jwt))
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| eyre::eyre!(e))?
-            .json::<EngineApiResponse<P>>()
-            .map_err(|err| eyre::eyre!(err))
-            .timeout(Duration::from_secs(5))
+        let res = policy
+            .retry(|| async {
+                client
+                    .post(&self.base_url)
+                    .header(header::AUTHORIZATION, format!("Bearer {}", jwt))
+                    .json(&body)
+                    .send()
+                    .await
+                    .map_err(|e| eyre::eyre!(e))?
+                    .json::<EngineApiResponse<P>>()
+                    .map_err(|e| eyre::eyre!(e))
+                    .timeout(Duration::from_secs(10))
+                    .map_err(|e| eyre::eyre!(e))
+                    .await
+            })
             .await?;
 
         if let Some(res) = res.result {
