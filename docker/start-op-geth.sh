@@ -3,7 +3,16 @@ set -e
 
 DATADIR=/data/geth
 
-if [ $NETWORK = "optimism-goerli" ]
+if [ $NETWORK = "optimism" ]
+then
+    CHAIN_ID=10
+    if [ ! -d $DATADIR ]
+    then
+        mkdir $DATADIR
+        wget "https://storage.googleapis.com/oplabs-mainnet-data/mainnet-bedrock.tar" -P $DATADIR
+        tar -xvf $DATADIR/mainnet-bedrock.tar -C $DATADIR
+    fi
+elif [ $NETWORK = "optimism-goerli" ]
 then
     CHAIN_ID=420
     if [ ! -d $DATADIR ]
@@ -48,4 +57,5 @@ exec geth \
   --authrpc.port=8551 \
   --authrpc.jwtsecret=/jwtsecret.txt \
   --rollup.disabletxpoolgossip=true \
+  --snapshot=false 
   $@

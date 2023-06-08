@@ -69,6 +69,12 @@ where
         if let Some(channel) = channel {
             let batches = decode_batches(&channel)?;
             batches.into_iter().for_each(|batch| {
+                tracing::debug!(
+                    "saw batch: t={}, ph={:?}, e={}",
+                    batch.timestamp,
+                    batch.parent_hash,
+                    batch.epoch_num
+                );
                 self.batches.insert(batch.timestamp, batch);
             });
         }
@@ -191,6 +197,7 @@ where
                                 return BatchStatus::Drop;
                             }
                         } else {
+                            tracing::debug!("sequencer drift undecided");
                             return BatchStatus::Undecided;
                         }
                     }
@@ -200,6 +207,7 @@ where
                 }
             }
         } else {
+            tracing::debug!("batch origin not known");
             return BatchStatus::Undecided;
         }
 

@@ -1,7 +1,10 @@
 use std::collections::HashMap;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
+use again::RetryPolicy;
 use eyre::Result;
+use futures::prelude::*;
+use futures_timer::TryFutureExt;
 use reqwest::{header, Client};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -53,6 +56,7 @@ impl EngineApi {
                     header::HeaderValue::from_static("application/json"),
                 )])
             })
+            .timeout(Duration::from_secs(5))
             .build()
             .expect("reqwest::Client could not be built, TLS backend could not be initialized");
 
@@ -133,15 +137,25 @@ impl EngineApi {
             .encode(&claims)
             .map_err(|_| eyre::eyre!("EngineApi failed to encode jwt with claims!"))?;
 
+        let policy = RetryPolicy::fixed(Duration::ZERO).with_max_retries(5);
+
         // Send the request
-        let res = client
-            .post(&self.base_url)
-            .header(header::AUTHORIZATION, format!("Bearer {}", jwt))
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| eyre::eyre!(e))?
-            .json::<EngineApiResponse<P>>()
+        let res = policy
+            .retry(|| async {
+                client
+                    .post(&self.base_url)
+                    .header(header::AUTHORIZATION, format!("Bearer {}", jwt))
+                    .json(&body)
+                    .send()
+                    .map_err(|e| eyre::eyre!(e))
+                    .timeout(Duration::from_secs(2))
+                    .await?
+                    .json::<EngineApiResponse<P>>()
+                    .map_err(|e| eyre::eyre!(e))
+                    .timeout(Duration::from_secs(2))
+                    .map_err(|e| eyre::eyre!(e))
+                    .await
+            })
             .await?;
 
         if let Some(res) = res.result {

@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    str::FromStr,
     sync::{
         mpsc::{channel, sync_channel, Receiver, SyncSender},
         Arc,
@@ -19,6 +18,7 @@ use ethers::{
 
 use eyre::Result;
 use once_cell::sync::Lazy;
+use reqwest::Url;
 use tokio::{spawn, task::JoinHandle, time::sleep};
 
 use crate::{
@@ -578,7 +578,11 @@ impl TryFrom<Log> for SystemConfigUpdate {
 }
 
 fn generate_http_provider(url: &str) -> Arc<Provider<RetryClient<Http>>> {
-    let http = Http::from_str(url).expect("invalid RPC URL");
+    let client = reqwest::ClientBuilder::new()
+        .timeout(Duration::from_secs(5))
+        .build()
+        .unwrap();
+    let http = Http::new_with_client(Url::parse(url).expect("ivnalid rpc url"), client);
     let policy = Box::new(HttpRateLimitRetryPolicy);
     let client = RetryClient::new(http, policy, 100, 50);
     Arc::new(Provider::new(client))

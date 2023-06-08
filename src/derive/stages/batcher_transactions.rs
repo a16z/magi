@@ -119,6 +119,13 @@ impl Frame {
             l1_inclusion_block,
         };
 
+        tracing::debug!(
+            "saw batcher tx: block={}, number={}, is_last={}",
+            l1_inclusion_block,
+            frame_number,
+            is_last
+        );
+
         Ok((frame, offset + data.len()))
     }
 }

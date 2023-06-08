@@ -5,10 +5,11 @@ use std::{
 };
 
 use ethers::{
-    providers::{Middleware, Provider},
+    providers::{Http, Middleware, Provider},
     types::{Address, BlockId, BlockNumber},
 };
 use eyre::Result;
+use reqwest::Url;
 use tokio::{
     sync::watch::{self, Sender},
     time::sleep,
@@ -56,11 +57,18 @@ pub struct Driver<E: Engine> {
     unsafe_block_signer_sender: Sender<Address>,
     /// Networking service
     network_service: Option<Service>,
+    /// Channel timeout length
+    channel_timeout: u64,
 }
 
 impl Driver<EngineApi> {
     pub async fn from_config(config: Config, shutdown_recv: Arc<Receiver<()>>) -> Result<Self> {
-        let provider = Provider::try_from(&config.l2_rpc_url)?;
+        let client = reqwest::ClientBuilder::new()
+            .timeout(Duration::from_secs(5))
+            .build()?;
+
+        let http = Http::new_with_client(Url::parse(&config.l2_rpc_url)?, client);
+        let provider = Provider::new(http);
 
         let block_id = BlockId::Number(BlockNumber::Finalized);
         let finalized_block = provider.get_block_with_txs(block_id).await?;
@@ -84,7 +92,7 @@ impl Driver<EngineApi> {
 
         let config = Arc::new(config);
         let chain_watcher = ChainWatcher::new(
-            finalized_epoch.number,
+            finalized_epoch.number - config.chain.channel_timeout,
             finalized_head.number,
             config.clone(),
         )?;
@@ -121,6 +129,7 @@ impl Driver<EngineApi> {
             unsafe_block_recv,
             unsafe_block_signer_sender,
             network_service: Some(service),
+            channel_timeout: config.chain.channel_timeout,
         })
     }
 }
@@ -224,7 +233,7 @@ impl<E: Engine> Driver<E> {
             let unsafe_block_num = payload.block_number.as_u64();
             let synced_block_num = self.engine_driver.unsafe_head.number;
 
-            unsafe_block_num > synced_block_num && unsafe_block_num - synced_block_num < 256
+            unsafe_block_num > synced_block_num && unsafe_block_num - synced_block_num < 1024
         });
 
         let next_unsafe_payload = self
@@ -282,7 +291,7 @@ impl<E: Engine> Driver<E> {
 
                         self.unfinalized_blocks.clear();
                         self.chain_watcher.restart(
-                            self.engine_driver.finalized_epoch.number,
+                            self.engine_driver.finalized_epoch.number - self.channel_timeout,
                             self.engine_driver.finalized_head.number,
                         )?;
 
