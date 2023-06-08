@@ -137,7 +137,7 @@ impl EngineApi {
             .encode(&claims)
             .map_err(|_| eyre::eyre!("EngineApi failed to encode jwt with claims!"))?;
 
-        let policy = RetryPolicy::fixed(Duration::from_secs(1)).with_max_retries(3);
+        let policy = RetryPolicy::fixed(Duration::ZERO).with_max_retries(5);
 
         // Send the request
         let res = policy
@@ -148,11 +148,11 @@ impl EngineApi {
                     .json(&body)
                     .send()
                     .map_err(|e| eyre::eyre!(e))
-                    .timeout(Duration::from_secs(15))
+                    .timeout(Duration::from_secs(2))
                     .await?
                     .json::<EngineApiResponse<P>>()
                     .map_err(|e| eyre::eyre!(e))
-                    .timeout(Duration::from_secs(15))
+                    .timeout(Duration::from_secs(2))
                     .map_err(|e| eyre::eyre!(e))
                     .await
             })
