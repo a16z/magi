@@ -85,6 +85,7 @@ impl<E: Engine> EngineDriver<E> {
     async fn process_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
         let new_epoch = *attributes.epoch.as_ref().unwrap();
 
+        tracing::info!("started payload build");
         let payload = self.build_payload(attributes).await?;
 
         let new_head = BlockInfo {
@@ -94,9 +95,12 @@ impl<E: Engine> EngineDriver<E> {
             timestamp: payload.timestamp.as_u64(),
         };
 
+        tracing::info!("started push payload");
         self.push_payload(payload).await?;
         self.update_safe_head(new_head, new_epoch, true)?;
+        tracing::info!("started update forkchoice");
         self.update_forkchoice().await?;
+        tracing::info!("finished");
 
         Ok(())
     }
