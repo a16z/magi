@@ -6,6 +6,8 @@ use reqwest::{header, Client};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use futures::prelude::*;
+use futures_timer::TryFutureExt;
 
 use crate::engine::DEFAULT_AUTH_PORT;
 use crate::engine::ENGINE_GET_PAYLOAD_V1;
@@ -143,6 +145,8 @@ impl EngineApi {
             .await
             .map_err(|e| eyre::eyre!(e))?
             .json::<EngineApiResponse<P>>()
+            .map_err(|err| eyre::eyre!(err))
+            .timeout(Duration::from_secs(5))
             .await?;
 
         if let Some(res) = res.result {

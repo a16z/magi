@@ -1892,7 +1892,7 @@ dependencies = [
  "enr 0.8.1",
  "ethers-core",
  "futures-core",
- "futures-timer",
+ "futures-timer 3.0.2",
  "futures-util",
  "hashers",
  "hex",
@@ -2130,10 +2130,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "futures-channel-preview"
+version = "0.3.0-alpha.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5e5f4df964fa9c1c2f8bddeb5c3611631cacd93baf810fc8bb2fb4b495c263a"
+dependencies = [
+ "futures-core-preview",
+ "futures-sink-preview",
+]
+
+[[package]]
 name = "futures-core"
 version = "0.3.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4bca583b7e26f571124fe5b7561d49cb2868d79116cfa0eefce955557c6fee8c"
+
+[[package]]
+name = "futures-core-preview"
+version = "0.3.0-alpha.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b35b6263fb1ef523c3056565fa67b1d16f0a8604ff12b11b08c25f28a734c60a"
 
 [[package]]
 name = "futures-executor"
@@ -2148,10 +2164,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "futures-executor-preview"
+version = "0.3.0-alpha.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "75236e88bd9fe88e5e8bfcd175b665d0528fe03ca4c5207fabc028c8f9d93e98"
+dependencies = [
+ "futures-core-preview",
+ "futures-util-preview",
+ "num_cpus",
+]
+
+[[package]]
 name = "futures-io"
 version = "0.3.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fff74096e71ed47f8e023204cfd0aa1289cd54ae5430a9523be060cdb849964"
+
+[[package]]
+name = "futures-io-preview"
+version = "0.3.0-alpha.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f4914ae450db1921a56c91bde97a27846287d062087d4a652efc09bb3a01ebda"
 
 [[package]]
 name = "futures-lite"
@@ -2190,6 +2223,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "futures-preview"
+version = "0.3.0-alpha.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3b1dce2a0267ada5c6ff75a8ba864b4e679a9e2aa44262af7a3b5516d530d76e"
+dependencies = [
+ "futures-channel-preview",
+ "futures-core-preview",
+ "futures-executor-preview",
+ "futures-io-preview",
+ "futures-sink-preview",
+ "futures-util-preview",
+]
+
+[[package]]
 name = "futures-rustls"
 version = "0.22.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2207,10 +2254,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f43be4fe21a13b9781a69afa4985b0f6ee0e1afab2c6f454a8cf30e2b2237b6e"
 
 [[package]]
+name = "futures-sink-preview"
+version = "0.3.0-alpha.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "86f148ef6b69f75bb610d4f9a2336d4fc88c4b5b67129d1a340dd0fd362efeec"
+
+[[package]]
 name = "futures-task"
 version = "0.3.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76d3d132be6c0e6aa1534069c705a74a5997a356c0dc2f86a47765e5617c5b65"
+
+[[package]]
+name = "futures-timer"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f9eb554aa23143abc64ec4d0016f038caf53bb7cbc3d91490835c54edc96550"
+dependencies = [
+ "futures-preview",
+ "pin-utils",
+]
 
 [[package]]
 name = "futures-timer"
@@ -2236,6 +2299,21 @@ dependencies = [
  "futures-task",
  "memchr",
  "pin-project-lite",
+ "pin-utils",
+ "slab",
+]
+
+[[package]]
+name = "futures-util-preview"
+version = "0.3.0-alpha.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ce968633c17e5f97936bd2797b6e38fb56cf16a7422319f7ec2e30d3c470e8d"
+dependencies = [
+ "futures-channel-preview",
+ "futures-core-preview",
+ "futures-io-preview",
+ "futures-sink-preview",
+ "memchr",
  "pin-utils",
  "slab",
 ]
@@ -3077,7 +3155,7 @@ checksum = "f210d259724eae82005b5c48078619b7745edb7b76de370b03f8ba59ea103097"
 dependencies = [
  "bytes",
  "futures",
- "futures-timer",
+ "futures-timer 3.0.2",
  "getrandom 0.2.9",
  "instant",
  "libp2p-allow-block-list",
@@ -3132,7 +3210,7 @@ dependencies = [
  "either",
  "fnv",
  "futures",
- "futures-timer",
+ "futures-timer 3.0.2",
  "instant",
  "libp2p-identity",
  "log",
@@ -3300,7 +3378,7 @@ checksum = "3e57759c19c28a73ef1eb3585ca410cefb72c1a709fcf6de1612a378e4219202"
 dependencies = [
  "either",
  "futures",
- "futures-timer",
+ "futures-timer 3.0.2",
  "instant",
  "libp2p-core",
  "libp2p-swarm",
@@ -3317,7 +3395,7 @@ checksum = "c6b26abd81cd2398382a1edfe739b539775be8a90fa6914f39b2ab49571ec735"
 dependencies = [
  "bytes",
  "futures",
- "futures-timer",
+ "futures-timer 3.0.2",
  "if-watch",
  "libp2p-core",
  "libp2p-identity",
@@ -3340,7 +3418,7 @@ dependencies = [
  "either",
  "fnv",
  "futures",
- "futures-timer",
+ "futures-timer 3.0.2",
  "instant",
  "libp2p-core",
  "libp2p-identity",
@@ -3370,7 +3448,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "33d33698596d7722d85d3ab0c86c2c322254fce1241e91208e3679b4eb3026cf"
 dependencies = [
  "futures",
- "futures-timer",
+ "futures-timer 3.0.2",
  "if-watch",
  "libc",
  "libp2p-core",
@@ -3408,7 +3486,7 @@ dependencies = [
  "asynchronous-codec",
  "bytes",
  "futures",
- "futures-timer",
+ "futures-timer 3.0.2",
  "hex",
  "if-watch",
  "libp2p-core",
@@ -3551,6 +3629,7 @@ dependencies = [
  "eyre",
  "figment",
  "futures",
+ "futures-timer 0.3.0",
  "hex",
  "jsonrpsee",
  "jsonwebtoken",
