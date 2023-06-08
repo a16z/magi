@@ -151,7 +151,7 @@ impl EngineApi {
                     .map_err(|e| eyre::eyre!(e))?
                     .json::<EngineApiResponse<P>>()
                     .map_err(|e| eyre::eyre!(e))
-                    .timeout(Duration::from_secs(10))
+                    .timeout(Duration::from_secs(15))
                     .map_err(|e| eyre::eyre!(e))
                     .await
             })
