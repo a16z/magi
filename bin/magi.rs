@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
 
 #[derive(Parser, Serialize)]
 pub struct Cli {
-    #[clap(short, long, default_value = "optimism-goerli")]
+    #[clap(short, long, default_value = "optimism")]
     network: String,
     #[clap(long)]
     l1_rpc_url: Option<String>,
