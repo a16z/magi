@@ -233,7 +233,7 @@ impl<E: Engine> Driver<E> {
             let unsafe_block_num = payload.block_number.as_u64();
             let synced_block_num = self.engine_driver.unsafe_head.number;
 
-            unsafe_block_num > synced_block_num && unsafe_block_num - synced_block_num < 256
+            unsafe_block_num > synced_block_num && unsafe_block_num - synced_block_num < 1024
         });
 
         let next_unsafe_payload = self
