@@ -109,12 +109,12 @@ impl Driver<EngineApi> {
         let _addr = rpc::run_server(config.clone()).await?;
 
         let (unsafe_block_signer_sender, unsafe_block_signer_recv) =
-            watch::channel(config.chain.system_config.unsafe_block_singer);
+            watch::channel(config.chain.system_config.unsafe_block_signer);
 
         let (block_handler, unsafe_block_recv) =
-            BlockHandler::new(config.chain.chain_id, unsafe_block_signer_recv);
+            BlockHandler::new(config.chain.l2_chain_id, unsafe_block_signer_recv);
 
-        let service = Service::new("0.0.0.0:9876".parse()?, config.chain.chain_id)
+        let service = Service::new("0.0.0.0:9876".parse()?, config.chain.l2_chain_id)
             .add_handler(Box::new(block_handler));
 
         Ok(Self {
@@ -276,7 +276,7 @@ impl<E: Engine> Driver<E> {
                         let num = l1_info.block_info.number;
 
                         self.unsafe_block_signer_sender
-                            .send(l1_info.system_config.unsafe_block_singer)?;
+                            .send(l1_info.system_config.unsafe_block_signer)?;
 
                         self.pipeline
                             .push_batcher_transactions(l1_info.batcher_transactions.clone(), num)?;

@@ -111,8 +111,10 @@ pub struct CliConfig {
 pub struct ChainConfig {
     /// The network name
     pub network: String,
-    /// The chain id
-    pub chain_id: u64,
+    /// The L1 chain id
+    pub l1_chain_id: u64,
+    /// The L2 chain id
+    pub l2_chain_id: u64,
     /// The L1 block referenced by the L2 chain
     pub l1_start_epoch: Epoch,
     /// The L2 genesis block info
@@ -154,7 +156,7 @@ pub struct SystemConfig {
     /// Fee scalar
     pub l1_fee_scalar: U256,
     /// Sequencer's signer for unsafe blocks
-    pub unsafe_block_singer: Address,
+    pub unsafe_block_signer: Address,
 }
 
 impl SystemConfig {
@@ -207,7 +209,8 @@ impl ChainConfig {
     pub fn optimism() -> Self {
         Self {
             network: "optimism".to_string(),
-            chain_id: 10,
+            l1_chain_id: 1,
+            l2_chain_id: 10,
             l1_start_epoch: Epoch {
                 hash: hash("0x438335a20d98863a4c0c97999eb2481921ccd28553eac6f913af7c12aec04108"),
                 number: 17422590,
@@ -226,7 +229,7 @@ impl ChainConfig {
                 gas_limit: U256::from(30_000_000),
                 l1_fee_overhead: U256::from(188),
                 l1_fee_scalar: U256::from(684000),
-                unsafe_block_singer: addr("0xAAAA45d9549EDA09E70937013520214382Ffc4A2"),
+                unsafe_block_signer: addr("0xAAAA45d9549EDA09E70937013520214382Ffc4A2"),
             },
             batch_inbox: addr("0xff00000000000000000000000000000000000010"),
             deposit_contract: addr("0xbEb5Fc579115071764c7423A4f12eDde41f106Ed"),
@@ -243,7 +246,8 @@ impl ChainConfig {
     pub fn optimism_goerli() -> Self {
         Self {
             network: "optimism-goerli".to_string(),
-            chain_id: 420,
+            l1_chain_id: 5,
+            l2_chain_id: 420,
             l1_start_epoch: Epoch {
                 hash: hash("0x6ffc1bf3754c01f6bb9fe057c1578b87a8571ce2e9be5ca14bace6eccfd336c7"),
                 number: 8300214,
@@ -262,7 +266,7 @@ impl ChainConfig {
                 gas_limit: U256::from(25_000_000),
                 l1_fee_overhead: U256::from(2100),
                 l1_fee_scalar: U256::from(1000000),
-                unsafe_block_singer: addr("0x715b7219D986641DF9eFd9C7Ef01218D528e19ec"),
+                unsafe_block_signer: addr("0x715b7219D986641DF9eFd9C7Ef01218D528e19ec"),
             },
             system_config_contract: addr("0xAe851f927Ee40dE99aaBb7461C00f9622ab91d60"),
             batch_inbox: addr("0xff00000000000000000000000000000000000420"),
@@ -279,7 +283,8 @@ impl ChainConfig {
     pub fn base_goerli() -> Self {
         Self {
             network: "base-goerli".to_string(),
-            chain_id: 84531,
+            l1_chain_id: 5,
+            l2_chain_id: 84531,
             l1_start_epoch: Epoch {
                 number: 8410981,
                 hash: hash("0x73d89754a1e0387b89520d989d3be9c37c1f32495a88faf1ea05c61121ab0d19"),
@@ -296,7 +301,7 @@ impl ChainConfig {
                 gas_limit: U256::from(25_000_000),
                 l1_fee_overhead: U256::from(2100),
                 l1_fee_scalar: U256::from(1000000),
-                unsafe_block_singer: addr("0x32a4e99A72c11E9DD3dC159909a2D7BD86C1Bc51"),
+                unsafe_block_signer: addr("0x32a4e99A72c11E9DD3dC159909a2D7BD86C1Bc51"),
             },
             system_config_contract: addr("0xb15eea247ece011c68a614e4a77ad648ff495bc1"),
             batch_inbox: addr("0x8453100000000000000000000000000000000000"),
