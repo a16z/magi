@@ -206,6 +206,13 @@ impl Default for DefaultsProvider {
 }
 
 impl ChainConfig {
+    /// Read and parse a chain config object from a JSON file path
+    pub fn from_json(path: &str) -> Self {
+        let file = std::fs::File::open(path).unwrap();
+        let external: ExternalChainConfig = serde_json::from_reader(file).unwrap();
+        external.into()
+    }
+
     pub fn optimism() -> Self {
         Self {
             network: "optimism".to_string(),
@@ -419,13 +426,6 @@ impl From<ExternalChainConfig> for ChainConfig {
             l2_to_l1_message_passer: Address::zero(),
         }
     }
-}
-
-/// Read and parse a chain config object from a JSON file path
-pub fn read_chain_config_from_json(path: &str) -> ChainConfig {
-    let file = std::fs::File::open(path).unwrap();
-    let external: ExternalChainConfig = serde_json::from_reader(file).unwrap();
-    external.into()
 }
 
 #[cfg(test)]
