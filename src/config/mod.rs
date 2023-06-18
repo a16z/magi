@@ -338,3 +338,174 @@ fn hash(s: &str) -> H256 {
 fn default_blocktime() -> u64 {
     2
 }
+
+/// External chain config
+///
+/// This is used to parse external chain configs from JSON.
+/// This interface corresponds to the default output of the `op-node`
+/// genesis devnet setup command `--outfile.rollup` flag.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ExternalChainConfig {
+    genesis: ExternalGenesisInfo,
+    block_time: u64,
+    max_sequencer_drift: u64,
+    seq_window_size: u64,
+    channel_timeout: u64,
+    l1_chain_id: u64,
+    l2_chain_id: u64,
+    regolith_time: u64,
+    batch_inbox_address: Address,
+    deposit_contract_address: Address,
+    l1_system_config_address: Address,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ExternalGenesisInfo {
+    l1: ChainGenesisInfo,
+    l2: ChainGenesisInfo,
+    l2_time: u64,
+    system_config: SystemConfigInfo,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SystemConfigInfo {
+    #[serde(rename = "batcherAddr")]
+    batcher_addr: Address,
+    overhead: H256,
+    scalar: H256,
+    #[serde(rename = "gasLimit")]
+    gas_limit: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ChainGenesisInfo {
+    hash: H256,
+    number: u64,
+}
+
+impl From<ExternalChainConfig> for ChainConfig {
+    fn from(external: ExternalChainConfig) -> Self {
+        Self {
+            network: "external".to_string(),
+            l1_chain_id: external.l1_chain_id,
+            l2_chain_id: external.l2_chain_id,
+            l1_start_epoch: Epoch {
+                hash: external.genesis.l1.hash,
+                number: external.genesis.l1.number,
+                timestamp: 0,
+            },
+            l2_genesis: BlockInfo {
+                hash: external.genesis.l2.hash,
+                number: external.genesis.l2.number,
+                parent_hash: H256::zero(),
+                timestamp: external.genesis.l2_time,
+            },
+            system_config: SystemConfig {
+                batch_sender: external.genesis.system_config.batcher_addr,
+                gas_limit: U256::from(external.genesis.system_config.gas_limit),
+                l1_fee_overhead: external.genesis.system_config.overhead.0.into(),
+                l1_fee_scalar: external.genesis.system_config.scalar.0.into(),
+                unsafe_block_signer: Address::zero(),
+            },
+            batch_inbox: external.batch_inbox_address,
+            deposit_contract: external.deposit_contract_address,
+            system_config_contract: external.l1_system_config_address,
+            max_channel_size: 100_000_000,
+            channel_timeout: external.channel_timeout,
+            seq_window_size: external.seq_window_size,
+            max_seq_drift: external.max_sequencer_drift,
+            regolith_time: external.regolith_time,
+            blocktime: external.block_time,
+            l2_to_l1_message_passer: Address::zero(),
+        }
+    }
+}
+
+/// Read and parse a chain config object from a JSON file path
+pub fn read_chain_config_from_json(path: &str) -> ChainConfig {
+    let file = std::fs::File::open(path).unwrap();
+    let external: ExternalChainConfig = serde_json::from_reader(file).unwrap();
+    external.into()
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_read_external_chain_from_json() {
+        let devnet_json = r#"
+        {
+            "genesis": {
+              "l1": {
+                "hash": "0xdb52a58e7341447d1a9525d248ea07dbca7dfa0e105721dee1aa5a86163c088d",
+                "number": 0
+              },
+              "l2": {
+                "hash": "0xf85bca315a08237644b06a8350cda3bc0de1593745a91be93daeadb28fb3a32e",
+                "number": 0
+              },
+              "l2_time": 1685710775,
+              "system_config": {
+                "batcherAddr": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
+                "overhead": "0x0000000000000000000000000000000000000000000000000000000000000834",
+                "scalar": "0x00000000000000000000000000000000000000000000000000000000000f4240",
+                "gasLimit": 30000000
+              }
+            },
+            "block_time": 2,
+            "max_sequencer_drift": 300,
+            "seq_window_size": 200,
+            "channel_timeout": 120,
+            "l1_chain_id": 900,
+            "l2_chain_id": 901,
+            "regolith_time": 0,
+            "batch_inbox_address": "0xff00000000000000000000000000000000000000",
+            "deposit_contract_address": "0x6900000000000000000000000000000000000001",
+            "l1_system_config_address": "0x6900000000000000000000000000000000000009"
+          }          
+        "#;
+
+        let external: ExternalChainConfig = serde_json::from_str(devnet_json).unwrap();
+        let chain: ChainConfig = external.into();
+
+        assert_eq!(chain.network, "external");
+        assert_eq!(chain.l1_chain_id, 900);
+        assert_eq!(chain.l2_chain_id, 901);
+        assert_eq!(chain.l1_start_epoch.number, 0);
+        assert_eq!(
+            chain.l1_start_epoch.hash,
+            hash("0xdb52a58e7341447d1a9525d248ea07dbca7dfa0e105721dee1aa5a86163c088d")
+        );
+        assert_eq!(chain.l2_genesis.number, 0);
+        assert_eq!(
+            chain.l2_genesis.hash,
+            hash("0xf85bca315a08237644b06a8350cda3bc0de1593745a91be93daeadb28fb3a32e")
+        );
+        assert_eq!(chain.system_config.gas_limit, U256::from(30_000_000));
+        assert_eq!(chain.system_config.l1_fee_overhead, U256::from(2100));
+        assert_eq!(chain.system_config.l1_fee_scalar, U256::from(1_000_000));
+        assert_eq!(
+            chain.system_config.batch_sender,
+            addr("0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc")
+        );
+        assert_eq!(
+            chain.batch_inbox,
+            addr("0xff00000000000000000000000000000000000000")
+        );
+        assert_eq!(
+            chain.deposit_contract,
+            addr("0x6900000000000000000000000000000000000001")
+        );
+        assert_eq!(
+            chain.system_config_contract,
+            addr("0x6900000000000000000000000000000000000009")
+        );
+        assert_eq!(chain.max_channel_size, 100_000_000);
+        assert_eq!(chain.channel_timeout, 120);
+        assert_eq!(chain.seq_window_size, 200);
+        assert_eq!(chain.max_seq_drift, 300);
+        assert_eq!(chain.regolith_time, 0);
+        assert_eq!(chain.blocktime, 2);
+    }
+}
