@@ -217,7 +217,7 @@ impl InnerWatcher {
                 l1_fee_scalar,
                 gas_limit: block.gas_limit,
                 // TODO: fetch from contract
-                unsafe_block_singer: config.chain.system_config.unsafe_block_singer,
+                unsafe_block_signer: config.chain.system_config.unsafe_block_signer,
             }
         };
 
@@ -325,7 +325,7 @@ impl InnerWatcher {
                         config.gas_limit = gas;
                     }
                     SystemConfigUpdate::UnsafeBlockSigner(addr) => {
-                        config.unsafe_block_singer = addr;
+                        config.unsafe_block_signer = addr;
                     }
                 }
 

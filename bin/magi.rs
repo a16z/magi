@@ -70,7 +70,12 @@ impl Cli {
             "optimism" => ChainConfig::optimism(),
             "optimism-goerli" => ChainConfig::optimism_goerli(),
             "base-goerli" => ChainConfig::base_goerli(),
-            _ => panic!("network not recognized"),
+            file if file.ends_with(".json") => ChainConfig::from_json(file),
+            _ => panic!(
+                "Invalid network name. \\
+                Please use one of the following: 'optimism', 'optimism-goerli', 'base-goerli'. \\
+                You can also use a JSON file path for custom configuration."
+            ),
         };
 
         let config_path = home_dir().unwrap().join(".magi/magi.toml");
