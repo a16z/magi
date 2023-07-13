@@ -12,6 +12,15 @@ then
         wget "https://storage.googleapis.com/oplabs-mainnet-data/mainnet-bedrock.tar" -P $DATADIR
         tar -xvf $DATADIR/mainnet-bedrock.tar -C $DATADIR
     fi
+elif [ $NETWORK = "base" ]
+then
+    CHAIN_ID=8453
+    if [ ! -d $DATADIR ]
+    then
+        mkdir $DATADIR
+        wget "https://raw.githubusercontent.com/base-org/node/main/mainnet/genesis-l2.json" -O ./genesis-l2.json
+        exec geth init --datadir=$DATADIR ./genesis-l2.json
+    fi
 elif [ $NETWORK = "optimism-goerli" ]
 then
     CHAIN_ID=420
