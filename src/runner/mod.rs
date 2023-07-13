@@ -1,18 +1,14 @@
-use std::{
-    process,
-    sync::{
-        mpsc::{channel, Receiver},
-        Arc,
-    },
-    time::Duration,
-};
+use std::{process, time::Duration};
 
 use ethers::{
     providers::{Http, Middleware, Provider},
     types::{BlockId, BlockNumber, H256},
 };
 use eyre::Result;
-use tokio::time::sleep;
+use tokio::{
+    sync::watch::{channel, Receiver},
+    time::sleep,
+};
 
 use crate::{
     config::{Config, SyncMode, SystemAccounts},
@@ -26,16 +22,16 @@ pub struct Runner {
     config: Config,
     sync_mode: SyncMode,
     checkpoint_hash: Option<String>,
-    shutdown_recv: Arc<Receiver<()>>,
+    shutdown_recv: Receiver<bool>,
 }
 
 impl Runner {
     pub fn from_config(config: Config) -> Self {
-        let (shutdown_sender, shutdown_recv) = channel();
+        let (shutdown_sender, shutdown_recv) = channel(false);
         ctrlc::set_handler(move || {
             tracing::info!("shutting down");
             shutdown_sender
-                .send(())
+                .send(true)
                 .expect("could not send shutdown signal");
         })
         .expect("could not register shutdown handler");
@@ -44,7 +40,7 @@ impl Runner {
             config,
             sync_mode: SyncMode::Full,
             checkpoint_hash: None,
-            shutdown_recv: Arc::new(shutdown_recv),
+            shutdown_recv,
         }
     }
 
@@ -197,7 +193,7 @@ impl Runner {
     }
 
     fn check_shutdown(&self) -> Result<()> {
-        if self.shutdown_recv.try_recv().is_ok() {
+        if *self.shutdown_recv.borrow() {
             tracing::warn!("shutting down");
             process::exit(0);
         }

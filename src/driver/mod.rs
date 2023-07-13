@@ -50,7 +50,7 @@ pub struct Driver<E: Engine> {
     /// L1 chain watcher
     chain_watcher: ChainWatcher,
     /// Channel to receive the shutdown signal from
-    shutdown_recv: Arc<Receiver<()>>,
+    shutdown_recv: watch::Receiver<bool>,
     /// Channel to receive unsafe block from
     unsafe_block_recv: Receiver<ExecutionPayload>,
     /// Channel to send unsafe signer updated to block handler
@@ -62,7 +62,7 @@ pub struct Driver<E: Engine> {
 }
 
 impl Driver<EngineApi> {
-    pub async fn from_config(config: Config, shutdown_recv: Arc<Receiver<()>>) -> Result<Self> {
+    pub async fn from_config(config: Config, shutdown_recv: watch::Receiver<bool>) -> Result<Self> {
         let client = reqwest::ClientBuilder::new()
             .timeout(Duration::from_secs(5))
             .build()?;
@@ -157,7 +157,7 @@ impl<E: Engine> Driver<E> {
 
     /// Checks for shutdown signal and shuts down if received
     async fn check_shutdown(&self) {
-        if self.shutdown_recv.try_recv().is_ok() {
+        if *self.shutdown_recv.borrow() {
             self.shutdown().await;
         }
     }
@@ -356,10 +356,11 @@ impl<E: Engine> Driver<E> {
 
 #[cfg(test)]
 mod tests {
-    use std::{path::PathBuf, str::FromStr, sync::mpsc::channel};
+    use std::{path::PathBuf, str::FromStr};
 
     use ethers::providers::{Http, Middleware};
     use eyre::Result;
+    use tokio::sync::watch::channel;
 
     use crate::config::{ChainConfig, CliConfig};
 
@@ -382,13 +383,13 @@ mod tests {
                 rpc_port: None,
             };
             let config = Config::new(&config_path, cli_config, ChainConfig::optimism_goerli());
-            let (_shutdown_sender, shutdown_recv) = channel();
+            let (_shutdown_sender, shutdown_recv) = channel(false);
 
             let block_id = BlockId::Number(BlockNumber::Finalized);
             let provider = Provider::<Http>::try_from(config.l2_rpc_url.clone())?;
             let finalized_block = provider.get_block(block_id).await?.unwrap();
 
-            let driver = Driver::from_config(config, Arc::new(shutdown_recv)).await?;
+            let driver = Driver::from_config(config, shutdown_recv).await?;
 
             assert_eq!(
                 driver.engine_driver.finalized_head.number,
