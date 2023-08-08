@@ -16,6 +16,6 @@ COPY ./ ./
 RUN RUSTFLAGS="$(cat /.rustflags)" cargo build --release --config net.git-fetch-with-cli=true --target $(cat /.platform)
 RUN cp /magi/target/$(cat /.platform)/release/magi /magi/magi
 
-FROM debian:buster-slim
+FROM debian:bullseye-slim
 RUN apt-get update && apt-get install -y libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
 COPY --from=build /magi/magi /usr/local/bin
