@@ -1,6 +1,8 @@
 #!/bin/sh
 set -e
 
+apk add zstd
+
 DATADIR=/data/geth
 
 if [ $NETWORK = "optimism" ]
@@ -9,8 +11,8 @@ then
     if [ ! -d $DATADIR ]
     then
         mkdir $DATADIR
-        wget "https://storage.googleapis.com/oplabs-mainnet-data/mainnet-bedrock.tar" -P $DATADIR
-        tar -xvf $DATADIR/mainnet-bedrock.tar -C $DATADIR
+        wget "https://datadirs.optimism.io/mainnet-bedrock.tar.zst" -P $DATADIR
+        zstd -cd $DATADIR/mainnet-bedrock.tar.zst | tar xvf - -C $DATADIR
     fi
 elif [ $NETWORK = "base" ]
 then
@@ -27,8 +29,8 @@ then
     if [ ! -d $DATADIR ]
     then
         mkdir $DATADIR
-        wget "https://storage.googleapis.com/oplabs-goerli-data/goerli-bedrock.tar" -P $DATADIR
-        tar -xvf $DATADIR/goerli-bedrock.tar -C $DATADIR
+        wget "https://datadirs.optimism.io/goerli-bedrock.tar.zst" -P $DATADIR
+        zstd -cd $DATADIR/goerli-bedrock.tar.zst | tar xvf - -C $DATADIR
     fi
 elif [ $NETWORK = "base-goerli" ]
 then
