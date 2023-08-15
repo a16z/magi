@@ -5,7 +5,7 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME: samueldare/magi
+  IMAGE_NAME: a16zcrypto/magi
 
 jobs:
   container:
