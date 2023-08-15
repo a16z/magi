@@ -5,7 +5,7 @@ on:
 
 env:
   # REGISTRY: docker.io/a16zcrypto/
-  REGISTRY: docker.io/samueldare
+  REGISTRY: docker.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
@@ -40,11 +40,19 @@ jobs:
       run: |
         echo "::set-output name=docker_tags::${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_REF##*/}"
 
+    - name: Set up Docker Buildx cache
+      uses: actions/cache@v2
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+
     - name: Build and push Docker image
       uses: docker/build-push-action@v3
       with:
         context: .
         push: true
         tags: ${{ steps.docker_tagging.outputs.docker_tags }}
-        cache-from: type=local
-        cache-to: type=local,mode=max
+        cache-from: type=local,src=/tmp/.buildx-cache
+        cache-to: type=local,dest=/tmp/.buildx-cache
