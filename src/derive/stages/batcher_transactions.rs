@@ -108,11 +108,7 @@ impl Frame {
 
         let frame_data = data[22..frame_data_end].to_vec();
 
-        let is_last = if data[frame_data_end] > 1 {
-            eyre::bail!("invalid is_last flag");
-        } else {
-            data[frame_data_end] != 0
-        };
+        let is_last = data[frame_data_end] != 0;
 
         let frame = Self {
             channel_id,
