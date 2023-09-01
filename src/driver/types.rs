@@ -41,6 +41,7 @@ impl TryFrom<Block<Transaction>> for HeadInfo {
 #[cfg(test)]
 mod tests {
     mod head_info {
+        use crate::driver::HeadInfo;
         use std::str::FromStr;
 
         use ethers::{
@@ -48,8 +49,6 @@ mod tests {
             types::{Block, Transaction, H256},
         };
         use eyre::Result;
-
-        use crate::driver::HeadInfo;
 
         #[test]
         fn should_fail_conversion_from_a_block_to_head_info_if_missing_l1_deposited_tx(
