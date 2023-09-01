@@ -5,8 +5,8 @@ use std::{
 };
 
 use ethers::{
-    providers::{Http, Middleware, Provider},
-    types::{Address, BlockId, BlockNumber},
+    providers::{Http, Provider},
+    types::Address,
 };
 use eyre::Result;
 use reqwest::Url;
@@ -19,7 +19,6 @@ use crate::{
     common::{BlockInfo, Epoch},
     config::Config,
     derive::{state::State, Pipeline},
-    driver::types::HeadInfo,
     engine::{Engine, EngineApi, ExecutionPayload},
     l1::{BlockUpdate, ChainWatcher},
     network::{handlers::block_handler::BlockHandler, service::Service},
@@ -30,7 +29,9 @@ use crate::{
 use self::engine_driver::EngineDriver;
 
 mod engine_driver;
+mod info;
 mod types;
+pub use types::*;
 
 /// Driver is responsible for advancing the execution node by feeding
 /// the derived chain into the engine API
@@ -70,19 +71,9 @@ impl Driver<EngineApi> {
         let http = Http::new_with_client(Url::parse(&config.l2_rpc_url)?, client);
         let provider = Provider::new(http);
 
-        let block_id = BlockId::Number(BlockNumber::Finalized);
-        let finalized_block = provider.get_block_with_txs(block_id).await?;
-
-        let head = finalized_block
-            .and_then(|block| HeadInfo::try_from(block).ok())
-            .unwrap_or_else(|| {
-                tracing::warn!("could not get head info. Falling back to the genesis head.");
-                HeadInfo {
-                    l2_block_info: config.chain.l2_genesis,
-                    l1_epoch: config.chain.l1_start_epoch,
-                    sequence_number: 0,
-                }
-            });
+        let head =
+            info::HeadInfoQuery::get_head_info(&info::HeadInfoFetcher::from(&provider), &config)
+                .await;
 
         let finalized_head = head.l2_block_info;
         let finalized_epoch = head.l1_epoch;
@@ -358,7 +349,10 @@ impl<E: Engine> Driver<E> {
 mod tests {
     use std::{path::PathBuf, str::FromStr};
 
-    use ethers::providers::{Http, Middleware};
+    use ethers::{
+        providers::{Http, Middleware},
+        types::{BlockId, BlockNumber},
+    };
     use eyre::Result;
     use tokio::sync::watch::channel;
 
