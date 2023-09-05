@@ -130,18 +130,21 @@ impl EngineApi {
             .as_ref()
             .ok_or(eyre::eyre!("Driver missing http client"))?;
 
-        // Construct the JWT Authorization Token
-        let claims = self.secret.generate_claims(Some(SystemTime::now()));
-        let jwt = self
-            .secret
-            .encode(&claims)
-            .map_err(|_| eyre::eyre!("EngineApi failed to encode jwt with claims!"))?;
+        // Clone the secret so we can use it in the retry policy.
+        let secret_clone = self.secret.clone();
 
         let policy = RetryPolicy::fixed(Duration::ZERO).with_max_retries(5);
 
         // Send the request
         let res = policy
             .retry(|| async {
+                // Construct the JWT Authorization Token
+                let claims = secret_clone.generate_claims(Some(SystemTime::now()));
+                let jwt = secret_clone
+                    .encode(&claims)
+                    .map_err(|_| eyre::eyre!("EngineApi failed to encode jwt with claims!"))?;
+
+                // Send the request
                 client
                     .post(&self.base_url)
                     .header(header::AUTHORIZATION, format!("Bearer {}", jwt))
