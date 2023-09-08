@@ -1,7 +1,11 @@
-FROM --platform=$BUILDPLATFORM rust:latest as build
+FROM --platform=$BUILDPLATFORM debian:bullseye-slim as base
+RUN apt update && apt install -y libudev-dev build-essential ca-certificates clang curl git libpq-dev libssl-dev pkg-config lsof lld
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+ENV PATH "$PATH:/root/.cargo/bin"
+
+FROM base as build
 WORKDIR /magi
 ARG TARGETARCH
-
 COPY ./platform.sh .
 RUN ./platform.sh
 RUN rustup target add $(cat /.platform) 
