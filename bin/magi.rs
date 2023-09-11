@@ -69,6 +69,7 @@ impl Cli {
         let chain = match self.network.as_str() {
             "optimism" => ChainConfig::optimism(),
             "optimism-goerli" => ChainConfig::optimism_goerli(),
+            "optimism-sepolia" => ChainConfig::optimism_sepolia(),
             "base" => ChainConfig::base(),
             "base-goerli" => ChainConfig::base_goerli(),
             file if file.ends_with(".json") => ChainConfig::from_json(file),
