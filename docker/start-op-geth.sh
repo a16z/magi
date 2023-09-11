@@ -32,6 +32,14 @@ then
         wget "https://datadirs.optimism.io/goerli-bedrock.tar.zst" -P $DATADIR
         zstd -cd $DATADIR/goerli-bedrock.tar.zst | tar xvf - -C $DATADIR
     fi
+elif [ "$NETWORK" = "optimism-sepolia" ]
+then
+    CHAIN_ID=11155420
+    if [ ! -d "$DATADIR" ]
+    then
+        wget "https://storage.googleapis.com/oplabs-network-data/Sepolia/genesis.json" -O ./genesis-l2.json
+        geth init --datadir=$DATADIR ./genesis-l2.json
+    fi
 elif [ $NETWORK = "base-goerli" ]
 then
     CHAIN_ID=84531
