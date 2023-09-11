@@ -55,10 +55,6 @@ impl State {
         })
     }
 
-    pub fn is_full(&self) -> bool {
-        self.current_epoch_num > self.safe_epoch.number + 1000
-    }
-
     pub fn update_l1_info(&mut self, l1_info: L1Info) {
         self.current_epoch_num = l1_info.block_info.number;
 

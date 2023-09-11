@@ -202,6 +202,11 @@ impl<E: Engine> Driver<E> {
             let new_safe_head = self.engine_driver.safe_head;
             let new_safe_epoch = self.engine_driver.safe_epoch;
 
+            self.state
+                .write()
+                .map_err(|_| eyre::eyre!("lock poisoned"))?
+                .update_safe_head(new_safe_head, new_safe_epoch);
+
             let unfinalized_entry = (
                 new_safe_head,
                 new_safe_epoch,
@@ -252,54 +257,46 @@ impl<E: Engine> Driver<E> {
 
     /// Ingests the next update from the block update channel
     async fn handle_next_block_update(&mut self) -> Result<()> {
-        let is_state_full = self
-            .state
-            .read()
-            .map_err(|_| eyre::eyre!("lock poisoned"))?
-            .is_full();
+        let next = self.chain_watcher.block_update_receiver.try_recv();
 
-        if !is_state_full {
-            let next = self.chain_watcher.block_update_receiver.try_recv();
+        if let Ok(update) = next {
+            match update {
+                BlockUpdate::NewBlock(l1_info) => {
+                    let num = l1_info.block_info.number;
 
-            if let Ok(update) = next {
-                match update {
-                    BlockUpdate::NewBlock(l1_info) => {
-                        let num = l1_info.block_info.number;
+                    self.unsafe_block_signer_sender
+                        .send(l1_info.system_config.unsafe_block_signer)?;
 
-                        self.unsafe_block_signer_sender
-                            .send(l1_info.system_config.unsafe_block_signer)?;
+                    self.pipeline
+                        .push_batcher_transactions(l1_info.batcher_transactions.clone(), num)?;
 
-                        self.pipeline
-                            .push_batcher_transactions(l1_info.batcher_transactions.clone(), num)?;
+                    self.state
+                        .write()
+                        .map_err(|_| eyre::eyre!("lock poisoned"))?
+                        .update_l1_info(*l1_info);
+                }
+                BlockUpdate::Reorg => {
+                    tracing::warn!("reorg detected, purging pipeline");
 
-                        self.state
-                            .write()
-                            .map_err(|_| eyre::eyre!("lock poisoned"))?
-                            .update_l1_info(*l1_info);
-                    }
-                    BlockUpdate::Reorg => {
-                        tracing::warn!("reorg detected, purging pipeline");
+                    self.unfinalized_blocks.clear();
+                    self.chain_watcher.restart(
+                        self.engine_driver.finalized_epoch.number - self.channel_timeout,
+                        self.engine_driver.finalized_head.number,
+                    )?;
 
-                        self.unfinalized_blocks.clear();
-                        self.chain_watcher.restart(
-                            self.engine_driver.finalized_epoch.number - self.channel_timeout,
-                            self.engine_driver.finalized_head.number,
-                        )?;
+                    self.state
+                        .write()
+                        .map_err(|_| eyre::eyre!("lock poisoned"))?
+                        .purge(
+                            self.engine_driver.finalized_head,
+                            self.engine_driver.finalized_epoch,
+                        );
 
-                        self.state
-                            .write()
-                            .map_err(|_| eyre::eyre!("lock poisoned"))?
-                            .purge(
-                                self.engine_driver.finalized_head,
-                                self.engine_driver.finalized_epoch,
-                            );
-
-                        self.pipeline.purge()?;
-                        self.engine_driver.reorg();
-                    }
-                    BlockUpdate::FinalityUpdate(num) => {
-                        self.finalized_l1_block_number = num;
-                    }
+                    self.pipeline.purge()?;
+                    self.engine_driver.reorg();
+                }
+                BlockUpdate::FinalityUpdate(num) => {
+                    self.finalized_l1_block_number = num;
                 }
             }
         }
