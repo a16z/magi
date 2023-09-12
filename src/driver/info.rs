@@ -52,8 +52,7 @@ impl HeadInfoQuery {
     }
 }
 
-#[allow(dead_code)]
-#[cfg(any(test, feature = "test-utils"))]
+#[cfg(all(test, feature = "test-utils"))]
 mod test_utils {
     use super::*;
     use crate::common::{BlockInfo, Epoch};
