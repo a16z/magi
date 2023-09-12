@@ -257,7 +257,7 @@ impl<E: Engine> Driver<E> {
 
     /// Ingests the next update from the block update channel
     async fn handle_next_block_update(&mut self) -> Result<()> {
-        let next = self.chain_watcher.block_update_receiver.try_recv();
+        let next = self.chain_watcher.try_recv_from_channel();
 
         if let Ok(update) = next {
             match update {

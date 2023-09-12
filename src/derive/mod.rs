@@ -128,8 +128,8 @@ mod tests {
 
             let mut pipeline = Pipeline::new(state.clone(), config.clone(), 0).unwrap();
 
-            chain_watcher.block_update_receiver.recv().await.unwrap();
-            let update = chain_watcher.block_update_receiver.recv().await.unwrap();
+            chain_watcher.recv_from_channel().await.unwrap();
+            let update = chain_watcher.recv_from_channel().await.unwrap();
 
             let l1_info = match update {
                 BlockUpdate::NewBlock(block) => *block,
