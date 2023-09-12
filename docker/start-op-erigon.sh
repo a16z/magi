@@ -20,7 +20,7 @@ fi
 
 echo $JWT_SECRET > jwtsecret.txt
 
-erigon \
+exec erigon \
     --datadir=$DATADIR \
     --private.api.addr=localhost:9090 \
     --http.addr=0.0.0.0 \
