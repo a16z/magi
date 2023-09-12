@@ -29,6 +29,7 @@ services:
     volumes:
       - ./:/scripts
       - data:/data
+      - ${OP_ROLLUP_JSON_FILEPATH:-.}:/rollup.json
     <<: *logging
 
   op-geth:
@@ -48,6 +49,7 @@ services:
     volumes:
       - ./:/scripts
       - data:/data
+      - ${OP_GENESIS_JSON_FILEPATH:-.}:/genesis-l2.json
     <<: *logging
 
   op-erigon:
