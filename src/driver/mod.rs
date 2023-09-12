@@ -81,12 +81,12 @@ impl Driver<EngineApi> {
 
         tracing::info!("starting from head: {:?}", finalized_head.hash);
 
+        let l1_start_block =
+            get_l1_start_block(finalized_epoch.number, config.chain.channel_timeout);
+
         let config = Arc::new(config);
-        let chain_watcher = ChainWatcher::new(
-            finalized_epoch.number - config.chain.channel_timeout,
-            finalized_head.number,
-            config.clone(),
-        )?;
+        let chain_watcher =
+            ChainWatcher::new(l1_start_block, finalized_head.number, config.clone())?;
 
         let state = Arc::new(RwLock::new(State::new(
             finalized_head,
@@ -279,10 +279,14 @@ impl<E: Engine> Driver<E> {
                     tracing::warn!("reorg detected, purging pipeline");
 
                     self.unfinalized_blocks.clear();
-                    self.chain_watcher.restart(
-                        self.engine_driver.finalized_epoch.number - self.channel_timeout,
-                        self.engine_driver.finalized_head.number,
-                    )?;
+
+                    let l1_start_block = get_l1_start_block(
+                        self.engine_driver.finalized_epoch.number,
+                        self.channel_timeout,
+                    );
+
+                    self.chain_watcher
+                        .restart(l1_start_block, self.engine_driver.finalized_head.number)?;
 
                     self.state
                         .write()
@@ -340,6 +344,14 @@ impl<E: Engine> Driver<E> {
     fn synced(&self) -> bool {
         !self.unfinalized_blocks.is_empty()
     }
+}
+
+/// Retrieves the L1 start block number.
+/// If an overflow occurs during subtraction, the function returns the genesis block (represented by `epoch_number`).
+fn get_l1_start_block(epoch_number: u64, channel_timeout: u64) -> u64 {
+    epoch_number
+        .checked_sub(channel_timeout)
+        .unwrap_or(epoch_number)
 }
 
 #[cfg(test)]
