@@ -384,6 +384,7 @@ mod tests {
                 ),
                 checkpoint_sync_url: Some(l2_rpc.to_owned()),
                 rpc_port: None,
+                devnet: false,
             };
             let config = Config::new(&config_path, cli_config, ChainConfig::optimism_goerli());
             let (_shutdown_sender, shutdown_recv) = channel(false);

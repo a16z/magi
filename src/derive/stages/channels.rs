@@ -396,6 +396,7 @@ mod tests {
             rpc_port: 9545,
             chain: ChainConfig::optimism_goerli(),
             checkpoint_sync_url: None,
+            devnet: false,
         };
 
         let (tx, rx) = mpsc::channel();

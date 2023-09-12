@@ -108,6 +108,7 @@ mod tests {
                 jwt_secret: String::new(),
                 checkpoint_sync_url: None,
                 rpc_port: 9545,
+                devnet: false,
             });
 
             let mut chain_watcher = ChainWatcher::new(
