@@ -62,6 +62,8 @@ pub struct Cli {
     checkpoint_hash: Option<String>,
     #[clap(long)]
     checkpoint_sync_url: Option<String>,
+    #[clap(long)]
+    devnet: bool,
 }
 
 impl Cli {
@@ -95,6 +97,7 @@ impl From<Cli> for CliConfig {
             jwt_secret: value.jwt_secret,
             checkpoint_sync_url: value.checkpoint_sync_url,
             rpc_port: value.rpc_port,
+            devnet: value.devnet,
         }
     }
 }

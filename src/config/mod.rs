@@ -54,6 +54,8 @@ pub struct Config {
     pub checkpoint_sync_url: Option<String>,
     /// The port of RPC server
     pub rpc_port: u16,
+    /// The devnet mode.
+    pub devnet: bool,
 }
 
 impl Config {
@@ -104,6 +106,8 @@ pub struct CliConfig {
     pub checkpoint_sync_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc_port: Option<u16>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub devnet: bool,
 }
 
 /// A Chain Configuration
