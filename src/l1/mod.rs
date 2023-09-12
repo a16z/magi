@@ -354,9 +354,14 @@ impl InnerWatcher {
     }
 
     async fn get_finalized(&self) -> Result<u64> {
+        let block_number = match self.config.devnet {
+            false => BlockNumber::Finalized,
+            true => BlockNumber::Latest,
+        };
+
         Ok(self
             .provider
-            .get_block(BlockNumber::Finalized)
+            .get_block(block_number)
             .await?
             .ok_or(eyre::eyre!("block not found"))?
             .number
