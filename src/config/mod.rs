@@ -106,7 +106,7 @@ pub struct CliConfig {
     pub checkpoint_sync_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc_port: Option<u16>,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    #[serde(default)]
     pub devnet: bool,
 }
 
