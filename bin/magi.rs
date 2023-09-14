@@ -52,7 +52,7 @@ pub struct Cli {
     #[clap(long)]
     jwt_secret: Option<String>,
     /// Path to a JWT secret to use for authenticated RPC endpoints
-    #[clap(long, global = true, required = false)]
+    #[clap(long)]
     jwt_file: Option<PathBuf>,
     #[clap(short = 'v', long)]
     verbose: bool,
