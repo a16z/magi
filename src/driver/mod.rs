@@ -347,11 +347,9 @@ impl<E: Engine> Driver<E> {
 }
 
 /// Retrieves the L1 start block number.
-/// If an overflow occurs during subtraction, the function returns the genesis block (represented by `epoch_number`).
+/// If an overflow occurs during subtraction, the function returns the genesis block #0.
 fn get_l1_start_block(epoch_number: u64, channel_timeout: u64) -> u64 {
-    epoch_number
-        .checked_sub(channel_timeout)
-        .unwrap_or(epoch_number)
+    epoch_number.saturating_sub(channel_timeout)
 }
 
 #[cfg(test)]
