@@ -51,12 +51,8 @@ then
     fi
 elif [ $NETWORK = "custom" ] || [ $NETWORK = "devnet" ]
 then
-    if [ $NETWORK = "devnet" ]
-    then
-         rm -rf $DATADIR
-    fi
-
     CHAIN_ID=$(jq '.config.chainId' ./genesis-l2.json)
+    
     if [ ! -d $DATADIR ]
     then
         mkdir $DATADIR
