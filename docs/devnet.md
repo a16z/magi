@@ -1,6 +1,6 @@
 # Devnet Environment
 
-The devnet environment is constructed atop the OP stack devnet, also known as "bedrock". Essentially, this environment runs `op-geth` and `geth` node in development mode, excluding the PoS client, and without finality. This is why the `--devnet` flag is necessary. This flag allows for the acceptance of any block as finalized. Otherwise, the Magi would operate exclusively with finalized blocks.
+The devnet environment is built on the foundation of the locally available Optimism Bedrock devnet. Essentially, this environment runs `op-geth` and `geth` node in development mode, excluding the PoS client, and without finality. This is why the `--devnet` flag for Magi is necessary. This flag allows for the acceptance of any block as finalized. Otherwise, the Magi would operate exclusively with finalized blocks.
 
 The devnet environment for Magi connects to the initiated OP L1 devnet node and launches its own corresponding `op-geth` node from the Magi docker. Magi employs this as its L2 node and execution engine.
 
