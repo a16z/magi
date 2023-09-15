@@ -22,7 +22,7 @@ To launch the OP devnet, ensure you have [Docker](https://www.docker.com/):
 
 For troubleshooting, please refer to the official [documentation](https://community.optimism.io/docs/developers/build/dev-node/#).
 
-### Configure OP-Geth for Magic
+### Configure OP-Geth for Magi
 
 Once you have successfully started the OP devnet docker containers, proceed to the next step: launching an `op-geth` L2 instance for Magi.
 
