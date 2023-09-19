@@ -29,6 +29,7 @@ services:
     volumes:
       - ./:/scripts
       - data:/data
+      - ${OP_ROLLUP_JSON_FILEPATH:-.}:/rollup.json
     <<: *logging
 
   op-geth:
@@ -42,12 +43,13 @@ services:
     env_file:
       - .env
     ports:
-      - 8551:8551
-      - 8545:8545
-      - 8546:8546
+      - ${EXECUTION_CLIENT_AUTH_RPC_PORT}:8551
+      - ${EXECUTION_CLIENT_RPC_PORT}:8545
+      - ${EXECUTION_CLIENT_WS_PORT}:8546
     volumes:
       - ./:/scripts
       - data:/data
+      - ${OP_GENESIS_JSON_FILEPATH:-.}:/genesis-l2.json
     <<: *logging
 
   op-erigon:
@@ -61,9 +63,9 @@ services:
     env_file:
       - .env
     ports:
-      - 8551:8551
-      - 8545:8545
-      - 8546:8546
+      - ${EXECUTION_CLIENT_AUTH_RPC_PORT}:8551
+      - ${EXECUTION_CLIENT_RPC_PORT}:8545
+      - ${EXECUTION_CLIENT_WS_PORT}:8546
     volumes:
       - ./:/scripts
       - data:/data

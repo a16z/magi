@@ -81,12 +81,12 @@ impl Driver<EngineApi> {
 
         tracing::info!("starting from head: {:?}", finalized_head.hash);
 
+        let l1_start_block =
+            get_l1_start_block(finalized_epoch.number, config.chain.channel_timeout);
+
         let config = Arc::new(config);
-        let chain_watcher = ChainWatcher::new(
-            finalized_epoch.number - config.chain.channel_timeout,
-            finalized_head.number,
-            config.clone(),
-        )?;
+        let chain_watcher =
+            ChainWatcher::new(l1_start_block, finalized_head.number, config.clone())?;
 
         let state = Arc::new(RwLock::new(State::new(
             finalized_head,
@@ -257,7 +257,7 @@ impl<E: Engine> Driver<E> {
 
     /// Ingests the next update from the block update channel
     async fn handle_next_block_update(&mut self) -> Result<()> {
-        let next = self.chain_watcher.block_update_receiver.try_recv();
+        let next = self.chain_watcher.try_recv_from_channel();
 
         if let Ok(update) = next {
             match update {
@@ -279,10 +279,14 @@ impl<E: Engine> Driver<E> {
                     tracing::warn!("reorg detected, purging pipeline");
 
                     self.unfinalized_blocks.clear();
-                    self.chain_watcher.restart(
-                        self.engine_driver.finalized_epoch.number - self.channel_timeout,
-                        self.engine_driver.finalized_head.number,
-                    )?;
+
+                    let l1_start_block = get_l1_start_block(
+                        self.engine_driver.finalized_epoch.number,
+                        self.channel_timeout,
+                    );
+
+                    self.chain_watcher
+                        .restart(l1_start_block, self.engine_driver.finalized_head.number)?;
 
                     self.state
                         .write()
@@ -342,6 +346,12 @@ impl<E: Engine> Driver<E> {
     }
 }
 
+/// Retrieves the L1 start block number.
+/// If an overflow occurs during subtraction, the function returns the genesis block #0.
+fn get_l1_start_block(epoch_number: u64, channel_timeout: u64) -> u64 {
+    epoch_number.saturating_sub(channel_timeout)
+}
+
 #[cfg(test)]
 mod tests {
     use std::{path::PathBuf, str::FromStr};
@@ -372,6 +382,7 @@ mod tests {
                 ),
                 checkpoint_sync_url: Some(l2_rpc.to_owned()),
                 rpc_port: None,
+                devnet: false,
             };
             let config = Config::new(&config_path, cli_config, ChainConfig::optimism_goerli());
             let (_shutdown_sender, shutdown_recv) = channel(false);

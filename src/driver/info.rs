@@ -52,8 +52,7 @@ impl HeadInfoQuery {
     }
 }
 
-#[allow(dead_code)]
-#[cfg(any(test, feature = "test-utils"))]
+#[cfg(all(test, feature = "test-utils"))]
 mod test_utils {
     use super::*;
     use crate::common::{BlockInfo, Epoch};
@@ -133,6 +132,7 @@ mod test_utils {
             jwt_secret: Default::default(),
             checkpoint_sync_url: Default::default(),
             rpc_port: Default::default(),
+            devnet: false,
         }
     }
 

@@ -43,7 +43,7 @@ pub struct ChainWatcher {
     /// The L2 starting block
     l2_start_block: u64,
     /// Channel for receiving block updates for each new block
-    pub block_update_receiver: mpsc::Receiver<BlockUpdate>,
+    block_update_receiver: Option<mpsc::Receiver<BlockUpdate>>,
 }
 
 /// Updates L1Info
@@ -126,14 +126,12 @@ impl ChainWatcher {
     /// Creates a new ChainWatcher and begins the monitoring task.
     /// Errors if the rpc url in the config is invalid.
     pub fn new(l1_start_block: u64, l2_start_block: u64, config: Arc<Config>) -> Result<Self> {
-        let (_, block_updates) = mpsc::channel(1);
-
         Ok(Self {
             handle: None,
             config,
             l1_start_block,
             l2_start_block,
-            block_update_receiver: block_updates,
+            block_update_receiver: None,
         })
     }
 
@@ -150,7 +148,7 @@ impl ChainWatcher {
         )?;
 
         self.handle = Some(handle);
-        self.block_update_receiver = recv;
+        self.block_update_receiver = Some(recv);
 
         Ok(())
     }
@@ -164,11 +162,31 @@ impl ChainWatcher {
         let (handle, recv) = start_watcher(l1_start_block, l2_start_block, self.config.clone())?;
 
         self.handle = Some(handle);
-        self.block_update_receiver = recv;
+        self.block_update_receiver = Some(recv);
         self.l1_start_block = l1_start_block;
         self.l2_start_block = l2_start_block;
 
         Ok(())
+    }
+
+    /// Attempts to receive a message from the block update channel.
+    /// Returns an error if the channel contains no messages.
+    pub fn try_recv_from_channel(&mut self) -> Result<BlockUpdate> {
+        let receiver = self
+            .block_update_receiver
+            .as_mut()
+            .ok_or(eyre::eyre!("the watcher hasn't started"))?;
+
+        receiver.try_recv().map_err(eyre::Report::from)
+    }
+
+    /// Asynchronously receives from the block update channel.
+    /// Returns `None` if the channel contains no messages.
+    pub async fn recv_from_channel(&mut self) -> Option<BlockUpdate> {
+        match &mut self.block_update_receiver {
+            Some(receiver) => receiver.recv().await,
+            None => None,
+        }
     }
 }
 
@@ -354,9 +372,14 @@ impl InnerWatcher {
     }
 
     async fn get_finalized(&self) -> Result<u64> {
+        let block_number = match self.config.devnet {
+            false => BlockNumber::Finalized,
+            true => BlockNumber::Latest,
+        };
+
         Ok(self
             .provider
-            .get_block(BlockNumber::Finalized)
+            .get_block(block_number)
             .await?
             .ok_or(eyre::eyre!("block not found"))?
             .number

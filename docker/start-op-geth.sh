@@ -2,6 +2,7 @@
 set -e
 
 apk add zstd
+apk add jq
 
 DATADIR=/data/geth
 
@@ -21,7 +22,7 @@ then
     then
         mkdir $DATADIR
         wget "https://raw.githubusercontent.com/base-org/node/main/mainnet/genesis-l2.json" -O ./genesis-l2.json
-        exec geth init --datadir=$DATADIR ./genesis-l2.json
+        geth init --datadir=$DATADIR ./genesis-l2.json
     fi
 elif [ $NETWORK = "optimism-goerli" ]
 then
@@ -46,7 +47,16 @@ then
     if [ ! -d $DATADIR ]
     then
         wget "https://raw.githubusercontent.com/base-org/node/main/goerli/genesis-l2.json" -O ./genesis-l2.json
-        exec geth init --datadir=$DATADIR ./genesis-l2.json
+        geth init --datadir=$DATADIR ./genesis-l2.json
+    fi
+elif [ $NETWORK = "custom" ] || [ $NETWORK = "devnet" ]
+then
+    CHAIN_ID=$(jq '.config.chainId' ./genesis-l2.json)
+    
+    if [ ! -d $DATADIR ]
+    then
+        mkdir $DATADIR
+        geth init --datadir=$DATADIR ./genesis-l2.json
     fi
 else
     echo "Network not recognized. Available options are optimism-goerli and base-goerli"
