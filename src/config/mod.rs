@@ -56,6 +56,30 @@ pub struct Config {
     pub rpc_port: u16,
     /// The devnet mode.
     pub devnet: bool,
+    /// Meta protocol configuration
+    pub meta: ProtocolMetaConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProtocolMetaConfig {
+    pub enable_config_updates: bool,
+    pub enable_user_deposited_txs: bool,
+}
+
+impl ProtocolMetaConfig {
+    pub fn optimism() -> Self {
+        Self {
+            enable_config_updates: true,
+            enable_user_deposited_txs: true,
+        }
+    }
+
+    pub fn specular() -> Self {
+        Self {
+            enable_config_updates: false,
+            enable_user_deposited_txs: false,
+        }
+    }
 }
 
 impl Config {

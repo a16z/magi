@@ -240,7 +240,7 @@ impl From<PendingChannel> for Channel {
 #[cfg(test)]
 mod tests {
     use crate::{
-        config::{ChainConfig, Config},
+        config::{ChainConfig, Config, ProtocolMetaConfig},
         derive::stages::batcher_transactions::{
             BatcherTransactionMessage, BatcherTransactions, Frame,
         },
@@ -397,6 +397,7 @@ mod tests {
             chain: ChainConfig::optimism_goerli(),
             checkpoint_sync_url: None,
             devnet: false,
+            meta: ProtocolMetaConfig::optimism(),
         };
 
         let (tx, rx) = mpsc::channel();

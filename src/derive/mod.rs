@@ -89,7 +89,7 @@ mod tests {
 
     use crate::{
         common::RawTransaction,
-        config::{ChainConfig, Config},
+        config::{ChainConfig, Config, ProtocolMetaConfig},
         derive::*,
         l1::{BlockUpdate, ChainWatcher},
     };
@@ -109,6 +109,7 @@ mod tests {
                 checkpoint_sync_url: None,
                 rpc_port: 9545,
                 devnet: false,
+                meta: ProtocolMetaConfig::optimism(),
             });
 
             let mut chain_watcher = ChainWatcher::new(

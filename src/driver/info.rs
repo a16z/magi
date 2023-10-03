@@ -56,7 +56,7 @@ impl HeadInfoQuery {
 mod test_utils {
     use super::*;
     use crate::common::{BlockInfo, Epoch};
-    use crate::config::{ChainConfig, Config};
+    use crate::config::{ChainConfig, Config, ProtocolMetaConfig};
     use ethers::types::H256;
     use std::str::FromStr;
 
@@ -133,6 +133,7 @@ mod test_utils {
             checkpoint_sync_url: Default::default(),
             rpc_port: Default::default(),
             devnet: false,
+            meta: ProtocolMetaConfig::optimism(),
         }
     }
 
