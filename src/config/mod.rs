@@ -146,6 +146,23 @@ pub struct ChainConfig {
     pub blocktime: u64,
     /// L2 To L1 Message passer address
     pub l2_to_l1_message_passer: Address,
+    /// Protocol meta configuration
+    pub meta: ProtocolMetaConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProtocolMetaConfig {
+    pub enable_config_updates: bool,
+    pub enable_user_deposited_txs: bool,
+}
+
+impl ProtocolMetaConfig {
+    pub fn optimism() -> Self {
+        Self {
+            enable_config_updates: true,
+            enable_user_deposited_txs: true,
+        }
+    }
 }
 
 /// Optimism system config contract values
@@ -252,6 +269,7 @@ impl ChainConfig {
             max_seq_drift: 600,
             blocktime: 2,
             regolith_time: 0,
+            meta: ProtocolMetaConfig::optimism(),
         }
     }
 
@@ -290,6 +308,7 @@ impl ChainConfig {
             max_seq_drift: 600,
             regolith_time: 1679079600,
             blocktime: 2,
+            meta: ProtocolMetaConfig::optimism(),
         }
     }
     pub fn optimism_sepolia() -> Self {
@@ -327,6 +346,7 @@ impl ChainConfig {
             max_seq_drift: 600,
             regolith_time: 0,
             blocktime: 2,
+            meta: ProtocolMetaConfig::optimism(),
         }
     }
 
@@ -363,6 +383,7 @@ impl ChainConfig {
             max_seq_drift: 600,
             blocktime: 2,
             regolith_time: 0,
+            meta: ProtocolMetaConfig::optimism(),
         }
     }
 
@@ -399,6 +420,7 @@ impl ChainConfig {
             max_seq_drift: 600,
             regolith_time: 1683219600,
             blocktime: 2,
+            meta: ProtocolMetaConfig::optimism(),
         }
     }
 }
@@ -503,6 +525,7 @@ impl From<ExternalChainConfig> for ChainConfig {
             regolith_time: external.regolith_time,
             blocktime: external.block_time,
             l2_to_l1_message_passer: Address::zero(),
+            meta: ProtocolMetaConfig::optimism(),
         }
     }
 }
