@@ -199,7 +199,9 @@ impl InnerWatcher {
     ) -> Self {
         let provider = generate_http_provider(&config.l1_rpc_url);
 
-        let system_config = if l2_start_block == config.chain.l2_genesis.number || !config.meta.enable_config_updates {
+        let system_config = if l2_start_block == config.chain.l2_genesis.number
+            || !config.meta.enable_config_updates
+        {
             config.chain.system_config
         } else {
             let l2_provider = generate_http_provider(&config.l2_rpc_url);
