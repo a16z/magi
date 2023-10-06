@@ -97,12 +97,14 @@ impl Attributes {
     fn derive_transactions(&self, batch: Batch, l1_info: &L1Info) -> Vec<RawTransaction> {
         let mut transactions = Vec::new();
 
-        let attributes_tx = self.derive_attributes_deposited(l1_info, batch.timestamp);
-        transactions.push(attributes_tx);
+        if self.config.chain.meta.enable_deposited_txs {
+            let attributes_tx = self.derive_attributes_deposited(l1_info, batch.timestamp);
+            transactions.push(attributes_tx);
 
-        if self.sequence_number == 0 {
-            let mut user_deposited_txs = self.derive_user_deposited();
-            transactions.append(&mut user_deposited_txs);
+            if self.sequence_number == 0 {
+                let mut user_deposited_txs = self.derive_user_deposited();
+                transactions.append(&mut user_deposited_txs);
+            }
         }
 
         let mut rest = batch.transactions;

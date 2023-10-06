@@ -272,7 +272,7 @@ impl InnerWatcher {
             }
 
             let block = self.get_block(self.current_block).await?;
-            let user_deposits = if self.config.chain.meta.enable_user_deposited_txs {
+            let user_deposits = if self.config.chain.meta.enable_deposited_txs {
                 self.get_deposits(self.current_block).await?
             } else {
                 Vec::new()

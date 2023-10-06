@@ -19,6 +19,9 @@ impl TryFrom<Block<Transaction>> for HeadInfo {
     type Error = eyre::Report;
 
     fn try_from(value: Block<Transaction>) -> Result<Self> {
+        // TODO[zhe]: Get specular-variant epoch info
+        // TODO[zhe]: This is only called once when starting the driver
+
         let tx_calldata = value
             .transactions
             .get(0)

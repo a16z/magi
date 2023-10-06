@@ -210,6 +210,7 @@ impl Runner {
             .await?
             .ok_or_else(|| eyre::eyre!("could not find block"))?;
 
+        // TODO[zhe]: change to specular variant to support checkpoint sync (or implement outside)
         let sequence_number = &l2_block
             .transactions
             .iter()
