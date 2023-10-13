@@ -2,13 +2,16 @@ use std::sync::{mpsc, Arc, RwLock};
 
 use eyre::Result;
 
+use crate::specular::stages::{
+    batcher_transactions::SpecularBatcherTransactions, batches::SpecularBatches,
+};
 use crate::{config::Config, engine::PayloadAttributes};
 
 use self::{
     stages::{
         attributes::Attributes,
         batcher_transactions::{BatcherTransactionMessage, BatcherTransactions},
-        batches::Batches,
+        batches::{Batch, Batches},
         channels::Channels,
     },
     state::State,
@@ -41,10 +44,19 @@ impl Iterator for Pipeline {
 impl Pipeline {
     pub fn new(state: Arc<RwLock<State>>, config: Arc<Config>, seq: u64) -> Result<Self> {
         let (tx, rx) = mpsc::channel();
-        let batcher_transactions = BatcherTransactions::new(rx);
-        let channels = Channels::new(batcher_transactions, config.clone());
-        let batches = Batches::new(channels, state.clone(), config.clone());
-        let attributes = Attributes::new(Box::new(batches), state, config, seq);
+        let batch_iter: Box<dyn PurgeableIterator<Item = Batch>> =
+            if config.chain.meta.enable_deposited_txs {
+                let batcher_transactions = BatcherTransactions::new(rx);
+                let channels = Channels::new(batcher_transactions, config.clone());
+                let batches = Batches::new(channels, state.clone(), config.clone());
+                Box::new(batches)
+            } else {
+                let batcher_transactions = SpecularBatcherTransactions::new(rx);
+                let batches =
+                    SpecularBatches::new(batcher_transactions, state.clone(), config.clone());
+                Box::new(batches)
+            };
+        let attributes = Attributes::new(batch_iter, state, config, seq);
 
         Ok(Self {
             batcher_transaction_sender: tx,
