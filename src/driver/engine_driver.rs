@@ -7,6 +7,7 @@ use ethers::{
     utils::keccak256,
 };
 use eyre::Result;
+use tokio::time::{sleep, Duration};
 
 use crate::{
     common::{BlockInfo, Epoch},
@@ -23,6 +24,8 @@ pub struct EngineDriver<E: Engine> {
     blocktime: u64,
     /// Most recent block found on the p2p network
     pub unsafe_head: BlockInfo,
+    /// Batch epoch of the unsafe head (expected)
+    pub unsafe_epoch: Epoch,
     /// Most recent block that can be derived from L1 data
     pub safe_head: BlockInfo,
     /// Batch epoch of the safe head
@@ -34,7 +37,11 @@ pub struct EngineDriver<E: Engine> {
 }
 
 impl<E: Engine> EngineDriver<E> {
-    pub async fn handle_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
+    pub async fn handle_attributes(
+        &mut self,
+        attributes: PayloadAttributes,
+        update_safe: bool,
+    ) -> Result<()> {
         let block: Option<Block<Transaction>> = self.block_at(attributes.timestamp.as_u64()).await;
 
         if let Some(block) = block {
@@ -42,10 +49,10 @@ impl<E: Engine> EngineDriver<E> {
                 self.skip_attributes(attributes, block).await
             } else {
                 self.unsafe_head = self.safe_head;
-                self.process_attributes(attributes).await
+                self.process_attributes(attributes, update_safe).await
             }
         } else {
-            self.process_attributes(attributes).await
+            self.process_attributes(attributes, update_safe).await
         }
     }
 
@@ -70,6 +77,7 @@ impl<E: Engine> EngineDriver<E> {
 
     pub fn reorg(&mut self) {
         self.unsafe_head = self.finalized_head;
+        self.unsafe_epoch = self.finalized_epoch;
         self.safe_head = self.finalized_head;
         self.safe_epoch = self.finalized_epoch;
     }
@@ -82,7 +90,11 @@ impl<E: Engine> EngineDriver<E> {
             .is_ok()
     }
 
-    async fn process_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
+    async fn process_attributes(
+        &mut self,
+        attributes: PayloadAttributes,
+        update_safe: bool,
+    ) -> Result<()> {
         let new_epoch = *attributes.epoch.as_ref().unwrap();
 
         let payload = self.build_payload(attributes).await?;
@@ -95,7 +107,12 @@ impl<E: Engine> EngineDriver<E> {
         };
 
         self.push_payload(payload).await?;
-        self.update_safe_head(new_head, new_epoch, true)?;
+        if update_safe {
+            self.update_safe_head(new_head, new_epoch, true)?;
+        } else {
+            self.unsafe_head = new_head;
+            self.unsafe_epoch = new_epoch;
+        }
         self.update_forkchoice().await?;
 
         Ok(())
@@ -116,6 +133,7 @@ impl<E: Engine> EngineDriver<E> {
 
     async fn build_payload(&self, attributes: PayloadAttributes) -> Result<ExecutionPayload> {
         let forkchoice = self.create_forkchoice_state();
+        let no_tx_pool = attributes.no_tx_pool;
 
         let update = self
             .engine
@@ -130,6 +148,10 @@ impl<E: Engine> EngineDriver<E> {
             .payload_id
             .ok_or(eyre::eyre!("engine did not return payload id"))?;
 
+        if !no_tx_pool {
+            // Wait before fetching the payload to give the engine time to build it.
+            sleep(Duration::from_secs(self.blocktime)).await
+        }
         self.engine.get_payload(id).await
     }
 
@@ -242,6 +264,7 @@ impl EngineDriver<EngineApi> {
             provider,
             blocktime: config.chain.blocktime,
             unsafe_head: finalized_head,
+            unsafe_epoch: finalized_epoch,
             safe_head: finalized_head,
             safe_epoch: finalized_epoch,
             finalized_head,

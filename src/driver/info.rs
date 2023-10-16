@@ -133,6 +133,7 @@ mod test_utils {
             checkpoint_sync_url: Default::default(),
             rpc_port: Default::default(),
             devnet: false,
+            local_sequencer: Default::default(),
         }
     }
 

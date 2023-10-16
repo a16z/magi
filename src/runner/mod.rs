@@ -12,8 +12,12 @@ use tokio::{
 
 use crate::{
     config::{Config, SyncMode, SystemAccounts},
-    driver::Driver,
+    driver::{
+        sequencing::{self},
+        Driver,
+    },
     engine::{Engine, EngineApi, ExecutionPayload, ForkchoiceState, Status},
+    specular,
 };
 
 const TRUSTED_PEER_ENODE: &str = "enode://e85ba0beec172b17f53b373b0ab72238754259aa39f1ae5290e3244e0120882f4cf95acd203661a27c8618b27ca014d4e193266cb3feae43655ed55358eedb06@3.86.143.120:30303?discport=21693";
@@ -181,9 +185,34 @@ impl Runner {
     }
 
     async fn start_driver(&self) -> Result<()> {
-        let mut driver =
-            Driver::from_config(self.config.clone(), self.shutdown_recv.clone()).await?;
+        match (
+            self.config.local_sequencer.enabled,
+            self.config.chain.meta.enable_full_derivation,
+        ) {
+            // TODO: use a src that conforms to optimism's full derivation protocol.
+            (true, true) => panic!("not currently supported"),
+            (true, false) => {
+                let cfg = specular::sequencing::config::Config::new(&self.config);
+                let policy = specular::sequencing::AttributesBuilder::new(cfg);
+                let provider = Provider::try_from(self.config.l1_rpc_url.clone())?;
+                let sequencing_src = sequencing::Source::new(policy, provider);
+                self.start_driver_for_real(Some(sequencing_src)).await?
+            }
+            _ => self.start_driver_for_real(sequencing::none()).await?,
+        };
+        Ok(())
+    }
 
+    async fn start_driver_for_real<T: sequencing::SequencingSource<EngineApi>>(
+        &self,
+        sequencing_src: Option<T>,
+    ) -> Result<()> {
+        let mut driver = Driver::from_config(
+            self.config.clone(),
+            self.shutdown_recv.clone(),
+            sequencing_src,
+        )
+        .await?;
         if let Err(err) = driver.start().await {
             tracing::error!("driver failure: {}", err);
             std::process::exit(1);

@@ -28,5 +28,5 @@ pub mod rpc;
 /// A module to handle running Magi in different sync modes
 pub mod runner;
 
-/// A module for the specular features
+/// Specular-specific features
 pub mod specular;

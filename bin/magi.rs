@@ -1,10 +1,13 @@
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::{env::current_dir, process};
 
 use clap::Parser;
 use dirs::home_dir;
+use ethers::types::Address;
 use eyre::Result;
 
+use magi::config::LocalSequencerConfig;
 use magi::{
     config::{ChainConfig, CliConfig, Config, SyncMode},
     runner::Runner,
@@ -68,6 +71,21 @@ pub struct Cli {
     checkpoint_sync_url: Option<String>,
     #[clap(long)]
     devnet: bool,
+    #[clap(flatten)]
+    local_sequencer: LocalSequencerCli,
+}
+
+#[derive(Parser, Serialize)]
+pub struct LocalSequencerCli {
+    #[clap(long = "sequencer")]
+    enabled: bool,
+    #[clap(
+        long = "sequencer-suggested-fee-recipient",
+        default_value = "0x0000000000000000000000000000000000000000"
+    )]
+    suggested_fee_recipient: String,
+    #[clap(long = "sequencer-max-safe-lag", default_value = "0")]
+    max_safe_lag: u64,
 }
 
 impl Cli {
@@ -126,6 +144,17 @@ impl From<Cli> for CliConfig {
             checkpoint_sync_url: value.checkpoint_sync_url,
             rpc_port: value.rpc_port,
             devnet: value.devnet,
+            local_sequencer: Some(value.local_sequencer.into()),
+        }
+    }
+}
+
+impl From<LocalSequencerCli> for LocalSequencerConfig {
+    fn from(value: LocalSequencerCli) -> Self {
+        Self {
+            enabled: value.enabled,
+            suggested_fee_recipient: Address::from_str(&value.suggested_fee_recipient).unwrap(),
+            max_safe_lag: value.max_safe_lag,
         }
     }
 }

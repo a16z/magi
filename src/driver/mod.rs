@@ -30,12 +30,13 @@ use self::engine_driver::EngineDriver;
 
 mod engine_driver;
 mod info;
+pub mod sequencing;
 mod types;
 pub use types::*;
 
 /// Driver is responsible for advancing the execution node by feeding
 /// the derived chain into the engine API
-pub struct Driver<E: Engine> {
+pub struct Driver<E: Engine, S: sequencing::SequencingSource<E>> {
     /// The derivation pipeline
     pipeline: Pipeline,
     /// The engine driver
@@ -60,10 +61,16 @@ pub struct Driver<E: Engine> {
     network_service: Option<Service>,
     /// Channel timeout length
     channel_timeout: u64,
+    /// Local sequencing source
+    sequencing_src: Option<S>,
 }
 
-impl Driver<EngineApi> {
-    pub async fn from_config(config: Config, shutdown_recv: watch::Receiver<bool>) -> Result<Self> {
+impl<S: sequencing::SequencingSource<EngineApi>> Driver<EngineApi, S> {
+    pub async fn from_config(
+        config: Config,
+        shutdown_recv: watch::Receiver<bool>,
+        sequencing_src: Option<S>,
+    ) -> Result<Self> {
         let client = reqwest::ClientBuilder::new()
             .timeout(Duration::from_secs(5))
             .build()?;
@@ -121,11 +128,12 @@ impl Driver<EngineApi> {
             unsafe_block_signer_sender,
             network_service: Some(service),
             channel_timeout: config.chain.channel_timeout,
+            sequencing_src,
         })
     }
 }
 
-impl<E: Engine> Driver<E> {
+impl<E: Engine, S: sequencing::SequencingSource<E>> Driver<E, S> {
     /// Runs the Driver
     pub async fn start(&mut self) -> Result<()> {
         self.await_engine_ready().await;
@@ -165,6 +173,7 @@ impl<E: Engine> Driver<E> {
     async fn advance(&mut self) -> Result<()> {
         self.advance_safe_head().await?;
         self.advance_unsafe_head().await?;
+        self.advance_unsafe_head_by_attributes().await?;
 
         self.update_finalized();
         self.update_metrics();
@@ -190,7 +199,7 @@ impl<E: Engine> Driver<E> {
                 .ok_or(eyre::eyre!("attributes without seq number"))?;
 
             self.engine_driver
-                .handle_attributes(next_attributes)
+                .handle_attributes(next_attributes, true)
                 .await?;
 
             tracing::info!(
@@ -241,6 +250,21 @@ impl<E: Engine> Driver<E> {
             _ = self.engine_driver.handle_unsafe_payload(payload).await;
         }
 
+        Ok(())
+    }
+
+    /// Tries to process the next unbuilt payload attributes, building on the current forkchoice.
+    async fn advance_unsafe_head_by_attributes(&mut self) -> Result<()> {
+        let Some(sequencing_src) = &self.sequencing_src else {
+            return Ok(());
+        };
+        let Some(attrs) = sequencing_src
+            .get_next_attributes(&self.state, &self.engine_driver)
+            .await?
+        else {
+            return Ok(());
+        };
+        self.engine_driver.handle_attributes(attrs, false).await?;
         Ok(())
     }
 
@@ -383,6 +407,7 @@ mod tests {
                 checkpoint_sync_url: Some(l2_rpc.to_owned()),
                 rpc_port: None,
                 devnet: false,
+                local_sequencer: None,
             };
             let config = Config::new(&config_path, cli_config, ChainConfig::optimism_goerli());
             let (_shutdown_sender, shutdown_recv) = channel(false);
@@ -391,7 +416,8 @@ mod tests {
             let provider = Provider::<Http>::try_from(config.l2_rpc_url.clone())?;
             let finalized_block = provider.get_block(block_id).await?.unwrap();
 
-            let driver = Driver::from_config(config, shutdown_recv).await?;
+            let seq_src = sequencing::none();
+            let driver = Driver::from_config(config, shutdown_recv, seq_src).await?;
 
             assert_eq!(
                 driver.engine_driver.finalized_head.number,

@@ -45,7 +45,7 @@ impl Pipeline {
     pub fn new(state: Arc<RwLock<State>>, config: Arc<Config>, seq: u64) -> Result<Self> {
         let (tx, rx) = mpsc::channel();
         let batch_iter: Box<dyn PurgeableIterator<Item = Batch>> =
-            if config.chain.meta.enable_deposited_txs {
+            if config.chain.meta.enable_full_derivation {
                 let batcher_transactions = BatcherTransactions::new(rx);
                 let channels = Channels::new(batcher_transactions, config.clone());
                 let batches = Batches::new(channels, state.clone(), config.clone());
@@ -121,6 +121,7 @@ mod tests {
                 checkpoint_sync_url: None,
                 rpc_port: 9545,
                 devnet: false,
+                local_sequencer: Default::default(),
             });
 
             let mut chain_watcher = ChainWatcher::new(

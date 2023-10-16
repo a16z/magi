@@ -211,7 +211,7 @@ impl From<SpecularBatchV0> for Batch {
         Batch {
             epoch_num: val.l1_inclusion_block, // TODO[zhe]: we simply let the epoch number be the l1 inclusion block number
             epoch_hash: val.l1_inclusion_hash,
-            parent_hash: Default::default(),   // we don't care about parent hash
+            parent_hash: Default::default(), // we don't care about parent hash
             timestamp: val.timestamp,
             transactions: val.transactions,
             l1_inclusion_block: val.l1_inclusion_block,

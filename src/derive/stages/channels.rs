@@ -397,6 +397,7 @@ mod tests {
             chain: ChainConfig::optimism_goerli(),
             checkpoint_sync_url: None,
             devnet: false,
+            local_sequencer: Default::default(),
         };
 
         let (tx, rx) = mpsc::channel();
