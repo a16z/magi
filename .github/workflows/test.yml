@@ -4,6 +4,8 @@ on:
   push:
     branches:
         - master
+        - develop
+        - specular
   pull_request:
 
 env:
