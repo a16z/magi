@@ -586,5 +586,9 @@ mod test {
         assert_eq!(chain.max_seq_drift, 300);
         assert_eq!(chain.regolith_time, 0);
         assert_eq!(chain.blocktime, 2);
+        assert_eq!(
+            chain.l2_to_l1_message_passer,
+            addr("0x4200000000000000000000000000000000000016")
+        );
     }
 }
