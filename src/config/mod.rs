@@ -502,7 +502,7 @@ impl From<ExternalChainConfig> for ChainConfig {
             max_seq_drift: external.max_sequencer_drift,
             regolith_time: external.regolith_time,
             blocktime: external.block_time,
-            l2_to_l1_message_passer: Address::zero(),
+            l2_to_l1_message_passer: addr("0x4200000000000000000000000000000000000016"),
         }
     }
 }
