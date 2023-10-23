@@ -64,7 +64,6 @@ pub struct Config {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LocalSequencerConfig {
     pub enabled: bool,
-    pub suggested_fee_recipient: Address,
     pub max_safe_lag: u64,
 }
 

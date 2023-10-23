@@ -54,7 +54,7 @@ impl TryFrom<Block<Transaction>> for ExecutionPayload {
 
         Ok(ExecutionPayload {
             parent_hash: value.parent_hash,
-            fee_recipient: SystemAccounts::default().fee_vault,
+            fee_recipient: value.author.unwrap_or(SystemAccounts::default().fee_vault),
             state_root: value.state_root,
             receipts_root: value.receipts_root,
             logs_bloom: value.logs_bloom.unwrap().as_bytes().to_vec().into(),

@@ -1,10 +1,8 @@
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::{env::current_dir, process};
 
 use clap::Parser;
 use dirs::home_dir;
-use ethers::types::Address;
 use eyre::Result;
 
 use magi::config::LocalSequencerConfig;
@@ -79,11 +77,6 @@ pub struct Cli {
 pub struct LocalSequencerCli {
     #[clap(long = "sequencer")]
     enabled: bool,
-    #[clap(
-        long = "sequencer-suggested-fee-recipient",
-        default_value = "0x0000000000000000000000000000000000000000"
-    )]
-    suggested_fee_recipient: String,
     #[clap(long = "sequencer-max-safe-lag", default_value = "0")]
     max_safe_lag: u64,
 }
@@ -96,6 +89,7 @@ impl Cli {
             "optimism-sepolia" => ChainConfig::optimism_sepolia(),
             "base" => ChainConfig::base(),
             "base-goerli" => ChainConfig::base_goerli(),
+            file if file.starts_with("sp_") => ChainConfig::from_specular_json(file),
             file if file.ends_with(".json") => ChainConfig::from_json(file),
             _ => panic!(
                 "Invalid network name. \\
@@ -153,7 +147,6 @@ impl From<LocalSequencerCli> for LocalSequencerConfig {
     fn from(value: LocalSequencerCli) -> Self {
         Self {
             enabled: value.enabled,
-            suggested_fee_recipient: Address::from_str(&value.suggested_fee_recipient).unwrap(),
             max_safe_lag: value.max_safe_lag,
         }
     }

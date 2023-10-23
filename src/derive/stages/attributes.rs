@@ -79,7 +79,11 @@ impl Attributes {
         let seq_number = Some(self.sequence_number);
         let prev_randao = l1_info.block_info.mix_hash;
         let transactions = Some(self.derive_transactions(batch, l1_info));
-        let suggested_fee_recipient = SystemAccounts::default().fee_vault;
+        let suggested_fee_recipient = if self.config.chain.meta.enable_deposited_txs {
+            SystemAccounts::default().fee_vault
+        } else {
+            self.config.chain.system_config.batch_sender
+        };
 
         PayloadAttributes {
             timestamp,

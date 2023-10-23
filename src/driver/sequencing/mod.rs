@@ -15,6 +15,7 @@ use crate::{
 
 use super::engine_driver::EngineDriver;
 
+/// TODO: Support system config updates.
 #[async_trait(?Send)]
 pub trait SequencingSource<E: Engine> {
     /// Returns the next payload attributes to be built (if any) on top of

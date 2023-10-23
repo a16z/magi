@@ -87,7 +87,7 @@ impl SequencingPolicy for AttributesBuilder {
             .await?;
         let timestamp = self.next_timestamp(parent_l2_block.timestamp);
         let prev_randao = next_randao(&next_origin);
-        let suggested_fee_recipient = self.config.suggested_fee_recipient;
+        let suggested_fee_recipient = self.config.system_config.batch_sender;
         let txs = create_top_of_block_transactions(&next_origin);
         let no_tx_pool = timestamp > self.config.max_seq_drift;
         let gas_limit = self.config.system_config.gas_limit;
@@ -137,6 +137,7 @@ mod tests {
     use crate::{common::BlockInfo, driver::sequencing::SequencingPolicy};
 
     use super::{config, unix_now, AttributesBuilder};
+    use ethers::abi::Address;
     use eyre::Result;
 
     #[test]
@@ -146,8 +147,10 @@ mod tests {
             blocktime: 2,
             max_seq_drift: 0, // anything
             max_safe_lag: 10,
-            suggested_fee_recipient: Default::default(), // anything
-            system_config: config::SystemConfig { gas_limit: 1 }, // anything
+            system_config: config::SystemConfig {
+                batch_sender: Address::zero(),
+                gas_limit: 1,
+            }, // anything
         };
         let attrs_builder = AttributesBuilder::new(config.clone());
         // Run test cases.
