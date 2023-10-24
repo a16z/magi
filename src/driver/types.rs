@@ -21,7 +21,7 @@ impl TryFrom<Block<Transaction>> for HeadInfo {
     fn try_from(value: Block<Transaction>) -> Result<Self> {
         let tx_calldata = value
             .transactions
-            .get(0)
+            .first()
             .ok_or(eyre::eyre!(
                 "Could not find the L1 attributes deposited transaction"
             ))?
