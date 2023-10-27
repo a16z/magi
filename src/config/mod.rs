@@ -537,7 +537,7 @@ impl From<ExternalChainConfig> for ChainConfig {
             max_seq_drift: external.max_sequencer_drift,
             regolith_time: external.regolith_time,
             blocktime: external.block_time,
-            l2_to_l1_message_passer: Address::zero(),
+            l2_to_l1_message_passer: addr("0x4200000000000000000000000000000000000016"),
             meta: ProtocolMetaConfig::optimism(),
         }
     }
@@ -622,5 +622,9 @@ mod test {
         assert_eq!(chain.max_seq_drift, 300);
         assert_eq!(chain.regolith_time, 0);
         assert_eq!(chain.blocktime, 2);
+        assert_eq!(
+            chain.l2_to_l1_message_passer,
+            addr("0x4200000000000000000000000000000000000016")
+        );
     }
 }

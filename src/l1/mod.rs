@@ -216,7 +216,7 @@ impl InnerWatcher {
 
             let input = &block
                 .transactions
-                .get(0)
+                .first()
                 .expect(
                     "Could not find the L1 attributes deposited transaction in the parent L2 block",
                 )
