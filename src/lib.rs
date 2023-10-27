@@ -27,3 +27,6 @@ pub mod rpc;
 
 /// A module to handle running Magi in different sync modes
 pub mod runner;
+
+/// A module to get current Magi version.
+pub mod version;
