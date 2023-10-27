@@ -51,12 +51,12 @@ then
     fi
 elif [ $NETWORK = "custom" ] || [ $NETWORK = "devnet" ]
 then
-    CHAIN_ID=$(jq '.config.chainId' ./genesis-l2.json)
+    CHAIN_ID=$(jq '.config.chainId' ./genesis-l2-attached.json)
     
     if [ ! -d $DATADIR ]
     then
         mkdir $DATADIR
-        geth init --datadir=$DATADIR ./genesis-l2.json
+        geth init --datadir=$DATADIR ./genesis-l2-attached.json
     fi
 else
     echo "Network not recognized. Available options are optimism-goerli and base-goerli"

@@ -1,6 +1,9 @@
 use std::{fmt::Display, net::SocketAddr, sync::Arc};
 
-use crate::config::Config;
+use crate::{
+    config::{Config, ExternalChainConfig},
+    version::Version,
+};
 
 use eyre::Result;
 
@@ -22,10 +25,17 @@ use serde::{Deserialize, Serialize};
 pub trait Rpc {
     #[method(name = "outputAtBlock")]
     async fn output_at_block(&self, block_number: u64) -> Result<OutputRootResponse, Error>;
+
+    #[method(name = "rollupConfig")]
+    async fn rollup_config(&self) -> Result<ExternalChainConfig, Error>;
+
+    #[method(name = "version")]
+    async fn version(&self) -> Result<String, Error>;
 }
 
 #[derive(Debug)]
 pub struct RpcServerImpl {
+    version: Version,
     config: Arc<Config>,
 }
 
@@ -66,6 +76,16 @@ impl RpcServer for RpcServerImpl {
             withdrawal_storage_root,
         })
     }
+
+    async fn rollup_config(&self) -> Result<ExternalChainConfig, Error> {
+        let config = (*self.config).clone();
+
+        Ok(ExternalChainConfig::from(config.chain))
+    }
+
+    async fn version(&self) -> Result<String, Error> {
+        Ok(self.version.to_string())
+    }
 }
 
 fn convert_err<T, E: Display>(res: Result<T, E>) -> Result<T, Error> {
@@ -93,7 +113,10 @@ pub async fn run_server(config: Arc<Config>) -> Result<SocketAddr> {
         .build(format!("127.0.0.1:{}", port))
         .await?;
     let addr = server.local_addr()?;
-    let rpc_impl = RpcServerImpl { config };
+    let rpc_impl = RpcServerImpl {
+        config,
+        version: Version::build(),
+    };
     let handle = server.start(rpc_impl.into_rpc())?;
 
     // In this example we don't care about doing shutdown so let's it run forever.
