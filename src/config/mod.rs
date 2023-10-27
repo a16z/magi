@@ -431,7 +431,7 @@ fn default_blocktime() -> u64 {
 /// This interface corresponds to the default output of the `op-node`
 /// genesis devnet setup command `--outfile.rollup` flag.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct ExternalChainConfig {
+pub struct ExternalChainConfig {
     genesis: ExternalGenesisInfo,
     block_time: u64,
     max_sequencer_drift: u64,
@@ -507,9 +507,142 @@ impl From<ExternalChainConfig> for ChainConfig {
     }
 }
 
+impl From<ChainConfig> for ExternalChainConfig {
+    fn from(chain_config: ChainConfig) -> Self {
+        let mut overhead = [0; 32];
+        let mut scalar = [0; 32];
+
+        chain_config
+            .system_config
+            .l1_fee_overhead
+            .to_big_endian(&mut overhead);
+        chain_config
+            .system_config
+            .l1_fee_scalar
+            .to_big_endian(&mut scalar);
+
+        Self {
+            genesis: ExternalGenesisInfo {
+                l1: ChainGenesisInfo {
+                    hash: chain_config.l1_start_epoch.hash,
+                    number: chain_config.l1_start_epoch.number,
+                },
+                l2: ChainGenesisInfo {
+                    hash: chain_config.l2_genesis.hash,
+                    number: chain_config.l2_genesis.number,
+                },
+                l2_time: chain_config.l2_genesis.timestamp,
+                system_config: SystemConfigInfo {
+                    batcher_addr: chain_config.system_config.batch_sender,
+                    overhead: H256::from_slice(&overhead),
+                    scalar: H256::from_slice(&scalar),
+                    gas_limit: chain_config.system_config.gas_limit.as_u64(),
+                },
+            },
+            block_time: chain_config.blocktime,
+            max_sequencer_drift: chain_config.max_seq_drift,
+            seq_window_size: chain_config.seq_window_size,
+            channel_timeout: chain_config.channel_timeout,
+            l1_chain_id: chain_config.l1_chain_id,
+            l2_chain_id: chain_config.l2_chain_id,
+            regolith_time: chain_config.regolith_time,
+            batch_inbox_address: chain_config.batch_inbox,
+            deposit_contract_address: chain_config.deposit_contract,
+            l1_system_config_address: chain_config.system_config_contract,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn test_chain_config_to_external_chain_config() {
+        let chain_config = ChainConfig::optimism();
+        let external_config: ExternalChainConfig = chain_config.clone().into();
+
+        assert_eq!(
+            external_config.max_sequencer_drift,
+            chain_config.max_seq_drift
+        );
+        assert_eq!(
+            external_config.seq_window_size,
+            chain_config.seq_window_size
+        );
+        assert_eq!(
+            external_config.channel_timeout,
+            chain_config.channel_timeout
+        );
+        assert_eq!(external_config.l1_chain_id, chain_config.l1_chain_id);
+        assert_eq!(external_config.l2_chain_id, chain_config.l2_chain_id);
+        assert_eq!(external_config.block_time, chain_config.blocktime);
+        assert_eq!(external_config.regolith_time, chain_config.regolith_time);
+        assert_eq!(
+            external_config.batch_inbox_address,
+            chain_config.batch_inbox
+        );
+        assert_eq!(
+            external_config.deposit_contract_address,
+            chain_config.deposit_contract
+        );
+        assert_eq!(
+            external_config.l1_system_config_address,
+            chain_config.system_config_contract
+        );
+
+        assert_eq!(
+            external_config.genesis.l1.hash,
+            chain_config.l1_start_epoch.hash
+        );
+        assert_eq!(
+            external_config.genesis.l1.number,
+            chain_config.l1_start_epoch.number
+        );
+        assert_eq!(
+            external_config.genesis.l2.hash,
+            chain_config.l2_genesis.hash
+        );
+        assert_eq!(
+            external_config.genesis.l2.number,
+            chain_config.l2_genesis.number
+        );
+        assert_eq!(
+            external_config.genesis.l2_time,
+            chain_config.l2_genesis.timestamp
+        );
+
+        assert_eq!(
+            external_config.genesis.system_config.batcher_addr,
+            chain_config.system_config.batch_sender
+        );
+
+        let mut overhead = [0; 32];
+        let mut scalar = [0; 32];
+
+        chain_config
+            .system_config
+            .l1_fee_overhead
+            .to_big_endian(&mut overhead);
+        chain_config
+            .system_config
+            .l1_fee_scalar
+            .to_big_endian(&mut scalar);
+
+        assert_eq!(
+            external_config.genesis.system_config.overhead,
+            H256::from_slice(&overhead),
+        );
+        assert_eq!(
+            external_config.genesis.system_config.scalar,
+            H256::from_slice(&scalar),
+        );
+
+        assert_eq!(
+            external_config.genesis.system_config.gas_limit,
+            chain_config.system_config.gas_limit.as_u64()
+        );
+    }
 
     #[test]
     fn test_read_external_chain_from_json() {

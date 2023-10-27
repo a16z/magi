@@ -1,6 +1,9 @@
 use std::{fmt::Display, net::SocketAddr, sync::Arc};
 
-use crate::{config::Config, version::Version};
+use crate::{
+    config::{Config, ExternalChainConfig},
+    version::Version,
+};
 
 use eyre::Result;
 
@@ -22,6 +25,9 @@ use serde::{Deserialize, Serialize};
 pub trait Rpc {
     #[method(name = "outputAtBlock")]
     async fn output_at_block(&self, block_number: u64) -> Result<OutputRootResponse, Error>;
+
+    #[method(name = "rollupConfig")]
+    async fn rollup_config(&self) -> Result<ExternalChainConfig, Error>;
 
     #[method(name = "version")]
     async fn version(&self) -> Result<String, Error>;
@@ -69,6 +75,12 @@ impl RpcServer for RpcServerImpl {
             state_root,
             withdrawal_storage_root,
         })
+    }
+
+    async fn rollup_config(&self) -> Result<ExternalChainConfig, Error> {
+        let config = (*self.config).clone();
+
+        Ok(ExternalChainConfig::from(config.chain))
     }
 
     async fn version(&self) -> Result<String, Error> {
