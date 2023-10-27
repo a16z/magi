@@ -49,7 +49,7 @@ services:
     volumes:
       - ./:/scripts
       - data:/data
-      - ${OP_GENESIS_JSON_FILEPATH:-.}:/genesis-l2.json
+      - ${OP_GENESIS_JSON_FILEPATH:-.}:/genesis-l2-attached.json
     <<: *logging
 
   op-erigon:
