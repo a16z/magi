@@ -108,10 +108,44 @@ where
             }
         };
 
-        // TODO[zhe]: handle empty epoch
-        let batch = derived_batch;
+        // TODO[zhe]: fix correct epoch fetching
+        let batch = if derived_batch.is_none() {
+            let state = self.state.read().unwrap();
 
-        Ok(batch.map(|batch| batch.into()))
+            let current_l1_block = state.current_epoch_num;
+            let safe_head = state.safe_head;
+            let epoch = state.safe_epoch;
+            let next_epoch = state.epoch_by_number(epoch.number + 1);
+            let seq_window_size = self.config.chain.seq_window_size;
+
+            if let Some(next_epoch) = next_epoch {
+                if current_l1_block > epoch.number + seq_window_size {
+                    let next_timestamp = safe_head.timestamp + self.config.chain.blocktime;
+                    let epoch = if next_timestamp < next_epoch.timestamp {
+                        epoch
+                    } else {
+                        next_epoch
+                    };
+
+                    Some(Batch {
+                        epoch_num: epoch.number,
+                        epoch_hash: epoch.hash,
+                        parent_hash: Default::default(), // We don't care about parent_hash
+                        timestamp: next_timestamp,
+                        transactions: Vec::new(),
+                        l1_inclusion_block: current_l1_block,
+                    })
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        } else {
+            derived_batch.map(|batch| batch.into())
+        };
+
+        Ok(batch)
     }
 
     /// Determine whether a batch is valid.
@@ -208,8 +242,9 @@ impl SpecularBatchV0 {
 
 impl From<SpecularBatchV0> for Batch {
     fn from(val: SpecularBatchV0) -> Self {
+        // TODO[zhe]: this is incorrect, use the correct epoch when derivation pipeline is fixed
         Batch {
-            epoch_num: val.l1_inclusion_block, // TODO[zhe]: we simply let the epoch number be the l1 inclusion block number
+            epoch_num: val.l1_inclusion_block,
             epoch_hash: val.l1_inclusion_hash,
             parent_hash: Default::default(), // we don't care about parent hash
             timestamp: val.timestamp,
