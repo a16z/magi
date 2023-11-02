@@ -69,7 +69,7 @@ impl AttributesBuilder {
 #[async_trait]
 impl SequencingPolicy for AttributesBuilder {
     /// Returns true iff:
-    /// 1. `parent_l2_block` is within the max safe lag (i.e. the unsafe head isn't too far ahead of the safe head).
+    /// 1. `parent_l2_block` is within the max safe lag (i.e. `parent_l2_block` isn't too far ahead of `safe_l2_head`).
     /// 2. The next timestamp isn't in the future.
     fn is_ready(&self, parent_l2_block: &BlockInfo, safe_l2_head: &BlockInfo) -> bool {
         safe_l2_head.number + self.config.max_safe_lag > parent_l2_block.number
@@ -89,7 +89,7 @@ impl SequencingPolicy for AttributesBuilder {
         let prev_randao = next_randao(&next_origin);
         let suggested_fee_recipient = self.config.system_config.batch_sender;
         let txs = create_top_of_block_transactions(&next_origin);
-        let no_tx_pool = timestamp > self.config.max_seq_drift;
+        let no_tx_pool = timestamp > next_origin.timestamp + self.config.max_seq_drift;
         let gas_limit = self.config.system_config.gas_limit;
         Ok(PayloadAttributes {
             timestamp: U64([timestamp]),

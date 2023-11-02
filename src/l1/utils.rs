@@ -6,7 +6,7 @@ use eyre::{Result, WrapErr};
 
 use super::L1BlockInfo;
 
-/// Fetches the l1 block info for `block_id` using `provider`, which can be either a block number or a block hash.
+/// Fetches the l1 block info for `block_id` (which can be either a block number or a block hash), using `provider`.
 pub async fn get_l1_block_info<T: Into<BlockId> + Send + Sync, U: JsonRpcClient>(
     block_id: T,
     provider: &Provider<U>,

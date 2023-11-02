@@ -136,8 +136,11 @@ impl<S: sequencing::SequencingSource<EngineApi>> Driver<EngineApi, S> {
 impl<E: Engine, S: sequencing::SequencingSource<E>> Driver<E, S> {
     /// Runs the Driver
     pub async fn start(&mut self) -> Result<()> {
+        tracing::trace!("starting driver, waiting for engine...");
         self.await_engine_ready().await;
+        tracing::trace!("engine ready; starting chain watcher...");
         self.chain_watcher.start()?;
+        tracing::trace!("chain watcher started");
 
         loop {
             self.check_shutdown().await;
@@ -163,6 +166,7 @@ impl<E: Engine, S: sequencing::SequencingSource<E>> Driver<E, S> {
 
     async fn await_engine_ready(&self) {
         while !self.engine_driver.engine_ready().await {
+            tracing::trace!("waiting for engine ready...");
             self.check_shutdown().await;
             sleep(Duration::from_secs(1)).await;
         }

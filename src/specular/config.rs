@@ -1,4 +1,5 @@
 use ethers::types::{Address, H256, U256};
+use eyre::Context;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -41,8 +42,9 @@ struct ChainGenesisInfo {
 
 impl ChainConfig {
     pub fn from_specular_json(path: &str) -> Self {
-        tracing::info!("loading external specular chain config from {}", path);
-        let file = std::fs::File::open(path).unwrap();
+        let file = std::fs::File::open(path)
+            .with_context(|| format!("Failed to read chain config from {}", path))
+            .unwrap();
         let external: ExternalChainConfig = serde_json::from_reader(file).unwrap();
         external.into()
     }

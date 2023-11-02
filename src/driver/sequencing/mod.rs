@@ -80,7 +80,7 @@ impl<E: Engine, T: SequencingPolicy, U: JsonRpcClient> SequencingSource<E> for S
             },
             match next_l1_epoch {
                 Some(info) => Either::Left(async { Ok(info) }),
-                None => Either::Right(get_l1_block_info(parent_epoch.number + 1, &self.provider,)),
+                None => Either::Right(get_l1_block_info(parent_epoch.number + 1, &self.provider)),
             },
         );
         // TODO: handle recoverable errors, if any.
