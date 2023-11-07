@@ -12,7 +12,7 @@ use crate::config::Config;
 use crate::derive::stages::batches::Batch;
 use crate::derive::state::State;
 use crate::derive::PurgeableIterator;
-use ethers::utils::rlp::{Rlp};
+use ethers::utils::rlp::Rlp;
 
 use super::batcher_transactions::SpecularBatcherTransaction;
 
@@ -76,7 +76,11 @@ where
     fn try_next(&mut self) -> Result<Option<Batch>> {
         let batcher_transaction = self.batcher_transaction_iter.next();
         if let Some(batcher_transaction) = batcher_transaction {
-            let batches = decode_batches(&batcher_transaction, &self.state, self.config.chain.blocktime)?;
+            let batches = decode_batches(
+                &batcher_transaction,
+                &self.state,
+                self.config.chain.blocktime,
+            )?;
             batches.into_iter().for_each(|batch| {
                 tracing::debug!(
                     "saw batch: t={}, bn={:?}, e={}",
@@ -125,7 +129,11 @@ where
                     } else {
                         next_epoch
                     };
-                    tracing::trace!("inserting empty batch | ts={} epoch_num={}", epoch.number, next_timestamp);
+                    tracing::trace!(
+                        "inserting empty batch | ts={} epoch_num={}",
+                        epoch.number,
+                        next_timestamp
+                    );
                     Some(Batch {
                         epoch_num: epoch.number,
                         epoch_hash: epoch.hash,
@@ -220,7 +228,7 @@ fn decode_batches_v0(
     let batches_offset = if is_epoch_update { 3 } else { 2 };
     let mut batches = Vec::new();
     for (batch, idx) in rlp.at(batches_offset)?.iter().zip(0u64..) {
-        let batch = SpecularBatchV0{
+        let batch = SpecularBatchV0 {
             epoch_num,
             epoch_hash,
             timestamp: first_l2_block_timestamp + idx * blocktime,
