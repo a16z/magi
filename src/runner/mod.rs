@@ -193,9 +193,10 @@ impl Runner {
             (true, true) => panic!("not currently supported"),
             (true, false) => {
                 let cfg = specular::sequencing::config::Config::new(&self.config);
-                let policy = specular::sequencing::AttributesBuilder::new(cfg);
-                let provider = Provider::try_from(self.config.l1_rpc_url.clone())?;
-                let sequencing_src = sequencing::Source::new(policy, provider);
+                let l2_provider = Provider::try_from(&self.config.l2_rpc_url)?;
+                let policy = specular::sequencing::AttributesBuilder::new(cfg, l2_provider);
+                let l1_provider = Provider::try_from(self.config.l1_rpc_url.clone())?;
+                let sequencing_src = sequencing::Source::new(policy, l1_provider);
                 self.start_driver_for_real(Some(sequencing_src)).await?
             }
             _ => self.start_driver_for_real(sequencing::none()).await?,

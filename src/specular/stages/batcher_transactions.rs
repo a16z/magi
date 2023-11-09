@@ -1,31 +1,12 @@
 use std::sync::mpsc;
 
-use ethers::{
-    abi::parse_abi_str,
-    contract::Lazy,
-    prelude::BaseContract,
-    types::{Bytes, Selector},
-};
+use ethers::types::Bytes;
 use eyre::Result;
 use std::collections::VecDeque;
 
 use crate::derive::stages::batcher_transactions::BatcherTransactionMessage;
 use crate::derive::PurgeableIterator;
-
-type AppendTxBatchInput = Bytes;
-const APPEND_TX_BATCH_ABI_STR: &str = r#"[
-    function appendTxBatch(bytes calldata txBatchData) external
-]"#;
-static APPEND_TX_BATCH_ABI: Lazy<BaseContract> = Lazy::new(|| {
-    BaseContract::from(parse_abi_str(APPEND_TX_BATCH_ABI_STR).expect("abi must be valid"))
-});
-static APPEND_TX_BATCH_SELECTOR: Lazy<Selector> = Lazy::new(|| {
-    APPEND_TX_BATCH_ABI
-        .abi()
-        .function("appendTxBatch")
-        .expect("function must be present")
-        .short_signature()
-});
+use crate::specular::common::{AppendTxBatchInput, APPEND_TX_BATCH_ABI, APPEND_TX_BATCH_SELECTOR};
 
 /// The first stage in Specular's derivation pipeline.
 /// This stage consumes [BatcherTransactionMessage]s and produces [SpecularBatcherTransaction]s.

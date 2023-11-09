@@ -31,5 +31,6 @@ fn try_create_l1_block_info(block: &Block<H256>) -> Result<L1BlockInfo> {
             .base_fee_per_gas
             .ok_or(eyre::eyre!("base fee missing"))?,
         mix_hash: block.mix_hash.ok_or(eyre::eyre!("mix_hash missing"))?,
+        state_root: block.state_root,
     })
 }

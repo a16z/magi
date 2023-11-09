@@ -79,6 +79,8 @@ pub struct LocalSequencerCli {
     enabled: bool,
     #[clap(long = "sequencer-max-safe-lag", default_value = "0")]
     max_safe_lag: u64,
+    #[clap(long = "sequencer-pk-file")]
+    pk_file: Option<PathBuf>,
 }
 
 impl Cli {
@@ -143,11 +145,25 @@ impl From<Cli> for CliConfig {
     }
 }
 
+impl LocalSequencerCli {
+    pub fn read_private_key(&self) -> Option<String> {
+        let pk_file = self.pk_file.as_ref()?;
+        match std::fs::read_to_string(pk_file) {
+            Ok(content) => Some(content),
+            Err(_) => {
+                tracing::error!(target: "magi", "Failed to read sequencer pk from file: {:?}", pk_file);
+                None
+            }
+        }
+    }
+}
+
 impl From<LocalSequencerCli> for LocalSequencerConfig {
     fn from(value: LocalSequencerCli) -> Self {
         Self {
             enabled: value.enabled,
             max_safe_lag: value.max_safe_lag,
+            private_key: value.read_private_key(),
         }
     }
 }

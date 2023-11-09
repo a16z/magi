@@ -86,6 +86,8 @@ pub struct L1BlockInfo {
     pub base_fee: U256,
     /// L1 mix hash (prevrandao)
     pub mix_hash: H256,
+    /// L1 state root
+    pub state_root: H256,
 }
 
 /// Watcher actually ingests the L1 blocks. Should be run in another
@@ -474,6 +476,7 @@ impl L1Info {
                 .base_fee_per_gas
                 .ok_or(eyre::eyre!("block is pre london"))?,
             mix_hash: block.mix_hash.ok_or(eyre::eyre!("block not included"))?,
+            state_root: block.state_root,
         };
 
         let batcher_transactions =

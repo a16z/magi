@@ -1,7 +1,12 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
-use ethers::types::{H256, U64};
+use ethers::{
+    middleware::SignerMiddleware,
+    providers::Middleware,
+    signers::{LocalWallet, Signer},
+    types::{TransactionRequest, H256, U256, U64},
+};
 use eyre::Result;
 
 use crate::{
@@ -11,15 +16,25 @@ use crate::{
     l1::L1BlockInfo,
 };
 
+use crate::specular::common::{
+    SetL1OracleValuesInput, SET_L1_ORACLE_VALUES_ABI, SET_L1_ORACLE_VALUES_SELECTOR,
+};
+
 pub mod config;
 
-pub struct AttributesBuilder {
+pub struct AttributesBuilder<M> {
     config: config::Config,
+    client: SignerMiddleware<M, LocalWallet>,
 }
 
-impl AttributesBuilder {
-    pub fn new(config: config::Config) -> Self {
-        Self { config }
+// TODO[zhe]: 'static works for Http provider and MockProvider, not sure if it works for all [Middleware]
+// TODO[zhe]: has to be 'static because o/w [Middleware::fill_transaction] will complain about lifetime
+impl<M: Middleware + 'static> AttributesBuilder<M> {
+    pub fn new(config: config::Config, l2_provider: M) -> Self {
+        let wallet = LocalWallet::try_from(config.sequencer_private_key.clone())
+            .expect("invalid sequencer private key");
+        let client = SignerMiddleware::new(l2_provider, wallet);
+        Self { config, client }
     }
 
     /// Returns the next l2 block timestamp, given the `parent_block_timestamp`.
@@ -64,10 +79,51 @@ impl AttributesBuilder {
             }
         }
     }
+
+    // Creates the `L1Oracle::setL1OracleValues` transaction to include at the top of
+    // the next l2 block, which marks the start of an epoch.
+    async fn create_l1_oracle_update_transaction(
+        &self,
+        parent_l2_block: &BlockInfo,
+        parent_l1_epoch: &L1BlockInfo,
+        origin: &L1BlockInfo,
+    ) -> Result<Option<Vec<RawTransaction>>> {
+        if parent_l1_epoch.number == origin.number {
+            // Do not include the L1 oracle update tx if we are still in the same L1 epoch.
+            return Ok(None);
+        }
+        // Construct L1 oracle update transaction data
+        let set_l1_oracle_values_input: SetL1OracleValuesInput = (
+            U256::from(origin.number),
+            U256::from(origin.timestamp),
+            origin.base_fee,
+            origin.hash,
+            origin.state_root,
+        );
+        let input = SET_L1_ORACLE_VALUES_ABI
+            .encode_with_selector(*SET_L1_ORACLE_VALUES_SELECTOR, set_l1_oracle_values_input)
+            .expect("failed to encode setL1OracleValues input");
+        // Construct L1 oracle update transaction
+        let mut tx = TransactionRequest::new()
+            .to(self.config.l1_oracle_address)
+            .gas(150_000_000) // TODO[zhe]: consider to lower this number
+            .value(0)
+            .data(input)
+            .into();
+        let target_l2_block_number = parent_l2_block.number + 1;
+        // TODO[zhe]: here we let the provider to fill in the gas price
+        // TODO[zhe]: consider to make it constant?
+        self.client
+            .fill_transaction(&mut tx, Some(target_l2_block_number.into()))
+            .await?;
+        let signature = Signer::sign_transaction(self.client.signer(), &tx).await?;
+        let raw_tx = tx.rlp_signed(&signature);
+        Ok(Some(vec![RawTransaction(raw_tx.0.into())]))
+    }
 }
 
 #[async_trait]
-impl SequencingPolicy for AttributesBuilder {
+impl<M: Middleware + 'static> SequencingPolicy for AttributesBuilder<M> {
     /// Returns true iff:
     /// 1. `parent_l2_block` is within the max safe lag (i.e. `parent_l2_block` isn't too far ahead of `safe_l2_head`).
     /// 2. The next timestamp isn't in the future.
@@ -88,27 +144,23 @@ impl SequencingPolicy for AttributesBuilder {
         let timestamp = self.next_timestamp(parent_l2_block.timestamp);
         let prev_randao = next_randao(&next_origin);
         let suggested_fee_recipient = self.config.system_config.batch_sender;
-        let txs = create_top_of_block_transactions(&next_origin);
+        let txs = self
+            .create_l1_oracle_update_transaction(parent_l2_block, parent_l1_epoch, &next_origin)
+            .await?;
         let no_tx_pool = timestamp > next_origin.timestamp + self.config.max_seq_drift;
         let gas_limit = self.config.system_config.gas_limit;
         Ok(PayloadAttributes {
-            timestamp: U64([timestamp]),
+            timestamp: U64::from(timestamp),
             prev_randao,
             suggested_fee_recipient,
-            transactions: Some(txs),
+            transactions: txs,
             no_tx_pool,
-            gas_limit: U64([gas_limit]),
+            gas_limit: U64::from(gas_limit),
             epoch: Some(create_epoch(next_origin)),
             l1_inclusion_block: None,
             seq_number: None,
         })
     }
-}
-
-// TODO: implement. requires l1 info tx. requires signer...
-// Creates the transaction(s) to include at the top of the next l2 block.
-fn create_top_of_block_transactions(_origin: &L1BlockInfo) -> Vec<RawTransaction> {
-    vec![]
 }
 
 /// Returns the next l2 block randao, reusing that of the `next_origin`.
@@ -137,9 +189,11 @@ mod tests {
     use crate::{common::BlockInfo, driver::sequencing::SequencingPolicy};
 
     use super::{config, unix_now, AttributesBuilder};
-    use ethers::abi::Address;
+    use ethers::{
+        abi::Address,
+        providers::{MockProvider, Provider},
+    };
     use eyre::Result;
-
     #[test]
     fn test_is_ready() -> Result<()> {
         // Setup.
@@ -151,8 +205,14 @@ mod tests {
                 batch_sender: Address::zero(),
                 gas_limit: 1,
             }, // anything
+            l1_oracle_address: Address::zero(),
+            // random publicly known private key
+            sequencer_private_key:
+                "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318".to_string(),
         };
-        let attrs_builder = AttributesBuilder::new(config.clone());
+        let mock_client = MockProvider::default();
+        let provider: Provider<MockProvider> = Provider::new(mock_client);
+        let attrs_builder = AttributesBuilder::new(config.clone(), provider);
         // Run test cases.
         let cases = vec![(true, true), (true, false), (false, true), (false, false)];
         for case in cases.iter() {
