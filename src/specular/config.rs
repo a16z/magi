@@ -1,6 +1,7 @@
 use ethers::types::{Address, H256, U256};
 use eyre::Context;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 use crate::{
     common::{BlockInfo, Epoch},
@@ -16,7 +17,6 @@ struct ExternalChainConfig {
     l1_chain_id: u64,
     l2_chain_id: u64,
     batch_inbox_address: Address,
-    l1_oracle_address: Address,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,7 +85,7 @@ impl From<ExternalChainConfig> for ChainConfig {
             regolith_time: 0, // not used
             blocktime: external.block_time,
             l2_to_l1_message_passer: Address::zero(), // not used?
-            meta: ProtocolMetaConfig::specular(external.l1_oracle_address),
+            meta: ProtocolMetaConfig::specular(SystemAccounts::default().l1_oracle),
         }
     }
 }
@@ -99,4 +99,22 @@ impl ProtocolMetaConfig {
             l1_oracle,
         }
     }
+}
+
+/// Specular system accounts
+#[derive(Debug, Clone)]
+pub struct SystemAccounts {
+    pub l1_oracle: Address,
+}
+
+impl Default for SystemAccounts {
+    fn default() -> Self {
+        Self {
+            l1_oracle: addr("0x2a00000000000000000000000000000000000010"),
+        }
+    }
+}
+
+fn addr(s: &str) -> Address {
+    Address::from_str(s).unwrap()
 }
