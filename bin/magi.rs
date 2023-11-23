@@ -201,8 +201,8 @@ impl TryFrom<Cli> for CliConfig {
 /// The incoming value is the path to the key or a string with the key.
 /// The private key must be in hexadecimal format with a length of 64 characters.
 fn parse_secret_key_from_cli(value: &str) -> Result<SecretKey> {
-    secret_key_from_hex(value).or_else(|err| {
-        let path = PathBuf::try_from(value).map_err(|_| err)?;
+    secret_key_from_hex(value).or_else(|_| {
+        let path = PathBuf::from(value);
         let key_string = fs::read_to_string(&path)
             .map_err(|_| anyhow!("The key file {path:?} was not found."))?
             .trim()

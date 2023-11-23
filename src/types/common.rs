@@ -94,7 +94,7 @@ impl TryFrom<&ExecutionPayload> for HeadInfo {
     fn try_from(payload: &ExecutionPayload) -> Result<Self> {
         let (epoch, seq_number) = payload
             .transactions
-            .get(0)
+            .first()
             .ok_or(eyre::eyre!("no deposit transaction"))?
             .derive_unsafe_epoch()?;
 
@@ -117,7 +117,7 @@ impl TryFrom<Block<Transaction>> for HeadInfo {
     fn try_from(block: Block<Transaction>) -> std::result::Result<Self, Self::Error> {
         let tx_calldata = block
             .transactions
-            .get(0)
+            .first()
             .ok_or(eyre::eyre!(
                 "Could not find the L1 attributes deposited transaction"
             ))?

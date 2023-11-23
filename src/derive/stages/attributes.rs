@@ -458,7 +458,7 @@ mod tests {
         assert_eq!(transactions.len(), 2, "wrong transactions length");
 
         let (deposited_epoch, seq_number) =
-            transactions.get(0).unwrap().derive_unsafe_epoch().unwrap();
+            transactions.first().unwrap().derive_unsafe_epoch().unwrap();
         assert_eq!(
             deposited_epoch, new_epoch,
             "wrong epoch in deposited transaction"

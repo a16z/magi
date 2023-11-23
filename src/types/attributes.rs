@@ -24,7 +24,7 @@ impl RawTransaction {
     pub fn derive_unsafe_epoch(&self) -> Result<(Epoch, u64)> {
         let rlp = Rlp::new(self.0.as_slice());
         let tx = rlp.as_val::<DepositedTransaction>()?;
-        let calldata = Bytes::try_from(tx.data)?;
+        let calldata = Bytes::from(tx.data);
         let attr = AttributesDepositedCall::try_from(calldata)?;
         let epoch = Epoch::from(&attr);
 
@@ -335,8 +335,8 @@ impl TryFrom<Log> for UserDeposited {
             .into_bytes()
             .unwrap();
 
-        let from = Address::try_from(log.topics[1])?;
-        let to = Address::try_from(log.topics[2])?;
+        let from = Address::from(log.topics[1]);
+        let to = Address::from(log.topics[2]);
         let mint = U256::from_big_endian(&opaque_data[0..32]);
         let value = U256::from_big_endian(&opaque_data[32..64]);
         let gas = u64::from_be_bytes(opaque_data[64..72].try_into()?);
