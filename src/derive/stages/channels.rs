@@ -1,7 +1,5 @@
-use std::sync::Arc;
-
 use super::batcher_transactions::{BatcherTransaction, Frame};
-use crate::{config::Config, derive::PurgeableIterator};
+use crate::derive::PurgeableIterator;
 
 pub struct Channels<I> {
     batcher_tx_iter: I,
@@ -38,13 +36,13 @@ where
 }
 
 impl<I> Channels<I> {
-    pub fn new(batcher_tx_iter: I, config: Arc<Config>) -> Self {
+    pub fn new(batcher_tx_iter: I, max_channel_size: u64, channel_timeout: u64) -> Self {
         Self {
             batcher_tx_iter,
             pending_channels: Vec::new(),
             frame_bank: Vec::new(),
-            max_channel_size: config.chain.max_channel_size,
-            channel_timeout: config.chain.channel_timeout,
+            max_channel_size,
+            channel_timeout,
         }
     }
 }
@@ -240,12 +238,12 @@ impl From<PendingChannel> for Channel {
 #[cfg(test)]
 mod tests {
     use crate::{
-        config::{ChainConfig, Config},
+        config::ChainConfig,
         derive::stages::batcher_transactions::{
             BatcherTransactionMessage, BatcherTransactions, Frame,
         },
     };
-    use std::sync::{mpsc, Arc};
+    use std::sync::mpsc;
 
     use super::Channels;
 
@@ -388,20 +386,18 @@ mod tests {
         Channels<BatcherTransactions>,
         mpsc::Sender<BatcherTransactionMessage>,
     ) {
-        let config = Config {
-            l1_rpc_url: String::new(),
-            l2_rpc_url: String::new(),
-            l2_engine_url: String::new(),
-            jwt_secret: String::new(),
-            rpc_port: 9545,
-            chain: ChainConfig::optimism_goerli(),
-            checkpoint_sync_url: None,
-            devnet: false,
-        };
-
+        let ChainConfig {
+            max_channel_size,
+            channel_timeout,
+            ..
+        } = ChainConfig::optimism_goerli();
         let (tx, rx) = mpsc::channel();
         (
-            Channels::new(BatcherTransactions::new(rx), Arc::new(config)),
+            Channels::new(
+                BatcherTransactions::new(rx),
+                max_channel_size,
+                channel_timeout,
+            ),
             tx,
         )
     }

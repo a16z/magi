@@ -1,14 +1,16 @@
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::SystemTime;
 
-use ethers::types::{Address, Bytes, Signature, H256};
+use ethers::types::{Address, Bytes, Signature, H160, H256};
 use ethers::utils::keccak256;
+
 use eyre::Result;
 use libp2p::gossipsub::{IdentTopic, Message, MessageAcceptance, TopicHash};
 use ssz_rs::{prelude::*, List, Vector, U256};
 use tokio::sync::watch;
 
-use crate::{common::RawTransaction, engine::ExecutionPayload};
+use crate::network::signer::Signer;
+use crate::{engine::ExecutionPayload, types::attributes::RawTransaction};
 
 use super::Handler;
 
@@ -91,6 +93,7 @@ fn decode_block_msg(data: Vec<u8>) -> Result<(ExecutionPayload, Signature, Paylo
 
     let signature = Signature::try_from(sig_data)?;
 
+    // TODO: Seems it can panic, what's basically can crash node.
     let payload: ExecutionPayloadSSZ = deserialize(block_data)?;
     let payload: ExecutionPayload = ExecutionPayload::from(payload);
 
@@ -167,6 +170,61 @@ impl From<ExecutionPayloadSSZ> for ExecutionPayload {
     }
 }
 
+impl TryFrom<ExecutionPayload> for ExecutionPayloadSSZ {
+    type Error = eyre::Report;
+
+    fn try_from(value: ExecutionPayload) -> Result<Self> {
+        Ok(Self {
+            parent_hash: convert_hash_to_bytes32(value.parent_hash)?,
+            fee_recipient: convert_hash_to_address(value.fee_recipient)?,
+            state_root: convert_hash_to_bytes32(value.state_root)?,
+            receipts_root: convert_hash_to_bytes32(value.receipts_root)?,
+            logs_bloom: convert_bytes_to_vector(value.logs_bloom)?,
+            prev_randao: convert_hash_to_bytes32(value.prev_randao)?,
+            block_number: value.block_number.as_u64(),
+            gas_limit: value.gas_limit.as_u64(),
+            gas_used: value.gas_used.as_u64(),
+            timestamp: value.timestamp.as_u64(),
+            extra_data: convert_bytes_to_list(value.extra_data)?,
+            base_fee_per_gas: value.base_fee_per_gas.as_u64().into(),
+            block_hash: convert_hash_to_bytes32(value.block_hash)?,
+            transactions: convert_tx_to_list(value.transactions)?,
+        })
+    }
+}
+
+fn convert_hash_to_bytes32(hash: H256) -> Result<Bytes32> {
+    Bytes32::try_from(hash.as_fixed_bytes().to_vec())
+        .map_err(|_| eyre::eyre!("can't convert H256 to Bytes32"))
+}
+
+fn convert_hash_to_address(hash: H160) -> Result<VecAddress> {
+    VecAddress::try_from(hash.as_fixed_bytes().to_vec())
+        .map_err(|_| eyre::eyre!("can't convert H160 to Address"))
+}
+
+fn convert_bytes_to_list(data: Bytes) -> Result<List<u8, 32>> {
+    List::<u8, 32>::try_from(data.to_vec())
+        .map_err(|_| eyre::eyre!("can't convert bytes to List 32 size"))
+}
+
+fn convert_bytes_to_vector(data: Bytes) -> Result<Vector<u8, 256>> {
+    Vector::<u8, 256>::try_from(data.to_vec())
+        .map_err(|_| eyre::eyre!("can't convert bytes to Vector 256 size"))
+}
+
+fn convert_tx_to_list(txs: Vec<RawTransaction>) -> Result<List<Transaction, 1048576>> {
+    let mut list: List<Transaction, 1048576> = Default::default();
+
+    for tx in txs {
+        let list_tx = Transaction::try_from(tx.0)
+            .map_err(|_| eyre::eyre!("can't convert RawTransaction to List"))?;
+        list.push(list_tx);
+    }
+
+    Ok(list)
+}
+
 fn convert_hash(bytes: Bytes32) -> H256 {
     H256::from_slice(bytes.as_slice())
 }
@@ -192,4 +250,102 @@ fn convert_uint(value: U256) -> ethers::types::U64 {
 
 fn convert_tx_list(value: List<Transaction, 1048576>) -> Vec<RawTransaction> {
     value.iter().map(|tx| RawTransaction(tx.to_vec())).collect()
+}
+
+pub fn encode_block_msg(payload: ExecutionPayload, signer: &Signer) -> Result<Vec<u8>> {
+    // Start preparing payload for distribution.
+    let payload_ssz: ExecutionPayloadSSZ = payload.try_into()?;
+    let payload_bytes = serialize(&payload_ssz)?;
+
+    // Signature.
+    let (_, sig) = signer.sign(&payload_bytes)?;
+
+    // Create a payload for distribution.
+    let mut data: Vec<u8> = vec![];
+    data.extend(sig);
+    data.extend(payload_bytes);
+
+    // Zip.
+    let mut encoder = snap::raw::Encoder::new();
+
+    // The value can be passed by P2P.
+    Ok(encoder.compress_vec(&data)?)
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        engine::ExecutionPayload, network::signer::Signer, types::attributes::RawTransaction,
+    };
+    use ethers::core::k256::ecdsa::SigningKey;
+    use ethers::types::{Bytes, H160, H256, U64};
+    use ssz_rs::prelude::*;
+
+    use eyre::Result;
+
+    use rand::Rng;
+
+    use super::{decode_block_msg, encode_block_msg, ExecutionPayloadSSZ};
+
+    #[test]
+    fn test_prepare_payload() -> Result<()> {
+        let mut rng = rand::thread_rng();
+        let tx = RawTransaction(rng.gen::<[u8; 32]>().to_vec());
+
+        let mut logs_bloom = [0u8; 256];
+        rng.fill(&mut logs_bloom);
+
+        let payload = ExecutionPayload {
+            parent_hash: H256::random(),
+            fee_recipient: H160::random(),
+            state_root: H256::random(),
+            receipts_root: H256::random(),
+            logs_bloom: Bytes::from(logs_bloom),
+            prev_randao: H256::random(),
+            block_number: U64::from(rng.gen::<u64>()),
+            gas_limit: U64::from(rng.gen::<u64>()),
+            gas_used: U64::from(rng.gen::<u64>()),
+            timestamp: U64::from(rng.gen::<u64>()),
+            extra_data: Bytes::from(rng.gen::<[u8; 32]>()),
+            base_fee_per_gas: U64::from(rng.gen::<u64>()),
+            block_hash: H256::random(),
+            transactions: vec![tx],
+        };
+
+        // Start preparing payload for distribution.
+        let payload_ssz: ExecutionPayloadSSZ = payload.clone().try_into()?;
+        let payload_bytes = serialize(&payload_ssz)?;
+
+        // Sign.
+        let private_key = SigningKey::random(&mut rand::thread_rng());
+        let signer = Signer::new(1, private_key, None)?;
+
+        // Signature.
+        let (_, sig) = signer.sign(&payload_bytes)?;
+
+        // Create a payload for distribution.
+        let mut data: Vec<u8> = vec![];
+        data.extend(sig.clone());
+        data.extend(payload_bytes);
+
+        // Zip.
+        let mut encoder = snap::raw::Encoder::new();
+
+        // The value can be passed by P2P.
+        let compressed_1 = encoder.compress_vec(&data)?;
+        let compressed_2 = encode_block_msg(payload.clone(), &signer)?;
+
+        assert_eq!(compressed_1, compressed_2);
+
+        for tx in [compressed_1, compressed_2] {
+            let (decoded_payload, decoded_signature, _) = decode_block_msg(tx)?;
+            assert_eq!(payload, decoded_payload, "decoded payload different");
+            assert_eq!(
+                &sig,
+                &decoded_signature.to_vec(),
+                "decoded signature different"
+            );
+        }
+        Ok(())
+    }
 }

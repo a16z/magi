@@ -6,6 +6,7 @@ use discv5::{
 };
 use ethers::utils::rlp;
 use eyre::Result;
+use libp2p_identity::Keypair;
 use tokio::{
     sync::mpsc::{self, Receiver},
     time::sleep,
@@ -14,9 +15,14 @@ use unsigned_varint::{decode, encode};
 
 use super::types::{NetworkAddress, Peer};
 
-pub fn start(addr: NetworkAddress, chain_id: u64) -> Result<Receiver<Peer>> {
-    let bootnodes = bootnodes();
-    let mut disc = create_disc(chain_id)?;
+pub fn start(
+    addr: NetworkAddress,
+    keypair: Keypair,
+    chain_id: u64,
+    bootnodes_list: Option<Vec<Enr<CombinedKey>>>,
+) -> Result<Receiver<Peer>> {
+    let bootnodes = bootnodes_list.unwrap_or_else(bootnodes);
+    let mut disc = create_disc(chain_id, keypair)?;
 
     let (sender, recv) = mpsc::channel::<Peer>(256);
 
@@ -61,17 +67,19 @@ fn is_valid_node(node: &Enr<CombinedKey>, chain_id: u64) -> bool {
         .unwrap_or_default()
 }
 
-fn create_disc(chain_id: u64) -> Result<Discv5> {
+fn create_disc(chain_id: u64, keypair: Keypair) -> Result<Discv5> {
     let opstack = OpStackEnrData {
         chain_id,
         version: 0,
     };
     let opstack_data: Vec<u8> = opstack.into();
 
-    let key = CombinedKey::generate_secp256k1();
-    let enr = EnrBuilder::new("v4")
+    let key =
+        CombinedKey::secp256k1_from_bytes(&mut keypair.try_into_secp256k1()?.secret().to_bytes())?;
+    let enr: Enr<CombinedKey> = EnrBuilder::new("v4")
         .add_value_rlp("opstack", opstack_data.into())
         .build(&key)?;
+
     let config = Discv5Config::default();
 
     Discv5::new(enr, key, config).map_err(|_| eyre::eyre!("could not create disc service"))
@@ -109,6 +117,8 @@ impl From<OpStackEnrData> for Vec<u8> {
     }
 }
 
+/// Ethereum Node Entry (ENR) for the mainet optimism.
+/// Used in Magi as default values for p2p boot nodes
 fn bootnodes() -> Vec<Enr<CombinedKey>> {
     let bootnodes = [
         "enr:-J64QBbwPjPLZ6IOOToOLsSjtFUjjzN66qmBZdUexpO32Klrc458Q24kbty2PdRaLacHM5z-cZQr8mjeQu3pik6jPSOGAYYFIqBfgmlkgnY0gmlwhDaRWFWHb3BzdGFja4SzlAUAiXNlY3AyNTZrMaECmeSnJh7zjKrDSPoNMGXoopeDF4hhpj5I0OsQUUt4u8uDdGNwgiQGg3VkcIIkBg",

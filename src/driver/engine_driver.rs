@@ -9,9 +9,9 @@ use ethers::{
 use eyre::Result;
 
 use crate::{
-    common::{BlockInfo, Epoch},
     config::Config,
     engine::{Engine, EngineApi, ExecutionPayload, ForkchoiceState, PayloadAttributes, Status},
+    types::common::{BlockInfo, Epoch, HeadInfo},
 };
 
 pub struct EngineDriver<E: Engine> {
@@ -21,16 +21,16 @@ pub struct EngineDriver<E: Engine> {
     provider: Provider<Http>,
     /// Blocktime of the L2 chain
     blocktime: u64,
-    /// Most recent block found on the p2p network
-    pub unsafe_head: BlockInfo,
-    /// Most recent block that can be derived from L1 data
-    pub safe_head: BlockInfo,
-    /// Batch epoch of the safe head
-    pub safe_epoch: Epoch,
-    /// Most recent block that can be derived from finalized L1 data
-    pub finalized_head: BlockInfo,
-    /// Batch epoch of the finalized head
-    pub finalized_epoch: Epoch,
+
+    /// The unsafe head info of the L2: blocks from P2P or sequencer.
+    pub unsafe_info: HeadInfo,
+    /// The safe head info of the L2: when referenced L1 block which are not finalized yet.
+    pub safe_info: HeadInfo,
+    /// The finalized head info of the L2: when referenced L1 block can't be reverted already.
+    pub finalized_info: HeadInfo,
+
+    /// Engine sync head info.
+    pub sync_info: HeadInfo,
 }
 
 impl<E: Engine> EngineDriver<E> {
@@ -41,7 +41,9 @@ impl<E: Engine> EngineDriver<E> {
             if should_skip(&block, &attributes)? {
                 self.skip_attributes(attributes, block).await
             } else {
-                self.unsafe_head = self.safe_head;
+                self.unsafe_info = self.safe_info;
+                self.sync_info = self.safe_info;
+
                 self.process_attributes(attributes).await
             }
         } else {
@@ -51,27 +53,29 @@ impl<E: Engine> EngineDriver<E> {
 
     pub async fn handle_unsafe_payload(&mut self, payload: &ExecutionPayload) -> Result<()> {
         self.push_payload(payload.clone()).await?;
-        self.unsafe_head = payload.into();
+
+        self.unsafe_info = payload.try_into()?;
+        self.sync_info = self.unsafe_info;
+
         self.update_forkchoice().await?;
 
         tracing::info!(
             "head updated: {} {:?}",
-            self.unsafe_head.number,
-            self.unsafe_head.hash,
+            self.unsafe_info.head.number,
+            self.unsafe_info.head.hash,
         );
 
         Ok(())
     }
 
-    pub fn update_finalized(&mut self, head: BlockInfo, epoch: Epoch) {
-        self.finalized_head = head;
-        self.finalized_epoch = epoch;
+    pub fn update_finalized(&mut self, head: BlockInfo, epoch: Epoch, seq_number: u64) {
+        self.finalized_info = HeadInfo::new(head, epoch, seq_number)
     }
 
     pub fn reorg(&mut self) {
-        self.unsafe_head = self.finalized_head;
-        self.safe_head = self.finalized_head;
-        self.safe_epoch = self.finalized_epoch;
+        self.unsafe_info = self.finalized_info;
+        self.safe_info = self.finalized_info;
+        self.sync_info = self.finalized_info;
     }
 
     pub async fn engine_ready(&self) -> bool {
@@ -84,6 +88,7 @@ impl<E: Engine> EngineDriver<E> {
 
     async fn process_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
         let new_epoch = *attributes.epoch.as_ref().unwrap();
+        let seq_number = attributes.seq_number.unwrap();
 
         let payload = self.build_payload(attributes).await?;
 
@@ -95,7 +100,7 @@ impl<E: Engine> EngineDriver<E> {
         };
 
         self.push_payload(payload).await?;
-        self.update_safe_head(new_head, new_epoch, true)?;
+        self.update_safe_head(new_head, new_epoch, seq_number, true)?;
         self.update_forkchoice().await?;
 
         Ok(())
@@ -108,13 +113,14 @@ impl<E: Engine> EngineDriver<E> {
     ) -> Result<()> {
         let new_epoch = *attributes.epoch.as_ref().unwrap();
         let new_head = BlockInfo::try_from(block)?;
-        self.update_safe_head(new_head, new_epoch, false)?;
+
+        self.update_safe_head(new_head, new_epoch, attributes.seq_number.unwrap(), false)?;
         self.update_forkchoice().await?;
 
         Ok(())
     }
 
-    async fn build_payload(&self, attributes: PayloadAttributes) -> Result<ExecutionPayload> {
+    pub async fn build_payload(&self, attributes: PayloadAttributes) -> Result<ExecutionPayload> {
         let forkchoice = self.create_forkchoice_state();
 
         let update = self
@@ -129,7 +135,6 @@ impl<E: Engine> EngineDriver<E> {
         let id = update
             .payload_id
             .ok_or(eyre::eyre!("engine did not return payload id"))?;
-
         self.engine.get_payload(id).await
     }
 
@@ -160,15 +165,17 @@ impl<E: Engine> EngineDriver<E> {
         &mut self,
         new_head: BlockInfo,
         new_epoch: Epoch,
+        new_seq_number: u64,
         reorg_unsafe: bool,
     ) -> Result<()> {
-        if self.safe_head != new_head {
-            self.safe_head = new_head;
-            self.safe_epoch = new_epoch;
+        if self.safe_info.head != new_head {
+            self.safe_info = HeadInfo::new(new_head, new_epoch, new_seq_number);
+            self.sync_info = self.safe_info;
         }
 
-        if reorg_unsafe || self.safe_head.number > self.unsafe_head.number {
-            self.unsafe_head = new_head;
+        if reorg_unsafe || self.safe_info.head.number > self.unsafe_info.head.number {
+            self.unsafe_info = HeadInfo::new(new_head, new_epoch, new_seq_number);
+            self.sync_info = self.unsafe_info;
         }
 
         Ok(())
@@ -176,16 +183,16 @@ impl<E: Engine> EngineDriver<E> {
 
     fn create_forkchoice_state(&self) -> ForkchoiceState {
         ForkchoiceState {
-            head_block_hash: self.unsafe_head.hash,
-            safe_block_hash: self.safe_head.hash,
-            finalized_block_hash: self.finalized_head.hash,
+            head_block_hash: self.unsafe_info.head.hash,
+            safe_block_hash: self.safe_info.head.hash,
+            finalized_block_hash: self.finalized_info.head.hash,
         }
     }
 
     async fn block_at(&self, timestamp: u64) -> Option<Block<Transaction>> {
-        let time_diff = timestamp as i64 - self.finalized_head.timestamp as i64;
+        let time_diff = timestamp as i64 - self.finalized_info.head.timestamp as i64;
         let blocks = time_diff / self.blocktime as i64;
-        let block_num = self.finalized_head.number as i64 + blocks;
+        let block_num = self.finalized_info.head.number as i64 + blocks;
         self.provider
             .get_block_with_txs(block_num as u64)
             .await
@@ -230,8 +237,9 @@ fn should_skip(block: &Block<Transaction>, attributes: &PayloadAttributes) -> Re
 
 impl EngineDriver<EngineApi> {
     pub fn new(
-        finalized_head: BlockInfo,
-        finalized_epoch: Epoch,
+        finalized_info: HeadInfo,
+        safe_info: HeadInfo,
+        unsafe_info: HeadInfo,
         provider: Provider<Http>,
         config: &Arc<Config>,
     ) -> Result<Self> {
@@ -240,12 +248,11 @@ impl EngineDriver<EngineApi> {
         Ok(Self {
             engine,
             provider,
-            blocktime: config.chain.blocktime,
-            unsafe_head: finalized_head,
-            safe_head: finalized_head,
-            safe_epoch: finalized_epoch,
-            finalized_head,
-            finalized_epoch,
+            blocktime: config.chain.block_time,
+            finalized_info,
+            safe_info,
+            unsafe_info,
+            sync_info: unsafe_info,
         })
     }
 }

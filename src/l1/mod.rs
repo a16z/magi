@@ -15,9 +15,9 @@ use reqwest::Url;
 use tokio::{spawn, sync::mpsc, task::JoinHandle, time::sleep};
 
 use crate::{
-    common::BlockInfo,
     config::{Config, SystemConfig},
-    derive::stages::attributes::UserDeposited,
+    types::attributes::UserDeposited,
+    types::common::BlockInfo,
 };
 
 static CONFIG_UPDATE_TOPIC: Lazy<H256> =
@@ -50,14 +50,18 @@ pub struct ChainWatcher {
 pub enum BlockUpdate {
     /// A new block extending the current chain
     NewBlock(Box<L1Info>),
-    /// Updates the most recent finalized block
-    FinalityUpdate(u64),
+    /// Updates the most recent finalized L1 block.
+    FinalityUpdate(BlockInfo),
+    /// L1 head update.
+    HeadUpdate(BlockInfo),
+    /// L1 safe block update.
+    SafetyUpdate(BlockInfo),
     /// Reorg detected
     Reorg,
 }
 
 /// Data tied to a specific L1 block
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct L1Info {
     /// L1 block data
     pub block_info: L1BlockInfo,
@@ -72,7 +76,7 @@ pub struct L1Info {
 }
 
 /// L1 block info
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct L1BlockInfo {
     /// L1 block number
     pub number: u64,
@@ -80,10 +84,23 @@ pub struct L1BlockInfo {
     pub hash: H256,
     /// L1 block timestamp
     pub timestamp: u64,
+    /// L1 block parent hash.
+    pub parent_hash: H256,
     /// L1 base fee per gas
     pub base_fee: U256,
     /// L1 mix hash (prevrandao)
     pub mix_hash: H256,
+}
+
+impl From<L1BlockInfo> for BlockInfo {
+    fn from(l1_block: L1BlockInfo) -> Self {
+        Self {
+            hash: l1_block.hash,
+            number: l1_block.number,
+            parent_hash: l1_block.parent_hash,
+            timestamp: l1_block.timestamp,
+        }
+    }
 }
 
 /// Watcher actually ingests the L1 blocks. Should be run in another
@@ -101,6 +118,8 @@ struct InnerWatcher {
     head_block: u64,
     /// Most recent finalized block
     finalized_block: u64,
+    /// Most recent safe block
+    safe_block: u64,
     /// List of blocks that have not been finalized yet
     unfinalized_blocks: Vec<BlockInfo>,
     /// Mapping from block number to user deposits. Past block deposits
@@ -199,8 +218,8 @@ impl InnerWatcher {
     ) -> Self {
         let provider = generate_http_provider(&config.l1_rpc_url);
 
-        let system_config = if l2_start_block == config.chain.l2_genesis.number {
-            config.chain.system_config
+        let system_config = if l2_start_block == config.chain.genesis.l2.number {
+            config.chain.genesis.system_config
         } else {
             let l2_provider = generate_http_provider(&config.l2_rpc_url);
 
@@ -212,23 +231,23 @@ impl InnerWatcher {
 
             let input = &block
                 .transactions
-                .first()
+                .get(0)
                 .expect(
                     "Could not find the L1 attributes deposited transaction in the parent L2 block",
                 )
                 .input;
 
-            let batch_sender = Address::from_slice(&input[176..196]);
-            let l1_fee_overhead = U256::from(H256::from_slice(&input[196..228]).as_bytes());
-            let l1_fee_scalar = U256::from(H256::from_slice(&input[228..260]).as_bytes());
+            let batcher_addr = Address::from_slice(&input[176..196]);
+            let overhead = U256::from(H256::from_slice(&input[196..228]).as_bytes());
+            let scalar = U256::from(H256::from_slice(&input[228..260]).as_bytes());
 
             SystemConfig {
-                batch_sender,
-                l1_fee_overhead,
-                l1_fee_scalar,
-                gas_limit: block.gas_limit,
+                batcher_addr,
+                overhead,
+                scalar,
+                gas_limit: block.gas_limit.as_u64(),
                 // TODO: fetch from contract
-                unsafe_block_signer: config.chain.system_config.unsafe_block_signer,
+                unsafe_block_signer: config.chain.genesis.system_config.unsafe_block_signer,
             }
         };
 
@@ -239,6 +258,7 @@ impl InnerWatcher {
             current_block: l1_start_block,
             head_block: 0,
             finalized_block: 0,
+            safe_block: 0,
             unfinalized_blocks: Vec::new(),
             deposits: HashMap::new(),
             system_config,
@@ -250,7 +270,7 @@ impl InnerWatcher {
         if self.current_block > self.finalized_block {
             let finalized_block = self.get_finalized().await?;
 
-            self.finalized_block = finalized_block;
+            self.finalized_block = finalized_block.number;
             self.block_update_sender
                 .send(BlockUpdate::FinalityUpdate(finalized_block))
                 .await?;
@@ -261,7 +281,20 @@ impl InnerWatcher {
 
         if self.current_block > self.head_block {
             let head_block = self.get_head().await?;
-            self.head_block = head_block;
+            self.head_block = head_block.number;
+
+            self.block_update_sender
+                .send(BlockUpdate::HeadUpdate(head_block))
+                .await?;
+        }
+
+        if self.current_block > self.safe_block {
+            let safe_block = self.get_safe().await?;
+            self.safe_block = safe_block.number;
+
+            self.block_update_sender
+                .send(BlockUpdate::SafetyUpdate(safe_block))
+                .await?;
         }
 
         if self.current_block <= self.head_block {
@@ -274,7 +307,7 @@ impl InnerWatcher {
             let l1_info = L1Info::new(
                 &block,
                 user_deposits,
-                self.config.chain.batch_inbox,
+                self.config.chain.batch_inbox_address,
                 finalized,
                 self.system_config,
             )?;
@@ -312,7 +345,7 @@ impl InnerWatcher {
         if last_update_block < self.current_block {
             let to_block = last_update_block + 1000;
             let filter = Filter::new()
-                .address(self.config.chain.system_config_contract)
+                .address(self.config.chain.l1_system_config_address)
                 .topic0(*CONFIG_UPDATE_TOPIC)
                 .from_block(last_update_block + 1)
                 .to_block(to_block);
@@ -327,14 +360,14 @@ impl InnerWatcher {
                 let mut config = self.system_config;
                 match update {
                     SystemConfigUpdate::BatchSender(addr) => {
-                        config.batch_sender = addr;
+                        config.batcher_addr = addr;
                     }
                     SystemConfigUpdate::Fees(overhead, scalar) => {
-                        config.l1_fee_overhead = overhead;
-                        config.l1_fee_scalar = scalar;
+                        config.overhead = overhead;
+                        config.scalar = scalar;
                     }
                     SystemConfigUpdate::Gas(gas) => {
-                        config.gas_limit = gas;
+                        config.gas_limit = gas.as_u64();
                     }
                     SystemConfigUpdate::UnsafeBlockSigner(addr) => {
                         config.unsafe_block_signer = addr;
@@ -371,31 +404,44 @@ impl InnerWatcher {
         }
     }
 
-    async fn get_finalized(&self) -> Result<u64> {
+    async fn get_finalized(&self) -> Result<BlockInfo> {
         let block_number = match self.config.devnet {
             false => BlockNumber::Finalized,
             true => BlockNumber::Latest,
         };
 
-        Ok(self
+        let block = self
             .provider
             .get_block(block_number)
             .await?
-            .ok_or(eyre::eyre!("block not found"))?
-            .number
-            .ok_or(eyre::eyre!("block pending"))?
-            .as_u64())
+            .ok_or(eyre::eyre!("block not found"))?;
+
+        BlockInfo::try_from(block)
     }
 
-    async fn get_head(&self) -> Result<u64> {
-        Ok(self
+    async fn get_safe(&self) -> Result<BlockInfo> {
+        let block_number = match self.config.devnet {
+            false => BlockNumber::Safe,
+            true => BlockNumber::Latest,
+        };
+
+        let block = self
+            .provider
+            .get_block(block_number)
+            .await?
+            .ok_or(eyre::eyre!("block not found"))?;
+
+        BlockInfo::try_from(block)
+    }
+
+    async fn get_head(&self) -> Result<BlockInfo> {
+        let block = self
             .provider
             .get_block(BlockNumber::Latest)
             .await?
-            .ok_or(eyre::eyre!("block not found"))?
-            .number
-            .ok_or(eyre::eyre!("block pending"))?
-            .as_u64())
+            .ok_or(eyre::eyre!("block not found"))?;
+
+        BlockInfo::try_from(block)
     }
 
     async fn get_block(&self, block_num: u64) -> Result<Block<Transaction>> {
@@ -412,7 +458,7 @@ impl InnerWatcher {
                 let end_block = self.head_block.min(block_num + 1000);
 
                 let deposit_filter = Filter::new()
-                    .address(self.config.chain.deposit_contract)
+                    .address(self.config.chain.deposit_contract_address)
                     .topic0(*TRANSACTION_DEPOSITED_TOPIC)
                     .from_block(block_num)
                     .to_block(end_block);
@@ -460,6 +506,7 @@ impl L1Info {
             number: block_number,
             hash: block_hash,
             timestamp: block.timestamp.as_u64(),
+            parent_hash: block.parent_hash,
             base_fee: block
                 .base_fee_per_gas
                 .ok_or(eyre::eyre!("block is pre london"))?,
@@ -467,7 +514,7 @@ impl L1Info {
         };
 
         let batcher_transactions =
-            create_batcher_transactions(block, system_config.batch_sender, batch_inbox);
+            create_batcher_transactions(block, system_config.batcher_addr, batch_inbox);
 
         Ok(L1Info {
             block_info,

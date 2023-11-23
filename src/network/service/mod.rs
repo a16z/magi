@@ -1,7 +1,8 @@
+use discv5::Enr;
 use std::{net::SocketAddr, time::Duration};
 
 use eyre::Result;
-use futures::{prelude::*, select};
+use futures::prelude::*;
 use libp2p::{
     gossipsub::{self, IdentTopic, Message, MessageId},
     mplex::MplexConfig,
@@ -9,10 +10,16 @@ use libp2p::{
     swarm::{NetworkBehaviour, SwarmBuilder, SwarmEvent},
     tcp, Multiaddr, PeerId, Swarm, Transport,
 };
-use libp2p_identity::Keypair;
+use libp2p_identity::{secp256k1, secp256k1::SecretKey, Keypair};
 use openssl::sha::sha256;
+use tokio::select;
 
 use super::{handlers::Handler, service::types::NetworkAddress};
+use crate::network::signer::Signer;
+
+use crate::{engine::ExecutionPayload, network::handlers::block_handler::encode_block_msg};
+
+use ethers::core::k256::ecdsa::SigningKey;
 
 mod discovery;
 mod types;
@@ -21,16 +28,39 @@ pub struct Service {
     handlers: Vec<Box<dyn Handler>>,
     addr: SocketAddr,
     chain_id: u64,
-    keypair: Option<Keypair>,
+    keypair: Keypair,
+    bootnodes: Option<Vec<Enr>>,
+    signer: Option<Signer>,
+    block_topic: IdentTopic,
 }
 
 impl Service {
-    pub fn new(addr: SocketAddr, chain_id: u64) -> Self {
+    pub fn new(
+        addr: SocketAddr,
+        chain_id: u64,
+        bootnodes: Option<Vec<Enr>>,
+        keypair: Option<SecretKey>,
+        sequencer_secret_key: Option<SecretKey>,
+        block_topic: IdentTopic,
+    ) -> Self {
+        let keypair = keypair
+            .map(|secp_secret_key| secp256k1::Keypair::from(secp_secret_key).into())
+            .unwrap_or_else(Keypair::generate_secp256k1);
+
+        let signer = sequencer_secret_key
+            .and_then(|pk| SigningKey::from_slice(&pk.to_bytes()).ok())
+            .map(|signing_key| {
+                Signer::new(chain_id, signing_key, None).expect("Failed to create Signer")
+            });
+
         Self {
             handlers: Vec::new(),
             addr,
             chain_id,
-            keypair: None,
+            keypair,
+            bootnodes,
+            signer,
+            block_topic,
         }
     }
 
@@ -40,16 +70,20 @@ impl Service {
     }
 
     pub fn set_keypair(mut self, keypair: Keypair) -> Self {
-        self.keypair = Some(keypair);
+        self.keypair = keypair;
         self
     }
 
-    pub fn start(mut self) -> Result<()> {
+    pub fn start(
+        mut self,
+        mut receiver_new_block: tokio::sync::mpsc::Receiver<ExecutionPayload>,
+    ) -> Result<()> {
         let addr = NetworkAddress::try_from(self.addr)?;
-        let keypair = self.keypair.unwrap_or_else(Keypair::generate_secp256k1);
 
-        let mut swarm = create_swarm(keypair, &self.handlers)?;
-        let mut peer_recv = discovery::start(addr, self.chain_id)?;
+        let mut swarm = create_swarm(self.keypair.clone(), &self.handlers)?;
+
+        let mut peer_recv =
+            discovery::start(addr, self.keypair.clone(), self.chain_id, self.bootnodes)?;
 
         let multiaddr = Multiaddr::from(addr);
         swarm
@@ -59,20 +93,46 @@ impl Service {
         let mut handlers = Vec::new();
         handlers.append(&mut self.handlers);
 
+        // for p2p
+        let p2p_data = self.signer.take();
+
+        // Listening to peers
         tokio::spawn(async move {
             loop {
                 select! {
+                    // new peer
                     peer = peer_recv.recv().fuse() => {
                         if let Some(peer) = peer {
                             let peer = Multiaddr::from(peer);
                             _ = swarm.dial(peer);
                         }
                     },
+                    // incoming blocks from peers
                     event = swarm.select_next_some() => {
                         if let SwarmEvent::Behaviour(event) = event {
                             event.handle(&mut swarm, &handlers);
                         }
                     },
+                    // publish a block for peers
+                    Some(payload) = receiver_new_block.recv() => {
+                        if let Some(signer) = p2p_data.as_ref() {
+                            match encode_block_msg(payload, signer)
+                                .map_err(|err| err.to_string())
+                                .and_then(|tx|{
+                                    swarm.behaviour_mut().gossipsub
+                                        .publish(self.block_topic.clone(),tx)
+                                        .map_err(|err| err.to_string())
+                                }){
+                                    Ok(_message_id) => {},
+                                    Err(err) => tracing::debug!("P2P block broadcast error: {err:?}"),
+                                };
+                        } else {
+                            tracing::warn!("missed signer p2p private key; skip payload broadcast");
+                        }
+                    },
+                    _ = tokio::signal::ctrl_c() => {
+                        break;
+                    }
                 }
             }
         });

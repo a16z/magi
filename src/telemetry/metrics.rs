@@ -1,9 +1,13 @@
-use eyre::{Result, WrapErr};
+use std::net::SocketAddr;
+
+use eyre::Result;
 use lazy_static::lazy_static;
 use prometheus_exporter::{
     prometheus::{register_int_gauge, IntGauge},
     start,
 };
+
+pub const LISTENING_AS_STR: &str = "127.0.0.1:9200";
 
 lazy_static! {
     pub static ref FINALIZED_HEAD: IntGauge =
@@ -13,7 +17,7 @@ lazy_static! {
     pub static ref SYNCED: IntGauge = register_int_gauge!("synced", "synced flag").unwrap();
 }
 
-pub fn init() -> Result<()> {
-    start("0.0.0.0:9200".parse().wrap_err("Could not parse address")?)?;
+pub fn init(binding: SocketAddr) -> Result<()> {
+    start(binding)?;
     Ok(())
 }

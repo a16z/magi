@@ -1,11 +1,10 @@
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 use ethers::types::H256;
 
 use crate::{
-    common::{BlockInfo, Epoch},
-    config::Config,
     l1::L1Info,
+    types::common::{BlockInfo, Epoch},
 };
 
 pub struct State {
@@ -13,19 +12,29 @@ pub struct State {
     l1_hashes: BTreeMap<u64, H256>,
     pub safe_head: BlockInfo,
     pub safe_epoch: Epoch,
+    pub unsafe_head: BlockInfo,
+    pub unsafe_epoch: Epoch,
     pub current_epoch_num: u64,
-    config: Arc<Config>,
+    seq_window_size: u64,
 }
 
 impl State {
-    pub fn new(finalized_head: BlockInfo, finalized_epoch: Epoch, config: Arc<Config>) -> Self {
+    pub fn new(
+        finalized_head: BlockInfo,
+        finalized_epoch: Epoch,
+        unsafe_head: BlockInfo,
+        unsafe_epoch: Epoch,
+        seq_window_size: u64,
+    ) -> Self {
         Self {
             l1_info: BTreeMap::new(),
             l1_hashes: BTreeMap::new(),
             safe_head: finalized_head,
             safe_epoch: finalized_epoch,
+            unsafe_head,
+            unsafe_epoch,
             current_epoch_num: 0,
-            config,
+            seq_window_size,
         }
     }
 
@@ -36,6 +45,12 @@ impl State {
     pub fn l1_info_by_number(&self, num: u64) -> Option<&L1Info> {
         self.l1_hashes
             .get(&num)
+            .and_then(|hash| self.l1_info.get(hash))
+    }
+
+    pub fn l1_info_current(&self) -> Option<&L1Info> {
+        self.l1_hashes
+            .get(&self.current_epoch_num)
             .and_then(|hash| self.l1_info.get(hash))
     }
 
@@ -72,18 +87,28 @@ impl State {
 
         self.safe_head = safe_head;
         self.safe_epoch = safe_epoch;
+
+        self.unsafe_head = safe_head;
+        self.unsafe_epoch = safe_epoch;
     }
 
     pub fn update_safe_head(&mut self, safe_head: BlockInfo, safe_epoch: Epoch) {
         self.safe_head = safe_head;
         self.safe_epoch = safe_epoch;
+
+        if self.safe_head.number > self.unsafe_head.number {
+            self.unsafe_head = safe_head;
+            self.unsafe_epoch = safe_epoch;
+        }
+    }
+
+    pub fn update_unsafe_head(&mut self, unsafe_head: BlockInfo, unsafe_epoch: Epoch) {
+        self.unsafe_head = unsafe_head;
+        self.unsafe_epoch = unsafe_epoch;
     }
 
     fn prune(&mut self) {
-        let prune_until = self
-            .safe_epoch
-            .number
-            .saturating_sub(self.config.chain.seq_window_size);
+        let prune_until = self.safe_epoch.number.saturating_sub(self.seq_window_size);
 
         while let Some((block_num, block_hash)) = self.l1_hashes.first_key_value() {
             if *block_num >= prune_until {

@@ -2,10 +2,7 @@ use ethers::types::{Block, Bytes, Transaction, H160, H256, U64};
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    common::{Epoch, RawTransaction},
-    config::SystemAccounts,
-};
+use crate::{config::SystemAccounts, types::attributes::RawTransaction, types::common::Epoch};
 
 /// ## ExecutionPayload
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -160,26 +157,33 @@ mod tests {
 
     #[tokio::test]
     async fn test_from_block_hash_to_execution_paylaod() -> Result<()> {
-        if std::env::var("L1_TEST_RPC_URL").is_ok() && std::env::var("L2_TEST_RPC_URL").is_ok() {
-            let checkpoint_hash: H256 =
-                "0xc2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973".parse()?;
+        let l2_rpc = match std::env::var("L2_TEST_RPC_URL") {
+            Ok(l2_rpc) => l2_rpc,
+            l2_rpc_res => {
+                eprintln!(
+                    "Test ignored: `test_from_block_hash_to_execution_paylaod`, l2_rpc: {l2_rpc_res:?}"
+                );
+                return Ok(());
+            }
+        };
 
-            let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
-            let checkpoint_sync_url = Provider::<Http>::try_from(l2_rpc)?;
-            let checkpoint_block = checkpoint_sync_url
-                .get_block_with_txs(checkpoint_hash)
-                .await?
-                .unwrap();
+        let checkpoint_hash: H256 =
+            "0xc2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973".parse()?;
 
-            let payload = ExecutionPayload::try_from(checkpoint_block)?;
+        let checkpoint_sync_url = Provider::<Http>::try_from(l2_rpc)?;
+        let checkpoint_block = checkpoint_sync_url
+            .get_block_with_txs(checkpoint_hash)
+            .await?
+            .unwrap();
 
-            assert_eq!(
-                payload.block_hash,
-                "0xc2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973".parse()?
-            );
-            assert_eq!(payload.block_number, 8453214u64.into());
-            assert_eq!(payload.base_fee_per_gas, 50u64.into());
-        }
+        let payload = ExecutionPayload::try_from(checkpoint_block)?;
+
+        assert_eq!(
+            payload.block_hash,
+            "0xc2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973".parse()?
+        );
+        assert_eq!(payload.block_number, 8453214u64.into());
+        assert_eq!(payload.base_fee_per_gas, 50u64.into());
 
         Ok(())
     }

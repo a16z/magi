@@ -1,8 +1,10 @@
-use crate::config::Config;
-use crate::driver::types::HeadInfo;
+use crate::config::ChainConfig;
+use crate::types::common::HeadInfo;
 use ethers::middleware::Middleware;
 use ethers::providers::{JsonRpcClient, Provider, ProviderError};
 use ethers::types::{Block, BlockId, BlockNumber, Transaction};
+
+use eyre::Result;
 
 #[async_trait::async_trait]
 pub trait InnerProvider {
@@ -35,28 +37,71 @@ impl<'a, P: JsonRpcClient> InnerProvider for HeadInfoFetcher<'a, P> {
 pub struct HeadInfoQuery {}
 
 impl HeadInfoQuery {
-    pub async fn get_head_info<P: InnerProvider>(p: &P, config: &Config) -> HeadInfo {
-        p.get_block_with_txs(BlockId::Number(BlockNumber::Finalized))
+    async fn get_head_info<P: InnerProvider>(p: &P, block_number: BlockNumber) -> Option<HeadInfo> {
+        p.get_block_with_txs(BlockId::Number(block_number))
             .await
             .ok()
             .flatten()
             .and_then(|block| HeadInfo::try_from(block).ok())
+    }
+
+    pub async fn get_finalized<P: InnerProvider>(p: &P, chain: &ChainConfig) -> HeadInfo {
+        let block_number = BlockNumber::Finalized;
+        Self::get_head_info(p, block_number)
+            .await
             .unwrap_or_else(|| {
-                tracing::warn!("could not get head info. Falling back to the genesis head.");
+                tracing::warn!(
+                    "could not get {} head info. Falling back to the genesis head.",
+                    block_number
+                );
                 HeadInfo {
-                    l2_block_info: config.chain.l2_genesis,
-                    l1_epoch: config.chain.l1_start_epoch,
-                    sequence_number: 0,
+                    head: chain.l2_genesis(),
+                    epoch: chain.l1_start_epoch(),
+                    seq_number: 0,
+                }
+            })
+    }
+
+    pub async fn get_safe<P: InnerProvider>(p: &P, chain: &ChainConfig) -> HeadInfo {
+        let block_number = BlockNumber::Safe;
+        Self::get_head_info(p, block_number)
+            .await
+            .unwrap_or_else(|| {
+                tracing::warn!(
+                    "could not get {} head info. Falling back to the genesis head.",
+                    block_number
+                );
+                HeadInfo {
+                    head: chain.l2_genesis(),
+                    epoch: chain.l1_start_epoch(),
+                    seq_number: 0,
+                }
+            })
+    }
+
+    pub async fn get_unsafe<P: InnerProvider>(p: &P, chain: &ChainConfig) -> HeadInfo {
+        let block_number = BlockNumber::Latest;
+        Self::get_head_info(p, block_number)
+            .await
+            .unwrap_or_else(|| {
+                tracing::warn!(
+                    "could not get {} head info. Falling back to the genesis head.",
+                    block_number
+                );
+                HeadInfo {
+                    head: chain.l2_genesis(),
+                    epoch: chain.l1_start_epoch(),
+                    seq_number: 0,
                 }
             })
     }
 }
 
-#[cfg(all(test, feature = "test-utils"))]
+#[allow(dead_code)]
+#[cfg(any(test, feature = "test-utils"))]
 mod test_utils {
     use super::*;
-    use crate::common::{BlockInfo, Epoch};
-    use crate::config::{ChainConfig, Config};
+    use crate::types::common::{BlockInfo, Epoch};
     use ethers::types::H256;
     use std::str::FromStr;
 
@@ -70,7 +115,7 @@ mod test_utils {
 
     pub fn default_head_info() -> HeadInfo {
         HeadInfo {
-            l2_block_info: BlockInfo {
+            head: BlockInfo {
                 hash: H256::from_str(
                     "dbf6a80fef073de06add9b0d14026d6e5a86c85f6d102c36d3d8e9cf89c2afd3",
                 )
@@ -82,7 +127,7 @@ mod test_utils {
                 .unwrap(),
                 timestamp: 1686068903,
             },
-            l1_epoch: Epoch {
+            epoch: Epoch {
                 number: 17422590,
                 hash: H256::from_str(
                     "438335a20d98863a4c0c97999eb2481921ccd28553eac6f913af7c12aec04108",
@@ -90,7 +135,7 @@ mod test_utils {
                 .unwrap(),
                 timestamp: 1686068903,
             },
-            sequence_number: 0,
+            seq_number: 0,
         }
     }
 
@@ -123,19 +168,6 @@ mod test_utils {
         serde_json::from_str(raw_block).ok()
     }
 
-    pub fn optimism_config() -> Config {
-        Config {
-            l1_rpc_url: Default::default(),
-            l2_rpc_url: Default::default(),
-            l2_engine_url: Default::default(),
-            chain: ChainConfig::optimism(),
-            jwt_secret: Default::default(),
-            checkpoint_sync_url: Default::default(),
-            rpc_port: Default::default(),
-            devnet: false,
-        }
-    }
-
     #[async_trait::async_trait]
     impl InnerProvider for MockProvider {
         async fn get_block_with_txs(
@@ -154,24 +186,24 @@ mod tests {
     #[tokio::test]
     async fn test_get_head_info_fails() {
         let provider = test_utils::mock_provider(None);
-        let config = test_utils::optimism_config();
-        let head_info = HeadInfoQuery::get_head_info(&provider, &config).await;
+        let chain = ChainConfig::optimism();
+        let head_info = HeadInfoQuery::get_finalized(&provider, &chain).await;
         assert_eq!(test_utils::default_head_info(), head_info);
     }
 
     #[tokio::test]
     async fn test_get_head_info_empty_block() {
         let provider = test_utils::mock_provider(Some(Block::default()));
-        let config = test_utils::optimism_config();
-        let head_info = HeadInfoQuery::get_head_info(&provider, &config).await;
+        let chain = ChainConfig::optimism();
+        let head_info = HeadInfoQuery::get_finalized(&provider, &chain).await;
         assert_eq!(test_utils::default_head_info(), head_info);
     }
 
     #[tokio::test]
     async fn test_get_head_info_valid_block() {
         let provider = test_utils::mock_provider(test_utils::valid_block());
-        let config = test_utils::optimism_config();
-        let head_info = HeadInfoQuery::get_head_info(&provider, &config).await;
+        let chain = ChainConfig::optimism();
+        let head_info = HeadInfoQuery::get_finalized(&provider, &chain).await;
         assert_eq!(test_utils::default_head_info(), head_info);
     }
 }

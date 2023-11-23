@@ -10,10 +10,9 @@ use ethers::utils::rlp::{DecoderError, Rlp};
 use eyre::Result;
 use libflate::zlib::Decoder;
 
-use crate::common::RawTransaction;
-use crate::config::Config;
 use crate::derive::state::State;
 use crate::derive::PurgeableIterator;
+use crate::types::attributes::RawTransaction;
 
 use super::channels::Channel;
 
@@ -22,7 +21,9 @@ pub struct Batches<I> {
     batches: BTreeMap<u64, Batch>,
     channel_iter: I,
     state: Arc<RwLock<State>>,
-    config: Arc<Config>,
+    seq_window_size: u64,
+    max_seq_drift: u64,
+    blocktime: u64,
 }
 
 impl<I> Iterator for Batches<I>
@@ -50,12 +51,20 @@ where
 }
 
 impl<I> Batches<I> {
-    pub fn new(channel_iter: I, state: Arc<RwLock<State>>, config: Arc<Config>) -> Self {
+    pub fn new(
+        channel_iter: I,
+        state: Arc<RwLock<State>>,
+        seq_window_size: u64,
+        max_seq_drift: u64,
+        blocktime: u64,
+    ) -> Self {
         Self {
             batches: BTreeMap::new(),
             channel_iter,
             state,
-            config,
+            seq_window_size,
+            max_seq_drift,
+            blocktime,
         }
     }
 }
@@ -108,11 +117,17 @@ where
             let safe_head = state.safe_head;
             let epoch = state.safe_epoch;
             let next_epoch = state.epoch_by_number(epoch.number + 1);
-            let seq_window_size = self.config.chain.seq_window_size;
+            let seq_window_size = self.seq_window_size;
 
             if let Some(next_epoch) = next_epoch {
                 if current_l1_block > epoch.number + seq_window_size {
-                    let next_timestamp = safe_head.timestamp + self.config.chain.blocktime;
+                    tracing::warn!(
+                        "create an empty block because of sequence window: {} {}",
+                        current_l1_block,
+                        epoch.number
+                    );
+
+                    let next_timestamp = safe_head.timestamp + self.blocktime;
                     let epoch = if next_timestamp < next_epoch.timestamp {
                         epoch
                     } else {
@@ -145,7 +160,7 @@ where
         let epoch = state.safe_epoch;
         let next_epoch = state.epoch_by_number(epoch.number + 1);
         let head = state.safe_head;
-        let next_timestamp = head.timestamp + self.config.chain.blocktime;
+        let next_timestamp = head.timestamp + self.blocktime;
 
         // check timestamp range
         match batch.timestamp.cmp(&next_timestamp) {
@@ -161,7 +176,7 @@ where
         }
 
         // check the inclusion delay
-        if batch.epoch_num + self.config.chain.seq_window_size < batch.l1_inclusion_block {
+        if batch.epoch_num + self.seq_window_size < batch.l1_inclusion_block {
             tracing::warn!("inclusion window elapsed");
             return BatchStatus::Drop;
         }
@@ -188,7 +203,7 @@ where
             }
 
             // handle sequencer drift
-            if batch.timestamp > batch_origin.timestamp + self.config.chain.max_seq_drift {
+            if batch.timestamp > batch_origin.timestamp + self.max_seq_drift {
                 if batch.transactions.is_empty() {
                     if epoch.number == batch.epoch_num {
                         if let Some(next_epoch) = next_epoch {
