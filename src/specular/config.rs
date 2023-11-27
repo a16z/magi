@@ -85,18 +85,17 @@ impl From<ExternalChainConfig> for ChainConfig {
             regolith_time: 0, // not used
             blocktime: external.block_time,
             l2_to_l1_message_passer: Address::zero(), // not used?
-            meta: ProtocolMetaConfig::specular(SystemAccounts::default().l1_oracle),
+            meta: ProtocolMetaConfig::specular(),
         }
     }
 }
 
 impl ProtocolMetaConfig {
-    pub fn specular(l1_oracle: Address) -> Self {
+    pub fn specular() -> Self {
         Self {
             enable_config_updates: false,
             enable_deposited_txs: false,
             enable_full_derivation: false,
-            l1_oracle,
         }
     }
 }

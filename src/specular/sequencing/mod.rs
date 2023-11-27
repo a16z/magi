@@ -16,8 +16,9 @@ use crate::{
     l1::L1BlockInfo,
 };
 
-use crate::specular::common::{
-    SetL1OracleValuesInput, SET_L1_ORACLE_VALUES_ABI, SET_L1_ORACLE_VALUES_SELECTOR,
+use crate::specular::{
+    common::{SetL1OracleValuesInput, SET_L1_ORACLE_VALUES_ABI, SET_L1_ORACLE_VALUES_SELECTOR},
+    config::SystemAccounts,
 };
 
 pub mod config;
@@ -32,7 +33,8 @@ pub struct AttributesBuilder<M> {
 impl<M: Middleware + 'static> AttributesBuilder<M> {
     pub fn new(config: config::Config, l2_provider: M) -> Self {
         let wallet = LocalWallet::try_from(config.sequencer_private_key.clone())
-            .expect("invalid sequencer private key");
+            .expect("invalid sequencer private key")
+            .with_chain_id(config.l2_chain_id);
         let client = SignerMiddleware::new(l2_provider, wallet);
         Self { config, client }
     }
@@ -84,13 +86,12 @@ impl<M: Middleware + 'static> AttributesBuilder<M> {
     // the next l2 block, which marks the start of an epoch.
     async fn create_l1_oracle_update_transaction(
         &self,
-        parent_l2_block: &BlockInfo,
         parent_l1_epoch: &L1BlockInfo,
         origin: &L1BlockInfo,
     ) -> Result<Option<Vec<RawTransaction>>> {
         if parent_l1_epoch.number == origin.number {
             // Do not include the L1 oracle update tx if we are still in the same L1 epoch.
-            return Ok(None);
+            return Ok(Some(vec![]));
         }
         // Construct L1 oracle update transaction data
         let set_l1_oracle_values_input: SetL1OracleValuesInput = (
@@ -105,17 +106,15 @@ impl<M: Middleware + 'static> AttributesBuilder<M> {
             .expect("failed to encode setL1OracleValues input");
         // Construct L1 oracle update transaction
         let mut tx = TransactionRequest::new()
-            .to(self.config.l1_oracle_address)
-            .gas(150_000_000) // TODO[zhe]: consider to lower this number
+            .to(SystemAccounts::default().l1_oracle)
+            .gas(15_000_000) // TODO[zhe]: consider to lower this number or make it configurable
             .value(0)
             .data(input)
             .into();
-        let target_l2_block_number = parent_l2_block.number + 1;
-        // TODO[zhe]: here we let the provider to fill in the gas price
-        // TODO[zhe]: consider to make it constant?
-        self.client
-            .fill_transaction(&mut tx, Some(target_l2_block_number.into()))
-            .await?;
+        // TODO[zhe]: here we let the provider to fill in the gas price, consider to make it constant?
+        // Currently `get_attributes` is always called with `parent_l2_block` being the latest block, see src/driver/sequencing/mod.rs:51.
+        // Therefore, we can assume we're at the latest block and can fill on `Pending` block
+        self.client.fill_transaction(&mut tx, None).await?;
         let signature = Signer::sign_transaction(self.client.signer(), &tx).await?;
         let raw_tx = tx.rlp_signed(&signature);
         Ok(Some(vec![RawTransaction(raw_tx.0.into())]))
@@ -145,7 +144,7 @@ impl<M: Middleware + 'static> SequencingPolicy for AttributesBuilder<M> {
         let prev_randao = next_randao(&next_origin);
         let suggested_fee_recipient = self.config.system_config.batch_sender;
         let txs = self
-            .create_l1_oracle_update_transaction(parent_l2_block, parent_l1_epoch, &next_origin)
+            .create_l1_oracle_update_transaction(parent_l1_epoch, &next_origin)
             .await?;
         let no_tx_pool = timestamp > next_origin.timestamp + self.config.max_seq_drift;
         let gas_limit = self.config.system_config.gas_limit;
@@ -198,6 +197,7 @@ mod tests {
     fn test_is_ready() -> Result<()> {
         // Setup.
         let config = config::Config {
+            l2_chain_id: 13527,
             blocktime: 2,
             max_seq_drift: 0, // anything
             max_safe_lag: 10,
@@ -205,7 +205,6 @@ mod tests {
                 batch_sender: Address::zero(),
                 gas_limit: 1,
             }, // anything
-            l1_oracle_address: Address::zero(),
             // random publicly known private key
             sequencer_private_key:
                 "4c0883a69102937d6231471b5dbb6204fe5129617082792ae468d01a3f362318".to_string(),

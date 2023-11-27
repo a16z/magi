@@ -18,8 +18,9 @@ use ethers::{
 };
 
 use super::batcher_transactions::SpecularBatcherTransaction;
-use crate::specular::common::{
-    SetL1OracleValuesInput, SET_L1_ORACLE_VALUES_ABI, SET_L1_ORACLE_VALUES_SELECTOR,
+use crate::specular::{
+    common::{SetL1OracleValuesInput, SET_L1_ORACLE_VALUES_ABI, SET_L1_ORACLE_VALUES_SELECTOR},
+    config::SystemAccounts,
 };
 
 /// The second stage of Specular's derive pipeline.
@@ -218,20 +219,46 @@ fn decode_batches_v0(
     // Get l2 safe epoch info.
     let mut epoch_num = state.safe_epoch.number;
     let mut epoch_hash = state.safe_epoch.hash;
+    // Record the local l2 block number to check for duplicates and missing blocks.
+    let mut local_l2_num = safe_l2_num;
     // Decode each batch list in the batcher transaction.
     for batch_list in batch_lists.iter() {
         // Decode the first l2 block number at offset 0.
-        let first_l2_block_num: u64 = batch_list.val_at(0)?;
-        let first_l2_block_timestamp =
-            (first_l2_block_num - safe_l2_num) * config.chain.blocktime + safe_l2_ts;
+        let batch_first_l2_num: u64 = batch_list.val_at(0)?;
+        // Check for duplicates.
+        if batch_first_l2_num < local_l2_num {
+            tracing::warn!("invalid batcher transaction: contains already accepted batches | safe_head={} first_l2_block_num={}", local_l2_num, batch_first_l2_num);
+            eyre::bail!("invalid batcher transaction: contains already accepted batches");
+        }
+        // Insert empty batches for missing blocks.
+        for i in local_l2_num + 1..batch_first_l2_num {
+            let batch = SpecularBatchV0 {
+                epoch_num,
+                epoch_hash,
+                timestamp: (i - safe_l2_num) * config.chain.blocktime + safe_l2_ts,
+                transactions: Vec::new(),
+                l2_block_number: i,
+                l1_inclusion_block: state.current_epoch_num,
+                l1_oracle_values: None,
+            };
+            tracing::trace!(
+                "inserting empty batch | num={} ts={}",
+                batch.l2_block_number,
+                batch.timestamp,
+            );
+            batches.push(batch);
+        }
+        // Update the local l2 block number.
+        // We're supposed to have inserted empty batches until right before the first batch in the list.
+        local_l2_num = batch_first_l2_num - 1;
+        let batch_first_l2_ts =
+            (batch_first_l2_num - safe_l2_num) * config.chain.blocktime + safe_l2_ts;
         // Decode the transaction batches at offset 1.
         for (batch, idx) in batch_list.at(1)?.iter().zip(0u64..) {
             let transactions: Vec<RawTransaction> = batch.as_list()?;
             // Try decode the `setL1OacleValues` call if it is the first batch in the list.
             let l1_oracle_values = if idx == 0 {
-                transactions
-                    .first()
-                    .and_then(|tx| try_decode_l1_oracle_values(tx, config))
+                transactions.first().and_then(try_decode_l1_oracle_values)
             } else {
                 None
             };
@@ -240,16 +267,19 @@ fn decode_batches_v0(
                 epoch_num = new_epoch_num.as_u64();
                 epoch_hash = new_epoch_hash;
             }
+            // Create the batch.
             let batch = SpecularBatchV0 {
                 epoch_num,
                 epoch_hash,
-                timestamp: first_l2_block_timestamp + idx * config.chain.blocktime,
+                timestamp: batch_first_l2_ts + idx * config.chain.blocktime,
                 transactions,
-                l2_block_number: first_l2_block_num + idx,
+                l2_block_number: batch_first_l2_num + idx,
                 l1_inclusion_block: batcher_tx.l1_inclusion_block,
                 l1_oracle_values,
             };
             batches.push(batch);
+            // Update the local l2 block number.
+            local_l2_num += 1;
         }
     }
 
@@ -293,12 +323,9 @@ impl From<SpecularBatchV0> for Batch {
     }
 }
 
-fn try_decode_l1_oracle_values(
-    tx: &RawTransaction,
-    config: &Config,
-) -> Option<SetL1OracleValuesInput> {
+fn try_decode_l1_oracle_values(tx: &RawTransaction) -> Option<SetL1OracleValuesInput> {
     let tx = Transaction::decode(&Rlp::new(&tx.0)).ok()?;
-    if tx.to? != config.chain.meta.l1_oracle {
+    if tx.to? != SystemAccounts::default().l1_oracle {
         return None;
     }
 

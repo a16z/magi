@@ -167,8 +167,6 @@ pub struct ProtocolMetaConfig {
     pub enable_config_updates: bool,
     pub enable_deposited_txs: bool,
     pub enable_full_derivation: bool,
-    /// Specular: The L2-predeploy L1 oracle contract address
-    pub l1_oracle: Address,
 }
 
 impl ProtocolMetaConfig {
@@ -177,7 +175,6 @@ impl ProtocolMetaConfig {
             enable_config_updates: true,
             enable_deposited_txs: true,
             enable_full_derivation: true,
-            l1_oracle: Address::zero(),
         }
     }
 }

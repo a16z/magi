@@ -256,13 +256,16 @@ impl InnerWatcher {
         if self.current_block > self.finalized_block {
             let finalized_block = self.get_finalized().await?;
 
-            self.finalized_block = finalized_block;
-            self.block_update_sender
-                .send(BlockUpdate::FinalityUpdate(finalized_block))
-                .await?;
-
-            self.unfinalized_blocks
-                .retain(|b| b.number > self.finalized_block)
+            // Only update finalized block if it has changed to avoid spamming the channel.
+            if self.finalized_block < finalized_block {
+                tracing::debug!("[l1] finalized block updated to {}", finalized_block);
+                self.finalized_block = finalized_block;
+                self.block_update_sender
+                    .send(BlockUpdate::FinalityUpdate(finalized_block))
+                    .await?;
+                self.unfinalized_blocks
+                    .retain(|b| b.number > self.finalized_block)
+            }
         }
 
         if self.current_block > self.head_block {
