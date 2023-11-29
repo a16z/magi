@@ -1,4 +1,8 @@
-use std::{process, time::Duration};
+use std::{
+    process,
+    sync::{Arc, RwLock},
+    time::Duration,
+};
 
 use ethers::{
     providers::{Http, Middleware, Provider},
@@ -6,14 +10,19 @@ use ethers::{
 };
 use eyre::Result;
 use tokio::{
-    sync::watch::{channel, Receiver},
+    sync::{
+        watch::{channel, Receiver},
+        RwLock as TokioRwLock,
+    },
     time::sleep,
 };
 
 use crate::{
     config::{Config, SyncMode, SystemAccounts},
+    derive::state::State,
     driver::{
-        sequencing::{self},
+        engine_driver::EngineDriver,
+        sequencing::{self, driver::SequencingDriver},
         Driver,
     },
     engine::{Engine, EngineApi, ExecutionPayload, ForkchoiceState, Status},
@@ -185,6 +194,27 @@ impl Runner {
     }
 
     async fn start_driver(&self) -> Result<()> {
+        let mut driver =
+            Driver::from_config(self.config.clone(), self.shutdown_recv.clone()).await?;
+        let seq_fut = {
+            let engine_driver = driver.engine_driver.clone();
+            let state = driver.state.clone();
+            self.start_sequencing_driver(engine_driver, state)
+        };
+        let driver_fut = driver.start();
+        if let Err(err) = futures::try_join!(driver_fut, seq_fut) {
+            tracing::error!("driver failure: {}", err);
+            std::process::exit(1);
+        }
+
+        Ok(())
+    }
+
+    async fn start_sequencing_driver(
+        &self,
+        engine_driver: Arc<TokioRwLock<EngineDriver<EngineApi>>>,
+        state: Arc<RwLock<State>>,
+    ) -> Result<()> {
         match (
             self.config.local_sequencer.enabled,
             self.config.chain.meta.enable_full_derivation,
@@ -192,34 +222,24 @@ impl Runner {
             // TODO: use a src that conforms to optimism's full derivation protocol.
             (true, true) => panic!("not currently supported"),
             (true, false) => {
-                let cfg = specular::sequencing::config::Config::new(&self.config);
-                let l2_provider = Provider::try_from(&self.config.l2_rpc_url)?;
-                let policy = specular::sequencing::AttributesBuilder::new(cfg, l2_provider);
-                let l1_provider = Provider::try_from(self.config.l1_rpc_url.clone())?;
-                let sequencing_src = sequencing::Source::new(policy, l1_provider);
-                self.start_driver_for_real(Some(sequencing_src)).await?
+                // Use specular sequencing.
+                let mut driver = {
+                    let cfg = specular::sequencing::config::Config::new(&self.config);
+                    let l2_provider = Provider::try_from(&self.config.l2_rpc_url)?;
+                    let policy = specular::sequencing::AttributesBuilder::new(cfg, l2_provider);
+                    let l1_provider = Provider::try_from(&self.config.l1_rpc_url)?;
+                    let sequencing_src = sequencing::Source::new(policy, l1_provider);
+                    SequencingDriver::new(
+                        engine_driver,
+                        state,
+                        sequencing_src,
+                        self.shutdown_recv.clone(),
+                    )
+                };
+                driver.start().await
             }
-            _ => self.start_driver_for_real(sequencing::none()).await?,
-        };
-        Ok(())
-    }
-
-    async fn start_driver_for_real<T: sequencing::SequencingSource<EngineApi>>(
-        &self,
-        sequencing_src: Option<T>,
-    ) -> Result<()> {
-        let mut driver = Driver::from_config(
-            self.config.clone(),
-            self.shutdown_recv.clone(),
-            sequencing_src,
-        )
-        .await?;
-        if let Err(err) = driver.start().await {
-            tracing::error!("driver failure: {}", err);
-            std::process::exit(1);
+            _ => Ok(()),
         }
-
-        Ok(())
     }
 
     fn check_shutdown(&self) -> Result<()> {

@@ -60,7 +60,7 @@ impl<M: Middleware + 'static> AttributesBuilder<M> {
         let next_drift_bound = self.next_drift_bound(curr_l1_epoch);
         let is_drift_bound_exceeded = next_l2_ts > next_drift_bound;
         if is_drift_bound_exceeded {
-            tracing::info!("Next l2 ts exceeds the drift bound {}", next_drift_bound);
+            tracing::info!("next l2 ts exceeds the drift bound {}", next_drift_bound);
         }
         match (next_l1_epoch, is_drift_bound_exceeded) {
             // We found the next l1 block.
@@ -88,10 +88,10 @@ impl<M: Middleware + 'static> AttributesBuilder<M> {
         &self,
         parent_l1_epoch: &L1BlockInfo,
         origin: &L1BlockInfo,
-    ) -> Result<Option<Vec<RawTransaction>>> {
+    ) -> Result<Vec<RawTransaction>> {
         if parent_l1_epoch.number == origin.number {
             // Do not include the L1 oracle update tx if we are still in the same L1 epoch.
-            return Ok(Some(vec![]));
+            return Ok(vec![]);
         }
         // Construct L1 oracle update transaction data
         let set_l1_oracle_values_input: SetL1OracleValuesInput = (
@@ -117,7 +117,7 @@ impl<M: Middleware + 'static> AttributesBuilder<M> {
         self.client.fill_transaction(&mut tx, None).await?;
         let signature = Signer::sign_transaction(self.client.signer(), &tx).await?;
         let raw_tx = tx.rlp_signed(&signature);
-        Ok(Some(vec![RawTransaction(raw_tx.0.into())]))
+        Ok(vec![RawTransaction(raw_tx.0.into())])
     }
 }
 
@@ -152,7 +152,7 @@ impl<M: Middleware + 'static> SequencingPolicy for AttributesBuilder<M> {
             timestamp: U64::from(timestamp),
             prev_randao,
             suggested_fee_recipient,
-            transactions: txs,
+            transactions: Some(txs),
             no_tx_pool,
             gas_limit: U64::from(gas_limit),
             epoch: Some(create_epoch(next_origin)),
@@ -197,10 +197,10 @@ mod tests {
     fn test_is_ready() -> Result<()> {
         // Setup.
         let config = config::Config {
-            l2_chain_id: 13527,
             blocktime: 2,
             max_seq_drift: 0, // anything
             max_safe_lag: 10,
+            l2_chain_id: 0, // anything
             system_config: config::SystemConfig {
                 batch_sender: Address::zero(),
                 gas_limit: 1,

@@ -7,24 +7,24 @@ use futures::future::Either;
 use futures::join;
 
 use crate::{
-    common::BlockInfo,
+    common::{BlockInfo, Epoch},
     derive::state::State,
-    engine::{Engine, PayloadAttributes},
+    engine::PayloadAttributes,
     l1::{utils::get_l1_block_info, L1BlockInfo},
 };
 
-use super::engine_driver::EngineDriver;
+pub mod driver;
 
 /// TODO: Support system config updates.
 #[async_trait(?Send)]
-pub trait SequencingSource<E: Engine> {
+pub trait SequencingSource {
     /// Returns the next payload attributes to be built (if any) on top of
-    /// the current unsafe head, as determined by inspecting the `engine_driver`.
-    /// If no attributes are ready to be built, returns `None`.
+    /// `unsafe_head`. If no attributes are ready to be built, returns `None`.
     async fn get_next_attributes(
         &self,
         state: &Arc<RwLock<State>>,
-        engine_driver: &EngineDriver<E>,
+        parent_l2_block: &BlockInfo,
+        parent_epoch: &Epoch,
     ) -> Result<Option<PayloadAttributes>>;
 }
 
@@ -42,13 +42,13 @@ impl<T: SequencingPolicy, U: JsonRpcClient> Source<T, U> {
 }
 
 #[async_trait(?Send)]
-impl<E: Engine, T: SequencingPolicy, U: JsonRpcClient> SequencingSource<E> for Source<T, U> {
+impl<T: SequencingPolicy, U: JsonRpcClient> SequencingSource for Source<T, U> {
     async fn get_next_attributes(
         &self,
         state: &Arc<RwLock<State>>,
-        engine_driver: &EngineDriver<E>,
+        parent_l2_block: &BlockInfo,
+        parent_epoch: &Epoch,
     ) -> Result<Option<PayloadAttributes>> {
-        let parent_l2_block = &engine_driver.unsafe_head;
         let safe_l2_head = {
             let state = state.read().unwrap();
             state.safe_head
@@ -58,7 +58,6 @@ impl<E: Engine, T: SequencingPolicy, U: JsonRpcClient> SequencingSource<E> for S
             return Ok(None);
         }
         // Get full l1 epoch info.
-        let parent_epoch = engine_driver.unsafe_epoch;
         let (parent_l1_epoch, next_l1_epoch) = {
             // Acquire read lock on state to get epoch info (if it exists).
             let state = state.read().unwrap();

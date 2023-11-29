@@ -7,6 +7,7 @@ use ethers::{
     utils::keccak256,
 };
 use eyre::Result;
+use tokio::sync::RwLock;
 use tokio::time::{sleep, Duration};
 
 use crate::{
@@ -36,29 +37,107 @@ pub struct EngineDriver<E: Engine> {
     pub finalized_epoch: Epoch,
 }
 
+pub enum Action {
+    /// Indicates that the attributes should be skipped.
+    Skip(BlockInfo),
+    /// Indicates that the attributes should be processed.
+    /// If `bool` is true, reset unsafe head prior to processing.
+    Process(bool),
+}
+
+pub enum ChainHeadType {
+    Safe,
+    Unsafe,
+}
+
+/// Handles the given attributes.
+/// Functionally equivalent to [EngineDriver<E>::handle_attributes], but manages
+/// the engine driver RW lock by acquiring the write lock only as necessary.
+pub async fn handle_attributes<E: Engine>(
+    attrs: &PayloadAttributes,
+    target: ChainHeadType,
+    engine_driver: Arc<RwLock<EngineDriver<E>>>,
+) -> Result<()> {
+    let action = {
+        let engine_driver = engine_driver.read().await;
+        engine_driver.determine_action(attrs).await?
+    };
+    execute_action(attrs, action, target, engine_driver).await
+}
+
+/// Executes `action` for `attrs` at the `target` (either the safe or unsafe head).
+/// An error is returned if the action fails.
+pub async fn execute_action<E: Engine>(
+    attrs: &PayloadAttributes,
+    action: Action,
+    target: ChainHeadType,
+    engine_driver: Arc<RwLock<EngineDriver<E>>>,
+) -> Result<()> {
+    match action {
+        // Skip processing the attributes (fork-choice update-only).
+        Action::Skip(info) => {
+            let mut engine_driver = engine_driver.write().await;
+            let epoch = *attrs.epoch.as_ref().unwrap();
+            match target {
+                ChainHeadType::Safe => engine_driver.update_safe_head(info, epoch, false),
+                ChainHeadType::Unsafe => engine_driver.update_unsafe_head(info, epoch),
+            }
+        }
+        // Process the attributes (build payload + fork-choice update).
+        Action::Process(reorg) => {
+            if reorg {
+                let mut engine_driver = engine_driver.write().await;
+                let safe_head = engine_driver.safe_head;
+                let safe_epoch = engine_driver.safe_epoch;
+                engine_driver.update_unsafe_head(safe_head, safe_epoch);
+            }
+            // Build new payload.
+            let (new_head, new_epoch) = {
+                engine_driver
+                    .read()
+                    .await
+                    .build_new_payload(attrs.clone())
+                    .await?
+            };
+            // Book-keeping: prepare for next fork-choice update by updating the head.
+            {
+                let mut engine_driver = engine_driver.write().await;
+                match target {
+                    ChainHeadType::Safe => {
+                        engine_driver.update_safe_head(new_head, new_epoch, true)
+                    }
+                    ChainHeadType::Unsafe => engine_driver.update_unsafe_head(new_head, new_epoch),
+                }
+            }
+            // Final fork-choice update. TODO: downgrade lock to read.
+            engine_driver.read().await.update_forkchoice().await?;
+        }
+    }
+    Ok(())
+}
+
 impl<E: Engine> EngineDriver<E> {
+    /// Only use this if you are the only owner.
+    /// Use [mod::handle_attributes] for multi-owner concurrent cases.
     pub async fn handle_attributes(
         &mut self,
         attributes: PayloadAttributes,
         update_safe: bool,
     ) -> Result<()> {
-        let block: Option<Block<Transaction>> = self.block_at(attributes.timestamp.as_u64()).await;
-
-        if let Some(block) = block {
-            if should_skip(&block, &attributes)? {
-                self.skip_attributes(attributes, block).await
-            } else {
-                self.unsafe_head = self.safe_head;
-                self.process_attributes(attributes, update_safe).await
+        match self.determine_action(&attributes).await? {
+            Action::Skip(info) => self.skip_attributes(attributes, info).await,
+            Action::Process(reorg) if reorg => {
+                self.update_unsafe_head(self.safe_head, self.safe_epoch);
+                self.process_attributes(attributes.clone(), reorg).await
             }
-        } else {
-            self.process_attributes(attributes, update_safe).await
+            Action::Process(_) => self.process_attributes(attributes, update_safe).await,
         }
     }
 
     pub async fn handle_unsafe_payload(&mut self, payload: &ExecutionPayload) -> Result<()> {
         self.push_payload(payload.clone()).await?;
         self.unsafe_head = payload.into();
+        // TODO: inspect payload so we can set unsafe_epoch.
         self.update_forkchoice().await?;
 
         tracing::info!(
@@ -68,6 +147,48 @@ impl<E: Engine> EngineDriver<E> {
         );
 
         Ok(())
+    }
+
+    pub async fn build_new_payload(
+        &self,
+        attributes: PayloadAttributes,
+    ) -> Result<(BlockInfo, Epoch)> {
+        let new_epoch = *attributes.epoch.as_ref().unwrap();
+        let payload = self.build_payload(attributes).await?;
+        tracing::info!(
+            "built payload: ts={} block#={} hash={}",
+            payload.timestamp,
+            payload.block_number,
+            payload.block_hash
+        );
+        let new_head = BlockInfo {
+            number: payload.block_number.as_u64(),
+            hash: payload.block_hash,
+            parent_hash: payload.parent_hash,
+            timestamp: payload.timestamp.as_u64(),
+        };
+        self.push_payload(payload).await?;
+        Ok((new_head, new_epoch))
+    }
+
+    pub fn update_unsafe_head(&mut self, head: BlockInfo, epoch: Epoch) {
+        self.unsafe_head = head;
+        self.unsafe_epoch = epoch;
+    }
+
+    pub fn update_safe_head(&mut self, head: BlockInfo, epoch: Epoch, reorg_unsafe: bool) {
+        if self.safe_head != head {
+            self.safe_head = head;
+            self.safe_epoch = epoch;
+        }
+        if reorg_unsafe || self.safe_head.number > self.unsafe_head.number {
+            tracing::info!(
+                "updating unsafe {} to safe {}",
+                self.unsafe_head.number,
+                self.safe_head.number
+            );
+            self.update_unsafe_head(self.safe_head, self.safe_epoch);
+        }
     }
 
     pub fn update_finalized(&mut self, head: BlockInfo, epoch: Epoch) {
@@ -87,7 +208,19 @@ impl<E: Engine> EngineDriver<E> {
         self.engine
             .forkchoice_updated(forkchoice, None)
             .await
+            .map_err(|e| tracing::error!("engine not ready yet: {:?}", e))
             .is_ok()
+    }
+
+    /// Determines the action to take on the given attributes.
+    pub async fn determine_action(&self, attributes: &PayloadAttributes) -> Result<Action> {
+        match self.block_at(attributes.timestamp.as_u64()).await {
+            Some(block) if should_skip(&block, attributes)? => {
+                Ok(Action::Skip(BlockInfo::try_from(block)?))
+            }
+            Some(_) => Ok(Action::Process(true)),
+            _ => Ok(Action::Process(false)),
+        }
     }
 
     async fn process_attributes(
@@ -98,7 +231,12 @@ impl<E: Engine> EngineDriver<E> {
         let new_epoch = *attributes.epoch.as_ref().unwrap();
 
         let payload = self.build_payload(attributes).await?;
-
+        tracing::info!(
+            "built payload: ts={} block#={} hash={}",
+            payload.timestamp,
+            payload.block_number,
+            payload.block_hash
+        );
         let new_head = BlockInfo {
             number: payload.block_number.as_u64(),
             hash: payload.block_hash,
@@ -108,10 +246,9 @@ impl<E: Engine> EngineDriver<E> {
 
         self.push_payload(payload).await?;
         if update_safe {
-            self.update_safe_head(new_head, new_epoch, true)?;
+            self.update_safe_head(new_head, new_epoch, true);
         } else {
-            self.unsafe_head = new_head;
-            self.unsafe_epoch = new_epoch;
+            self.update_unsafe_head(new_head, new_epoch);
         }
         self.update_forkchoice().await?;
 
@@ -121,11 +258,10 @@ impl<E: Engine> EngineDriver<E> {
     async fn skip_attributes(
         &mut self,
         attributes: PayloadAttributes,
-        block: Block<Transaction>,
+        new_head: BlockInfo,
     ) -> Result<()> {
         let new_epoch = *attributes.epoch.as_ref().unwrap();
-        let new_head = BlockInfo::try_from(block)?;
-        self.update_safe_head(new_head, new_epoch, false)?;
+        self.update_safe_head(new_head, new_epoch, false);
         self.update_forkchoice().await?;
 
         Ok(())
@@ -141,7 +277,8 @@ impl<E: Engine> EngineDriver<E> {
             .await?;
 
         if update.payload_status.status != Status::Valid {
-            eyre::bail!("invalid payload attributes");
+            let err = update.payload_status.validation_error.unwrap_or_default();
+            eyre::bail!(format!("invalid payload attributes: {}", err));
         }
 
         let id = update
@@ -155,7 +292,7 @@ impl<E: Engine> EngineDriver<E> {
         self.engine.get_payload(id).await
     }
 
-    async fn push_payload(&self, payload: ExecutionPayload) -> Result<()> {
+    pub async fn push_payload(&self, payload: ExecutionPayload) -> Result<()> {
         let status = self.engine.new_payload(payload).await?;
         if status.status != Status::Valid && status.status != Status::Accepted {
             eyre::bail!("invalid execution payload");
@@ -164,7 +301,7 @@ impl<E: Engine> EngineDriver<E> {
         Ok(())
     }
 
-    async fn update_forkchoice(&self) -> Result<()> {
+    pub async fn update_forkchoice(&self) -> Result<()> {
         let forkchoice = self.create_forkchoice_state();
 
         let update = self.engine.forkchoice_updated(forkchoice, None).await?;
@@ -173,24 +310,6 @@ impl<E: Engine> EngineDriver<E> {
                 "could not accept new forkchoice: {:?}",
                 update.payload_status.validation_error
             );
-        }
-
-        Ok(())
-    }
-
-    fn update_safe_head(
-        &mut self,
-        new_head: BlockInfo,
-        new_epoch: Epoch,
-        reorg_unsafe: bool,
-    ) -> Result<()> {
-        if self.safe_head != new_head {
-            self.safe_head = new_head;
-            self.safe_epoch = new_epoch;
-        }
-
-        if reorg_unsafe || self.safe_head.number > self.unsafe_head.number {
-            self.unsafe_head = new_head;
         }
 
         Ok(())

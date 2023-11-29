@@ -11,7 +11,10 @@ use ethers::{
 use eyre::Result;
 use reqwest::Url;
 use tokio::{
-    sync::watch::{self, Sender},
+    sync::{
+        watch::{self, Sender},
+        RwLock as TokioRwLock,
+    },
     time::sleep,
 };
 
@@ -26,9 +29,9 @@ use crate::{
     telemetry::metrics,
 };
 
-use self::engine_driver::EngineDriver;
+use self::engine_driver::{handle_attributes, ChainHeadType, EngineDriver};
 
-mod engine_driver;
+pub mod engine_driver;
 mod info;
 pub mod sequencing;
 mod types;
@@ -36,11 +39,11 @@ pub use types::*;
 
 /// Driver is responsible for advancing the execution node by feeding
 /// the derived chain into the engine API
-pub struct Driver<E: Engine, S: sequencing::SequencingSource<E>> {
+pub struct Driver<E: Engine> {
     /// The derivation pipeline
     pipeline: Pipeline,
     /// The engine driver
-    engine_driver: EngineDriver<E>,
+    pub engine_driver: Arc<TokioRwLock<EngineDriver<E>>>,
     /// List of unfinalized L2 blocks with their epochs, L1 inclusions, and sequence numbers
     unfinalized_blocks: Vec<(BlockInfo, Epoch, u64, u64)>,
     /// Current finalized L1 block number
@@ -48,7 +51,7 @@ pub struct Driver<E: Engine, S: sequencing::SequencingSource<E>> {
     /// List of unsafe blocks that have not been applied yet
     future_unsafe_blocks: Vec<ExecutionPayload>,
     /// State struct to keep track of global state
-    state: Arc<RwLock<State>>,
+    pub state: Arc<RwLock<State>>,
     /// L1 chain watcher
     chain_watcher: ChainWatcher,
     /// Channel to receive the shutdown signal from
@@ -61,16 +64,10 @@ pub struct Driver<E: Engine, S: sequencing::SequencingSource<E>> {
     network_service: Option<Service>,
     /// Channel timeout length
     channel_timeout: u64,
-    /// Local sequencing source
-    sequencing_src: Option<S>,
 }
 
-impl<S: sequencing::SequencingSource<EngineApi>> Driver<EngineApi, S> {
-    pub async fn from_config(
-        config: Config,
-        shutdown_recv: watch::Receiver<bool>,
-        sequencing_src: Option<S>,
-    ) -> Result<Self> {
+impl Driver<EngineApi> {
+    pub async fn from_config(config: Config, shutdown_recv: watch::Receiver<bool>) -> Result<Self> {
         let client = reqwest::ClientBuilder::new()
             .timeout(Duration::from_secs(5))
             .build()?;
@@ -116,7 +113,7 @@ impl<S: sequencing::SequencingSource<EngineApi>> Driver<EngineApi, S> {
             .add_handler(Box::new(block_handler));
 
         Ok(Self {
-            engine_driver,
+            engine_driver: Arc::new(TokioRwLock::new(engine_driver)),
             pipeline,
             unfinalized_blocks: Vec::new(),
             finalized_l1_block_number: 0,
@@ -128,20 +125,16 @@ impl<S: sequencing::SequencingSource<EngineApi>> Driver<EngineApi, S> {
             unsafe_block_signer_sender,
             network_service: Some(service),
             channel_timeout: config.chain.channel_timeout,
-            sequencing_src,
         })
     }
 }
 
-impl<E: Engine, S: sequencing::SequencingSource<E>> Driver<E, S> {
+impl<E: Engine> Driver<E> {
     /// Runs the Driver
     pub async fn start(&mut self) -> Result<()> {
-        tracing::trace!("starting driver, waiting for engine...");
-        self.await_engine_ready().await;
-        tracing::trace!("engine ready; starting chain watcher...");
+        tracing::trace!("starting chain watcher...");
         self.chain_watcher.start()?;
-        tracing::trace!("chain watcher started");
-
+        tracing::trace!("chain watcher started; advancing driver...");
         loop {
             self.check_shutdown().await;
 
@@ -165,8 +158,7 @@ impl<E: Engine, S: sequencing::SequencingSource<E>> Driver<E, S> {
     }
 
     async fn await_engine_ready(&self) {
-        while !self.engine_driver.engine_ready().await {
-            tracing::trace!("waiting for engine ready...");
+        while !self.engine_driver.read().await.engine_ready().await {
             self.check_shutdown().await;
             sleep(Duration::from_secs(1)).await;
         }
@@ -175,12 +167,13 @@ impl<E: Engine, S: sequencing::SequencingSource<E>> Driver<E, S> {
     /// Attempts to advance the execution node forward using either L1 info our
     /// blocks received on the p2p network.
     async fn advance(&mut self) -> Result<()> {
+        // TODO: `await_engine_ready` was moved from `start` to here.
+        // This is a hack, due to possible lock contention bug (to be reverted).
+        self.await_engine_ready().await;
         self.advance_safe_head().await?;
         self.advance_unsafe_head().await?;
-        self.advance_unsafe_head_by_attributes().await?;
-
-        self.update_finalized();
-        self.update_metrics();
+        self.update_finalized().await;
+        self.update_metrics().await;
         self.try_start_networking()?;
 
         Ok(())
@@ -191,7 +184,7 @@ impl<E: Engine, S: sequencing::SequencingSource<E>> Driver<E, S> {
     /// does not successfully advance the node
     async fn advance_safe_head(&mut self) -> Result<()> {
         self.handle_next_block_update().await?;
-        self.update_state_head()?;
+        self.update_state_head().await?;
 
         for next_attributes in self.pipeline.by_ref() {
             let l1_inclusion_block = next_attributes
@@ -202,24 +195,27 @@ impl<E: Engine, S: sequencing::SequencingSource<E>> Driver<E, S> {
                 .seq_number
                 .ok_or(eyre::eyre!("attributes without seq number"))?;
 
-            self.engine_driver
-                .handle_attributes(next_attributes, true)
-                .await?;
+            handle_attributes(
+                &next_attributes,
+                ChainHeadType::Safe,
+                self.engine_driver.clone(),
+            )
+            .await?;
 
+            let engine_driver = self.engine_driver.read().await;
             tracing::info!(
                 "safe head updated: {} {:?}",
-                self.engine_driver.safe_head.number,
-                self.engine_driver.safe_head.hash,
+                engine_driver.safe_head.number,
+                engine_driver.safe_head.hash,
             );
 
-            let new_safe_head = self.engine_driver.safe_head;
-            let new_safe_epoch = self.engine_driver.safe_epoch;
+            let new_safe_head = engine_driver.safe_head;
+            let new_safe_epoch = engine_driver.safe_epoch;
 
             self.state
                 .write()
                 .map_err(|_| eyre::eyre!("lock poisoned"))?
                 .update_safe_head(new_safe_head, new_safe_epoch);
-
             let unfinalized_entry = (
                 new_safe_head,
                 new_safe_epoch,
@@ -238,9 +234,10 @@ impl<E: Engine, S: sequencing::SequencingSource<E>> Driver<E, S> {
             self.future_unsafe_blocks.push(payload);
         }
 
+        let engine_driver = self.engine_driver.read().await;
         self.future_unsafe_blocks.retain(|payload| {
             let unsafe_block_num = payload.block_number.as_u64();
-            let synced_block_num = self.engine_driver.unsafe_head.number;
+            let synced_block_num = engine_driver.unsafe_head.number;
 
             unsafe_block_num > synced_block_num && unsafe_block_num - synced_block_num < 1024
         });
@@ -248,37 +245,26 @@ impl<E: Engine, S: sequencing::SequencingSource<E>> Driver<E, S> {
         let next_unsafe_payload = self
             .future_unsafe_blocks
             .iter()
-            .find(|p| p.parent_hash == self.engine_driver.unsafe_head.hash);
+            .find(|p| p.parent_hash == engine_driver.unsafe_head.hash);
 
         if let Some(payload) = next_unsafe_payload {
-            _ = self.engine_driver.handle_unsafe_payload(payload).await;
+            engine_driver.push_payload(payload.clone()).await?;
+            drop(engine_driver);
+            // TODO: update epoch of unsafe head.
+            self.engine_driver.write().await.unsafe_head = payload.into();
+            self.engine_driver.read().await.update_forkchoice().await?;
         }
 
         Ok(())
     }
 
-    /// Tries to process the next unbuilt payload attributes, building on the current forkchoice.
-    async fn advance_unsafe_head_by_attributes(&mut self) -> Result<()> {
-        let Some(sequencing_src) = &self.sequencing_src else {
-            return Ok(());
-        };
-        let Some(attrs) = sequencing_src
-            .get_next_attributes(&self.state, &self.engine_driver)
-            .await?
-        else {
-            return Ok(());
-        };
-        self.engine_driver.handle_attributes(attrs, false).await?;
-        Ok(())
-    }
-
-    fn update_state_head(&self) -> Result<()> {
+    async fn update_state_head(&self) -> Result<()> {
+        let engine_driver = self.engine_driver.read().await;
         let mut state = self
             .state
             .write()
             .map_err(|_| eyre::eyre!("lock poisoned"))?;
-
-        state.update_safe_head(self.engine_driver.safe_head, self.engine_driver.safe_epoch);
+        state.update_safe_head(engine_driver.safe_head, engine_driver.safe_epoch);
 
         Ok(())
     }
@@ -295,6 +281,11 @@ impl<E: Engine, S: sequencing::SequencingSource<E>> Driver<E, S> {
                     self.unsafe_block_signer_sender
                         .send(l1_info.system_config.unsafe_block_signer)?;
 
+                    tracing::info!(
+                        "pushing into pipeline: l1_block#={} #batcher_txs={}",
+                        num,
+                        l1_info.batcher_transactions.len()
+                    );
                     self.pipeline
                         .push_batcher_transactions(l1_info.batcher_transactions.clone(), num)?;
 
@@ -308,24 +299,22 @@ impl<E: Engine, S: sequencing::SequencingSource<E>> Driver<E, S> {
 
                     self.unfinalized_blocks.clear();
 
+                    let mut engine_driver = self.engine_driver.write().await;
                     let l1_start_block = get_l1_start_block(
-                        self.engine_driver.finalized_epoch.number,
+                        engine_driver.finalized_epoch.number,
                         self.channel_timeout,
                     );
 
                     self.chain_watcher
-                        .restart(l1_start_block, self.engine_driver.finalized_head.number)?;
+                        .restart(l1_start_block, engine_driver.finalized_head.number)?;
 
                     self.state
                         .write()
                         .map_err(|_| eyre::eyre!("lock poisoned"))?
-                        .purge(
-                            self.engine_driver.finalized_head,
-                            self.engine_driver.finalized_epoch,
-                        );
+                        .purge(engine_driver.finalized_head, engine_driver.finalized_epoch);
 
                     self.pipeline.purge()?;
-                    self.engine_driver.reorg();
+                    engine_driver.reorg();
                 }
                 BlockUpdate::FinalityUpdate(num) => {
                     self.finalized_l1_block_number = num;
@@ -336,7 +325,7 @@ impl<E: Engine, S: sequencing::SequencingSource<E>> Driver<E, S> {
         Ok(())
     }
 
-    fn update_finalized(&mut self) {
+    async fn update_finalized(&mut self) {
         let new_finalized = self
             .unfinalized_blocks
             .iter()
@@ -346,7 +335,11 @@ impl<E: Engine, S: sequencing::SequencingSource<E>> Driver<E, S> {
             .last();
 
         if let Some((head, epoch, _, _)) = new_finalized {
-            self.engine_driver.update_finalized(*head, *epoch);
+            tracing::info!("updating finalized head: {:?}", head.number);
+            self.engine_driver
+                .write()
+                .await
+                .update_finalized(*head, *epoch);
         }
 
         self.unfinalized_blocks
@@ -363,9 +356,10 @@ impl<E: Engine, S: sequencing::SequencingSource<E>> Driver<E, S> {
         Ok(())
     }
 
-    fn update_metrics(&self) {
-        metrics::FINALIZED_HEAD.set(self.engine_driver.finalized_head.number as i64);
-        metrics::SAFE_HEAD.set(self.engine_driver.safe_head.number as i64);
+    async fn update_metrics(&self) {
+        let engine_driver = self.engine_driver.read().await;
+        metrics::FINALIZED_HEAD.set(engine_driver.finalized_head.number as i64);
+        metrics::SAFE_HEAD.set(engine_driver.safe_head.number as i64);
         metrics::SYNCED.set(self.synced() as i64);
     }
 
@@ -420,11 +414,10 @@ mod tests {
             let provider = Provider::<Http>::try_from(config.l2_rpc_url.clone())?;
             let finalized_block = provider.get_block(block_id).await?.unwrap();
 
-            let seq_src = sequencing::none();
-            let driver = Driver::from_config(config, shutdown_recv, seq_src).await?;
+            let driver = Driver::from_config(config, shutdown_recv).await?;
 
             assert_eq!(
-                driver.engine_driver.finalized_head.number,
+                driver.engine_driver.read().await.finalized_head.number,
                 finalized_block.number.unwrap().as_u64()
             );
         }

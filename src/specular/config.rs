@@ -1,7 +1,7 @@
 use ethers::types::{Address, H256, U256};
 use eyre::Context;
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
+use std::{path::Path, str::FromStr};
 
 use crate::{
     common::{BlockInfo, Epoch},
@@ -42,6 +42,11 @@ struct ChainGenesisInfo {
 }
 
 impl ChainConfig {
+    pub fn is_specular_config(path: &str) -> bool {
+        let file_name = Path::new(path).file_name().unwrap().to_str().unwrap();
+        file_name.starts_with("sp_") && file_name.ends_with(".json")
+    }
+
     pub fn from_specular_json(path: &str) -> Self {
         let file = std::fs::File::open(path)
             .with_context(|| format!("Failed to read chain config from {}", path))

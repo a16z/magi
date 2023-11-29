@@ -12,15 +12,15 @@ use crate::config::Config;
 use crate::derive::stages::batches::Batch;
 use crate::derive::state::State;
 use crate::derive::PurgeableIterator;
+use crate::specular::config::SystemAccounts;
 use ethers::{
     types::Transaction,
     utils::rlp::{Decodable, Rlp},
 };
 
 use super::batcher_transactions::SpecularBatcherTransaction;
-use crate::specular::{
-    common::{SetL1OracleValuesInput, SET_L1_ORACLE_VALUES_ABI, SET_L1_ORACLE_VALUES_SELECTOR},
-    config::SystemAccounts,
+use crate::specular::common::{
+    SetL1OracleValuesInput, SET_L1_ORACLE_VALUES_ABI, SET_L1_ORACLE_VALUES_SELECTOR,
 };
 
 /// The second stage of Specular's derive pipeline.
