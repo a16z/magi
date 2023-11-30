@@ -286,13 +286,13 @@ impl<E: Engine> Driver<E> {
     async fn run_sequencer_step(&mut self) -> Result<()> {
         if let Some(seq_config) = self.sequencer_config.clone() {
             // Get unsafe head to build a new block on top of it.
-            let head = self.engine_driver.unsafe_info.head;
+            let unsafe_head = self.engine_driver.unsafe_info.head;
             let unsafe_epoch = self.engine_driver.unsafe_info.epoch;
 
             if seq_config.max_safe_lag() > 0 {
                 // Check max safe lag, and in case delay produce blocks.
                 if self.engine_driver.safe_info.head.number + seq_config.max_safe_lag()
-                    <= head.number
+                    <= unsafe_head.number
                 {
                     tracing::debug!("max safe lag reached, waiting for safe block...");
                     return Ok(());
@@ -300,7 +300,7 @@ impl<E: Engine> Driver<E> {
             }
 
             // Next block timestamp.
-            let new_blocktime = head.timestamp + self.block_time;
+            let new_blocktime = unsafe_head.timestamp + self.block_time;
 
             // Check if we can generate block and time passed.
             let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
@@ -324,7 +324,7 @@ impl<E: Engine> Driver<E> {
                 },
             };
 
-            let block_num = head.number + 1;
+            let block_num = unsafe_head.number + 1;
             tracing::info!(
                 "attempt to build a payload {} {} {:?}",
                 block_num,
