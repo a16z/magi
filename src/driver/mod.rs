@@ -183,9 +183,6 @@ enum SequencerErr {
     #[error("past sequencer drift")]
     PastSeqDrift,
 
-    #[error("no next epoch available")]
-    NoNextEpoch,
-
     #[error("sequencer critical error: {0}")]
     Critical(String),
 }
@@ -268,7 +265,11 @@ impl<E: Engine> Driver<E> {
             if is_seq_drift {
                 return Err(SequencerErr::PastSeqDrift.into());
             }
-            return Err(SequencerErr::NoNextEpoch.into());
+
+            // TODO: retrieve the next L1 block directly from L1 node?
+            tracing::warn!("no next epoch found, current epoch used");
+
+            current_epoch
         };
 
         let l1_info = state
@@ -312,7 +313,6 @@ impl<E: Engine> Driver<E> {
             let (epoch, l1_info) = match self.prepare_block_data(unsafe_epoch, new_blocktime) {
                 Ok((epoch, l1_info)) => (epoch, l1_info),
                 Err(err) => match err.downcast()? {
-                    SequencerErr::NoNextEpoch => return Ok(()),
                     SequencerErr::OutOfSyncL1 => {
                         tracing::debug!("out of sync L1 {:?}", unsafe_epoch);
                         return Ok(());
