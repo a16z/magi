@@ -48,20 +48,12 @@ impl FromStr for SyncMode {
 pub struct SequencerConfig(u64);
 
 impl SequencerConfig {
+    pub fn new(max_safe_lag: u64) -> Self {
+        SequencerConfig(max_safe_lag)
+    }
+
     pub fn max_safe_lag(&self) -> u64 {
         self.0
-    }
-}
-
-impl TryFrom<String> for SequencerConfig {
-    type Error = eyre::Report;
-
-    fn try_from(value: String) -> Result<Self> {
-        let max_safe_lag = value
-            .parse()
-            .map_err(|_| eyre::eyre!("failed to parse sequencer max safe lag"))?;
-
-        Ok(SequencerConfig(max_safe_lag))
     }
 }
 

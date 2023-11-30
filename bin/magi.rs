@@ -10,7 +10,7 @@ use serde::Serialize;
 use magi::{
     config::{
         secret_key_from_hex, serialize_secret_key, ChainConfig, CliConfig, Config, ConfigBuilder,
-        SyncMode,
+        SequencerConfig, SyncMode,
     },
     network,
     runner::Runner,
@@ -74,7 +74,7 @@ pub struct Cli {
     #[clap(long = "sequencer-enabled")]
     sequencer_enabled: bool,
     #[clap(long = "sequencer-max-safe-lag", default_value = "0")]
-    sequencer_max_safe_lag: String,
+    sequencer_max_safe_lag: u64,
 
     /// P2P listening address
     #[clap(long, default_value = network::LISTENING_AS_STR)]
@@ -177,7 +177,7 @@ impl TryFrom<Cli> for CliConfig {
 
     fn try_from(value: Cli) -> Result<Self> {
         let sequencer = match value.sequencer_enabled {
-            true => Some(value.sequencer_max_safe_lag.try_into()?),
+            true => Some(SequencerConfig::new(value.sequencer_max_safe_lag)),
             false => None,
         };
 
