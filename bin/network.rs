@@ -1,10 +1,6 @@
-#![allow(unused_imports)]
-use std::{net::Ipv4Addr, str::FromStr};
+use std::str::FromStr;
 
-use discv5::{
-    enr::{CombinedKey, EnrBuilder},
-    Enr,
-};
+use discv5::Enr;
 use ethers::types::Address;
 use eyre::Result;
 
@@ -44,7 +40,7 @@ async fn main() -> Result<()> {
     let addr = "0.0.0.0:9221".parse()?;
     let chain_id = 901;
     let (_, recv) = watch::channel(Address::from_str(
-        "0xF64c29538cAE4E69eac62c50CDfebAC22b378044",
+        "0x715b7219d986641df9efd9c7ef01218d528e19ec",
     )?);
     let (block_handler, block_recv) = BlockHandler::new(chain_id, recv);
     // channel for sending new blocks to peers
@@ -56,25 +52,30 @@ async fn main() -> Result<()> {
     //     hex::decode("private key")?;
     // let private_key = CombinedKey::secp256k1_from_bytes(&mut pk)?;
 
-    // // Get RLP for optimism.
+    // Get RLP for optimism.
     // let opstack = OpStackEnrData {
     //     chain_id,
     //     version: 0,
     // };
     // let opstack_data: Vec<u8> = opstack.into();
 
-    // // Get ERN.
+    // Get Enr.
     // let enr = EnrBuilder::new("v4")
     //         .add_value_rlp("opstack", opstack_data.into())
     //         .ip4(Ipv4Addr::new(127, 0, 0, 1))
     //         .tcp4(9980)
     //         .udp4(9980)
     //         .build(&private_key)?;
-    // println!("ENR: {:?}", enr);
+    // println!("Enr: {:?}", enr);
     // let bootnodes = vec![enr];
 
-    let bootnodes: Vec<discv5::enr::Enr<CombinedKey>> =
-        vec![Enr::from_str("enr:-Je4QKqISnjZwcUSRQqLTbOoqFvmQX8sVlPIud5sWPrUp_8hPJXnzSyY-fqXhzqWGKDHjNSLJRbBGjC9VILm_HGuhHkBgmlkgnY0gmlwhH8AAAGHb3BzdGFja4OFBwCJc2VjcDI1NmsxoQMqv564GlblO4zWKiGSn0-lcr70dYrzwiieFETLNEy8xoN0Y3CCJvyDdWRwgib8").map_err(|e| eyre::eyre!("err: {}", e))?];
+    let bootnodes = [
+        "enr:-J64QBbwPjPLZ6IOOToOLsSjtFUjjzN66qmBZdUexpO32Klrc458Q24kbty2PdRaLacHM5z-cZQr8mjeQu3pik6jPSOGAYYFIqBfgmlkgnY0gmlwhDaRWFWHb3BzdGFja4SzlAUAiXNlY3AyNTZrMaECmeSnJh7zjKrDSPoNMGXoopeDF4hhpj5I0OsQUUt4u8uDdGNwgiQGg3VkcIIkBg",
+        "enr:-J64QAlTCDa188Hl1OGv5_2Kj2nWCsvxMVc_rEnLtw7RPFbOfqUOV6khXT_PH6cC603I2ynY31rSQ8sI9gLeJbfFGaWGAYYFIrpdgmlkgnY0gmlwhANWgzCHb3BzdGFja4SzlAUAiXNlY3AyNTZrMaECkySjcg-2v0uWAsFsZZu43qNHppGr2D5F913Qqs5jDCGDdGNwgiQGg3VkcIIkBg",
+        "enr:-J24QGEzN4mJgLWNTUNwj7riVJ2ZjRLenOFccl2dbRFxHHOCCZx8SXWzgf-sLzrGs6QgqSFCvGXVgGPBkRkfOWlT1-iGAYe6Cu93gmlkgnY0gmlwhCJBEUSHb3BzdGFja4OkAwCJc2VjcDI1NmsxoQLuYIwaYOHg3CUQhCkS-RsSHmUd1b_x93-9yQ5ItS6udIN0Y3CCIyuDdWRwgiMr",
+        ].iter()
+        .filter_map(|enr| Enr::from_str(enr).ok())
+        .collect();
 
     Service::new(
         addr,
