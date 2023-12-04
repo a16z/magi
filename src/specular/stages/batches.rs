@@ -176,7 +176,21 @@ where
             return BatchStatus::Drop;
         }
 
-        // TODO[zhe]: check inclusion delay, batch origin epoch, and sequencer drift
+        // check the inclusion delay
+        if batch.epoch_num + self.config.chain.seq_window_size < batch.l1_inclusion_block {
+            tracing::warn!("inclusion window elapsed");
+            return BatchStatus::Drop;
+        }
+
+        // TODO[zhe]: check origin epoch and sequencer drift
+
+        // check L1 oracle update transaction
+        if batch.l1_oracle_values.is_some() {
+            if let Err(err) = check_epoch_update_batch(batch, &state) {
+                tracing::warn!("invalid epoch update batch, err={:?}", err);
+                return BatchStatus::Drop;
+            }
+        }
 
         if batch.has_invalid_transactions() {
             tracing::warn!("invalid transaction");
@@ -334,4 +348,25 @@ fn try_decode_l1_oracle_values(tx: &RawTransaction) -> Option<SetL1OracleValuesI
         .ok()?;
 
     Some(input)
+}
+
+fn check_epoch_update_batch(batch: &SpecularBatchV0, state: &State) -> Result<()> {
+    let (epoch_num, timestamp, base_fee, epoch_hash, state_root) = batch.l1_oracle_values.unwrap();
+    let target_epoch = state
+        .l1_info_by_number(epoch_num.as_u64())
+        .ok_or(eyre::eyre!("epoch {} does not exist", epoch_num.as_u64()))?;
+    if epoch_hash != target_epoch.block_info.hash {
+        eyre::bail!("epoch hash mismatch with L1");
+    }
+    if timestamp.as_u64() != target_epoch.block_info.timestamp {
+        eyre::bail!("epoch timestamp mismatch with L1");
+    }
+    if base_fee != target_epoch.block_info.base_fee {
+        eyre::bail!("epoch base fee mismatch with L1");
+    }
+    if state_root != target_epoch.block_info.state_root {
+        eyre::bail!("epoch state root mismatch with L1");
+    }
+
+    Ok(())
 }
