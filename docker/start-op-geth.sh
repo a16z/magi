@@ -80,7 +80,6 @@ exec geth \
   --http.api=web3,debug,eth,txpool,net,engine,admin \
   --syncmode=full \
   --gcmode=full \
-  --networkid=420 \
   --authrpc.vhosts="*" \
   --authrpc.addr=0.0.0.0 \
   --authrpc.port=8551 \
