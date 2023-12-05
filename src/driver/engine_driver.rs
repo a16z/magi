@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use ethers::providers::{Http, Middleware, Provider};
-use ethers::types::Transaction;
+use ethers::types::{Transaction, U64};
 use ethers::{
     types::{Block, H256},
     utils::keccak256,
@@ -37,6 +37,7 @@ pub struct EngineDriver<E: Engine> {
     pub finalized_epoch: Epoch,
 }
 
+#[derive(Debug)]
 pub enum Action {
     /// Indicates that the attributes should be skipped.
     Skip(BlockInfo),
@@ -54,13 +55,13 @@ pub enum ChainHeadType {
 /// Functionally equivalent to [EngineDriver<E>::handle_attributes], but manages
 /// the engine driver RW lock by acquiring the write lock only as necessary.
 pub async fn handle_attributes<E: Engine>(
-    attrs: &PayloadAttributes,
+    attrs: PayloadAttributes,
     target: ChainHeadType,
     engine_driver: Arc<RwLock<EngineDriver<E>>>,
 ) -> Result<()> {
     let action = {
         let engine_driver = engine_driver.read().await;
-        engine_driver.determine_action(attrs).await?
+        engine_driver.determine_action(&attrs).await?
     };
     execute_action(attrs, action, target, engine_driver).await
 }
@@ -68,7 +69,7 @@ pub async fn handle_attributes<E: Engine>(
 /// Executes `action` for `attrs` at the `target` (either the safe or unsafe head).
 /// An error is returned if the action fails.
 pub async fn execute_action<E: Engine>(
-    attrs: &PayloadAttributes,
+    attrs: PayloadAttributes,
     action: Action,
     target: ChainHeadType,
     engine_driver: Arc<RwLock<EngineDriver<E>>>,
@@ -92,13 +93,7 @@ pub async fn execute_action<E: Engine>(
                 engine_driver.update_unsafe_head(safe_head, safe_epoch);
             }
             // Build new payload.
-            let (new_head, new_epoch) = {
-                engine_driver
-                    .read()
-                    .await
-                    .build_new_payload(attrs.clone())
-                    .await?
-            };
+            let (new_head, new_epoch) = build_payload(engine_driver.clone(), attrs).await?;
             // Book-keeping: prepare for next fork-choice update by updating the head.
             {
                 let mut engine_driver = engine_driver.write().await;
@@ -114,6 +109,36 @@ pub async fn execute_action<E: Engine>(
         }
     }
     Ok(())
+}
+
+/// Builds a payload using the given attributes.
+/// Returns the built head and epoch.
+/// If `no_tx_pool` is false, it will wait for the blocktime to pass before finalizing the payload.
+async fn build_payload<E: Engine>(
+    engine_driver: Arc<RwLock<EngineDriver<E>>>,
+    attrs: PayloadAttributes,
+) -> Result<(BlockInfo, Epoch)> {
+    let no_tx_pool = attrs.no_tx_pool;
+    // Start payload building
+    let new_epoch = attrs.epoch.unwrap();
+    let (blocktime, id) = {
+        let engine_driver = engine_driver.read().await;
+        (
+            engine_driver.blocktime,
+            engine_driver.start_payload_building(attrs.clone()).await?,
+        )
+    };
+    // If we're including transaction from txpool, wait for the blocktime to pass.
+    if !no_tx_pool {
+        sleep(Duration::from_secs(blocktime)).await;
+    }
+    // Finalize payload building
+    let new_head = engine_driver
+        .read()
+        .await
+        .finalize_payload_building(id)
+        .await?;
+    Ok((new_head, new_epoch))
 }
 
 impl<E: Engine> EngineDriver<E> {
@@ -149,12 +174,26 @@ impl<E: Engine> EngineDriver<E> {
         Ok(())
     }
 
-    pub async fn build_new_payload(
-        &self,
-        attributes: PayloadAttributes,
-    ) -> Result<(BlockInfo, Epoch)> {
-        let new_epoch = *attributes.epoch.as_ref().unwrap();
-        let payload = self.build_payload(attributes).await?;
+    async fn start_payload_building(&self, attributes: PayloadAttributes) -> Result<U64> {
+        let forkchoice = self.create_forkchoice_state();
+
+        let update = self
+            .engine
+            .forkchoice_updated(forkchoice, Some(attributes))
+            .await?;
+
+        if update.payload_status.status != Status::Valid {
+            let err = update.payload_status.validation_error.unwrap_or_default();
+            eyre::bail!(format!("invalid payload attributes: {}", err));
+        }
+
+        update
+            .payload_id
+            .ok_or(eyre::eyre!("engine did not return payload id"))
+    }
+
+    pub async fn finalize_payload_building(&self, id: U64) -> Result<BlockInfo> {
+        let payload = self.engine.get_payload(id).await?;
         tracing::info!(
             "built payload: ts={} block#={} hash={}",
             payload.timestamp,
@@ -168,7 +207,7 @@ impl<E: Engine> EngineDriver<E> {
             timestamp: payload.timestamp.as_u64(),
         };
         self.push_payload(payload).await?;
-        Ok((new_head, new_epoch))
+        Ok(new_head)
     }
 
     pub fn update_unsafe_head(&mut self, head: BlockInfo, epoch: Epoch) {
@@ -268,27 +307,7 @@ impl<E: Engine> EngineDriver<E> {
     }
 
     async fn build_payload(&self, attributes: PayloadAttributes) -> Result<ExecutionPayload> {
-        let forkchoice = self.create_forkchoice_state();
-        let no_tx_pool = attributes.no_tx_pool;
-
-        let update = self
-            .engine
-            .forkchoice_updated(forkchoice, Some(attributes))
-            .await?;
-
-        if update.payload_status.status != Status::Valid {
-            let err = update.payload_status.validation_error.unwrap_or_default();
-            eyre::bail!(format!("invalid payload attributes: {}", err));
-        }
-
-        let id = update
-            .payload_id
-            .ok_or(eyre::eyre!("engine did not return payload id"))?;
-
-        if !no_tx_pool {
-            // Wait before fetching the payload to give the engine time to build it.
-            sleep(Duration::from_secs(self.blocktime)).await
-        }
+        let id = self.start_payload_building(attributes).await?;
         self.engine.get_payload(id).await
     }
 

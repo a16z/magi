@@ -91,7 +91,7 @@ impl<S: SequencingSource> SequencingDriver<EngineApi, S> {
         match step {
             Some((attrs, action)) => {
                 execute_action(
-                    &attrs,
+                    attrs,
                     action,
                     ChainHeadType::Unsafe,
                     self.engine_driver.clone(),

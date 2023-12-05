@@ -112,8 +112,10 @@ impl Driver<EngineApi> {
         let service = Service::new("0.0.0.0:9876".parse()?, config.chain.l2_chain_id)
             .add_handler(Box::new(block_handler));
 
+        let engine_driver = Arc::new(TokioRwLock::new(engine_driver));
+
         Ok(Self {
-            engine_driver: Arc::new(TokioRwLock::new(engine_driver)),
+            engine_driver,
             pipeline,
             unfinalized_blocks: Vec::new(),
             finalized_l1_block_number: 0,
@@ -196,7 +198,7 @@ impl<E: Engine> Driver<E> {
                 .ok_or(eyre::eyre!("attributes without seq number"))?;
 
             handle_attributes(
-                &next_attributes,
+                next_attributes,
                 ChainHeadType::Safe,
                 self.engine_driver.clone(),
             )
