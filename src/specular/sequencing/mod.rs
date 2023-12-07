@@ -100,6 +100,8 @@ impl<M: Middleware + 'static> AttributesBuilder<M> {
             origin.base_fee,
             origin.hash,
             origin.state_root,
+            self.config.system_config.l1_fee_overhead,
+            self.config.system_config.l1_fee_scalar,
         );
         let input = SET_L1_ORACLE_VALUES_ABI
             .encode_with_selector(*SET_L1_ORACLE_VALUES_SELECTOR, set_l1_oracle_values_input)
@@ -191,6 +193,7 @@ mod tests {
     use ethers::{
         abi::Address,
         providers::{MockProvider, Provider},
+        types::U256,
     };
     use eyre::Result;
     #[test]
@@ -204,6 +207,8 @@ mod tests {
             system_config: config::SystemConfig {
                 batch_sender: Address::zero(),
                 gas_limit: 1,
+                l1_fee_overhead: U256::from(4242),
+                l1_fee_scalar: U256::from(1_000_000),
             }, // anything
             // random publicly known private key
             sequencer_private_key:

@@ -273,7 +273,7 @@ fn decode_batches_v0(
                 None
             };
             // Update the local epoch info if there's a new epoch.
-            if let Some((new_epoch_num, _, _, new_epoch_hash, _)) = l1_oracle_values {
+            if let Some((new_epoch_num, _, _, new_epoch_hash, _, _, _)) = l1_oracle_values {
                 epoch_num = new_epoch_num.as_u64();
                 epoch_hash = new_epoch_hash;
             }
@@ -334,7 +334,8 @@ impl From<SpecularBatchV0> for Batch {
 }
 
 fn check_epoch_update_batch(batch: &SpecularBatchV0, state: &State) -> Result<()> {
-    let (epoch_num, timestamp, base_fee, epoch_hash, state_root) = batch.l1_oracle_values.unwrap();
+    let (epoch_num, timestamp, base_fee, epoch_hash, state_root, _, _) =
+        batch.l1_oracle_values.unwrap();
     let target_epoch = state
         .l1_info_by_number(epoch_num.as_u64())
         .ok_or(eyre::eyre!("epoch {} does not exist", epoch_num.as_u64()))?;

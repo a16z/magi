@@ -1,4 +1,4 @@
-use ethers::types::H160;
+use ethers::types::{H160, U256};
 
 use crate::config::{Config as MagiConfig, SystemConfig as MagiSystemConfig};
 
@@ -19,6 +19,8 @@ pub struct Config {
 pub struct SystemConfig {
     pub batch_sender: H160,
     pub gas_limit: u64,
+    pub l1_fee_overhead: U256,
+    pub l1_fee_scalar: U256,
 }
 
 impl Config {
@@ -43,6 +45,8 @@ impl SystemConfig {
         Self {
             batch_sender: config.batch_sender,
             gas_limit: config.gas_limit.as_u64(),
+            l1_fee_overhead: config.l1_fee_overhead,
+            l1_fee_scalar: config.l1_fee_overhead,
         }
     }
 }
