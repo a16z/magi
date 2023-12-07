@@ -5,6 +5,7 @@ use std::cmp::Ordering;
 use std::sync::{Arc, RwLock};
 
 use ethers::types::H256;
+use ethers::utils::rlp::Rlp;
 use eyre::Result;
 
 use crate::common::RawTransaction;
@@ -12,16 +13,9 @@ use crate::config::Config;
 use crate::derive::stages::batches::Batch;
 use crate::derive::state::State;
 use crate::derive::PurgeableIterator;
-use crate::specular::config::SystemAccounts;
-use ethers::{
-    types::Transaction,
-    utils::rlp::{Decodable, Rlp},
-};
 
 use super::batcher_transactions::SpecularBatcherTransaction;
-use crate::specular::common::{
-    SetL1OracleValuesInput, SET_L1_ORACLE_VALUES_ABI, SET_L1_ORACLE_VALUES_SELECTOR,
-};
+use crate::specular::common::SetL1OracleValuesInput;
 
 /// The second stage of Specular's derive pipeline.
 /// This stage consumes [SpecularBatcherTransaction]s and produces [SpecularBatchV0]s.
@@ -272,7 +266,9 @@ fn decode_batches_v0(
             let transactions: Vec<RawTransaction> = batch.as_list()?;
             // Try decode the `setL1OacleValues` call if it is the first batch in the list.
             let l1_oracle_values = if idx == 0 {
-                transactions.first().and_then(try_decode_l1_oracle_values)
+                transactions
+                    .first()
+                    .and_then(|tx| SetL1OracleValuesInput::try_from(tx).ok())
             } else {
                 None
             };
@@ -335,19 +331,6 @@ impl From<SpecularBatchV0> for Batch {
             l1_inclusion_block: val.l1_inclusion_block,
         }
     }
-}
-
-fn try_decode_l1_oracle_values(tx: &RawTransaction) -> Option<SetL1OracleValuesInput> {
-    let tx = Transaction::decode(&Rlp::new(&tx.0)).ok()?;
-    if tx.to? != SystemAccounts::default().l1_oracle {
-        return None;
-    }
-
-    let input = SET_L1_ORACLE_VALUES_ABI
-        .decode_with_selector(*SET_L1_ORACLE_VALUES_SELECTOR, &tx.input.0)
-        .ok()?;
-
-    Some(input)
 }
 
 fn check_epoch_update_batch(batch: &SpecularBatchV0, state: &State) -> Result<()> {
