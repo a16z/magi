@@ -1,4 +1,4 @@
-## Magi &nbsp;:orange_circle:
+## Magi 🟠
 
 [![build](https://github.com/a16z/magi/actions/workflows/test.yml/badge.svg)](https://github.com/a16z/magi/actions/workflows/test.yml) [![license: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://opensource.org/license/agpl-v3/) [![chat](https://img.shields.io/badge/chat-telegram-blue)](https://t.me/+6zrIsnaLO0hjNmZh)
 
@@ -33,8 +33,8 @@ The docker setup contains a Grafana dashboard. To view sync progress, you can ch
 
 ## Contributing
 
-All contributions to Magi are welcome. Before opening a PR, please submit an issue detailing the bug or feature. Please ensure that your contribution builds on the stable Rust toolchain, has been linted with `cargo fmt`, passes `cargo clippy`, and contains tests when applicable.
+All contributions to Magi are welcome. Before opening a PR, please submit an issue detailing the bug or feature. Please ensure that your contribution build(s) on the stable Rust toolchain has been linked with `cargo fmt`, passes `cargo clippy`, and contains tests when applicable.
 
 ## Disclaimer
 
-_This code is being provided as is. No guarantee, representation or warranty is being made, express or implied, as to the safety or correctness of the code. It has not been audited and as such there can be no assurance it will work as intended, and users may experience delays, failures, errors, omissions or loss of transmitted information. Nothing in this repo should be construed as investment advice or legal advice for any particular facts or circumstances and is not meant to replace competent counsel. It is strongly advised for you to contact a reputable attorney in your jurisdiction for any questions or concerns with respect thereto. a16z is not liable for any use of the foregoing, and users should proceed with caution and use at their own risk. See a16z.com/disclosures for more info._
+_This code is being provided as is. No guarantee, representation, or warranty is being made, express or implied, as to the safety or correctness of the code. It has not been audited and as such there can be no assurance it will work as intended, and users may experience delays, failures, errors, omissions, or loss of transmitted information. Nothing in this repo should be construed as investment advice or legal advice for any particular facts or circumstances and is not meant to replace competent counsel. It is strongly advised for you to contact a reputable attorney in your jurisdiction for any questions or concerns with respect thereto. a16z is not liable for any use of the foregoing, and users should proceed with caution and use at their own risk. See a16z.com/disclosures for more info._
