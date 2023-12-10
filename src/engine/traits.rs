@@ -33,7 +33,7 @@ pub trait Engine: Send + Sync + 'static {
     ///
     /// ### Reference
     ///
-    /// See more details in the [Optimism Specs](https://github.com/ethereum-optimism/optimism/blob/develop/specs/exec-engine.md#engine_forkchoiceupdatedv1).
+    /// See more details in the [Optimism Specs](https://github.com/ethereum/execution-apis/blob/main/src/engine/paris.md#engine_forkchoiceupdatedv1).
     async fn forkchoice_updated(
         &self,
         forkchoice_state: ForkchoiceState,
@@ -58,7 +58,7 @@ pub trait Engine: Send + Sync + 'static {
     ///
     /// ### Reference
     ///
-    /// See more details in the [Optimism Specs](https://github.com/ethereum-optimism/optimism/blob/develop/specs/exec-engine.md#engine_newPayloadv1).
+    /// See more details in the [Optimism Specs](https://github.com/ethereum/execution-apis/blob/main/src/engine/paris.md#engine_newpayloadv1).
     async fn new_payload(&self, execution_payload: ExecutionPayload) -> Result<PayloadStatus>;
 
     /// ## get_payload
@@ -80,6 +80,6 @@ pub trait Engine: Send + Sync + 'static {
     ///
     /// ### Reference
     ///
-    /// See more details in the [Optimism Specs](https://github.com/ethereum-optimism/optimism/blob/develop/specs/exec-engine.md#engine_getPayloadv1).
+    /// See more details in the [Optimism Specs](https://github.com/ethereum/execution-apis/blob/main/src/engine/paris.md#engine_getpayloadv1).
     async fn get_payload(&self, payload_id: PayloadId) -> Result<ExecutionPayload>;
 }
