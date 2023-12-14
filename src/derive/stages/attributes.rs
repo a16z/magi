@@ -1,5 +1,6 @@
 use std::sync::{Arc, RwLock};
 
+use async_trait::async_trait;
 use ethers::abi::{decode, encode, ParamType, Token};
 use ethers::types::{Address, Log, H256, U256, U64};
 use ethers::utils::{keccak256, rlp::Encodable, rlp::RlpStream};
@@ -9,31 +10,33 @@ use eyre::Result;
 use crate::common::{Epoch, RawTransaction};
 use crate::config::{Config, SystemAccounts};
 use crate::derive::state::State;
-use crate::derive::PurgeableIterator;
+use crate::derive::{PurgeableIterator, PurgeableAsyncIterator};
+use crate::derive::async_iterator::AsyncIterator;
 use crate::engine::PayloadAttributes;
 use crate::l1::L1Info;
 
 use super::batches::Batch;
 
 pub struct Attributes {
-    batch_iter: Box<dyn PurgeableIterator<Item = Batch>>,
+    batch_iter: Box<dyn PurgeableIterator<Item = Batch> + Send>,
     state: Arc<RwLock<State>>,
     sequence_number: u64,
     epoch_hash: H256,
     config: Arc<Config>,
 }
 
-impl Iterator for Attributes {
+#[async_trait]
+impl AsyncIterator for Attributes {
     type Item = PayloadAttributes;
 
-    fn next(&mut self) -> Option<Self::Item> {
+    async fn next(&mut self) -> Option<Self::Item> {
         self.batch_iter
             .next()
             .map(|batch| self.derive_attributes(batch))
     }
 }
 
-impl PurgeableIterator for Attributes {
+impl PurgeableAsyncIterator for Attributes {
     fn purge(&mut self) {
         self.batch_iter.purge();
         self.sequence_number = 0;
@@ -43,7 +46,7 @@ impl PurgeableIterator for Attributes {
 
 impl Attributes {
     pub fn new(
-        batch_iter: Box<dyn PurgeableIterator<Item = Batch>>,
+        batch_iter: Box<dyn PurgeableIterator<Item = Batch> + Send>,
         state: Arc<RwLock<State>>,
         config: Arc<Config>,
         seq: u64,

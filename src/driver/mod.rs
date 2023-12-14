@@ -21,7 +21,7 @@ use tokio::{
 use crate::{
     common::{BlockInfo, Epoch},
     config::Config,
-    derive::{state::State, Pipeline},
+    derive::{state::State, Pipeline, async_iterator::AsyncIterator},
     engine::{Engine, EngineApi, ExecutionPayload},
     l1::{BlockUpdate, ChainWatcher},
     network::{handlers::block_handler::BlockHandler, service::Service},
@@ -195,7 +195,7 @@ impl<E: Engine> Driver<E> {
         self.handle_next_block_update().await?;
         self.update_state_head().await?;
 
-        for next_attributes in self.pipeline.by_ref() {
+        while let Some(next_attributes) = self.pipeline.next().await {
             let l1_inclusion_block = next_attributes
                 .l1_inclusion_block
                 .ok_or(eyre::eyre!("attributes without inclusion block"))?;

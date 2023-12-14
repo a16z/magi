@@ -1,5 +1,6 @@
 use std::sync::{mpsc, Arc, RwLock};
 
+use async_trait::async_trait;
 use eyre::Result;
 
 use crate::specular::stages::{
@@ -15,13 +16,15 @@ use self::{
         channels::Channels,
     },
     state::State,
+    async_iterator::AsyncIterator,
 };
 
 pub mod stages;
 pub mod state;
+pub mod async_iterator;
 
 mod purgeable;
-pub use purgeable::PurgeableIterator;
+pub use purgeable::{PurgeableIterator, PurgeableAsyncIterator};
 
 pub struct Pipeline {
     batcher_transaction_sender: mpsc::Sender<BatcherTransactionMessage>,
@@ -29,14 +32,15 @@ pub struct Pipeline {
     pending_attributes: Option<PayloadAttributes>,
 }
 
-impl Iterator for Pipeline {
+#[async_trait]
+impl AsyncIterator for Pipeline {
     type Item = PayloadAttributes;
 
-    fn next(&mut self) -> Option<Self::Item> {
+    async fn next(&mut self) -> Option<Self::Item> {
         if self.pending_attributes.is_some() {
             self.pending_attributes.take()
         } else {
-            self.attributes.next()
+            self.attributes.next().await
         }
     }
 }
@@ -44,7 +48,7 @@ impl Iterator for Pipeline {
 impl Pipeline {
     pub fn new(state: Arc<RwLock<State>>, config: Arc<Config>, seq: u64) -> Result<Self> {
         let (tx, rx) = mpsc::channel();
-        let batch_iter: Box<dyn PurgeableIterator<Item = Batch>> =
+        let batch_iter: Box<dyn PurgeableIterator<Item = Batch> + Send> =
             if config.chain.meta.enable_full_derivation {
                 let batcher_transactions = BatcherTransactions::new(rx);
                 let channels = Channels::new(batcher_transactions, config.clone());
@@ -71,9 +75,9 @@ impl Pipeline {
         Ok(())
     }
 
-    pub fn peek(&mut self) -> Option<&PayloadAttributes> {
+    pub async fn peek(&mut self) -> Option<&PayloadAttributes> {
         if self.pending_attributes.is_none() {
-            let next_attributes = self.next();
+            let next_attributes = self.next().await;
             self.pending_attributes = next_attributes;
         }
 
