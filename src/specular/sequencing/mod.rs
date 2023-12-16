@@ -125,12 +125,15 @@ impl<M: Middleware + 'static> AttributesBuilder<M> {
 
 #[async_trait]
 impl<M: Middleware + 'static> SequencingPolicy for AttributesBuilder<M> {
-    /// Returns true iff:
-    /// 1. `parent_l2_block` is within the max safe lag (i.e. `parent_l2_block` isn't too far ahead of `safe_l2_head`).
-    /// 2. The next timestamp isn't in the future.
+    /// Returns true iff (1a or 1b) AND (2):
+    /// (1a) `parent_l2_block` is within the max safe lag (i.e. `parent_l2_block` isn't too far ahead of `safe_l2_head`).
+    /// (1b) `max_safe_lag` is not configured (i.e. is 0).
+    /// (2) The next timestamp isn't in the future.
     fn is_ready(&self, parent_l2_block: &BlockInfo, safe_l2_head: &BlockInfo) -> bool {
-        safe_l2_head.number + self.config.max_safe_lag > parent_l2_block.number
-            && self.next_timestamp(parent_l2_block.timestamp) <= unix_now()
+        let within_lag = self.config.max_safe_lag == 0
+            || safe_l2_head.number + self.config.max_safe_lag > parent_l2_block.number;
+        let precedes_future = self.next_timestamp(parent_l2_block.timestamp) <= unix_now();
+        within_lag && precedes_future
     }
 
     async fn get_attributes(
