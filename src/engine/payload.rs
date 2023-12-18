@@ -97,6 +97,10 @@ pub struct PayloadAttributes {
     /// This field overrides the gas limit used during block-building.
     /// If not specified as rollup, a STATUS_INVALID is returned.
     pub gas_limit: U64,
+    /// Beaconchain withdrawals. This exists only for compatibility with L1, and is not used. Prior
+    /// to Canyon, this value is always None. After Canyon it is an empty array. Note that we use
+    /// the () type here since we never have a non empty array.
+    pub withdrawals: Option<Vec<()>>,
     /// The batch epoch number from derivation. This value is not expected by the engine is skipped
     /// during serialization and deserialization.
     #[serde(skip)]
