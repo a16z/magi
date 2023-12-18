@@ -40,6 +40,7 @@ pub struct ExecutionPayload {
     /// An array of transaction objects where each object is a byte list
     pub transactions: Vec<RawTransaction>,
     /// An array of beaconchain withdrawals. Always empty as this exists only for L1 compatibility
+    #[serde(default)]
     pub withdrawals: Vec<()>,
 }
 
