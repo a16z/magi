@@ -155,11 +155,17 @@ impl Behaviour {
 
         handlers
             .iter()
-            .map(|handler| {
-                let topic = IdentTopic::new(handler.topic().into_string());
-                gossipsub
-                    .subscribe(&topic)
-                    .map_err(|_| eyre::eyre!("subscription failed"))
+            .flat_map(|handler| {
+                handler
+                    .topics()
+                    .iter()
+                    .map(|topic| {
+                        let topic = IdentTopic::new(topic.to_string());
+                        gossipsub
+                            .subscribe(&topic)
+                            .map_err(|_| eyre::eyre!("subscription failed"))
+                    })
+                    .collect::<Vec<_>>()
             })
             .collect::<Result<Vec<bool>>>()?;
 
@@ -180,7 +186,9 @@ impl Event {
             message,
         }) = self
         {
-            let handler = handlers.iter().find(|h| h.topic() == message.topic);
+            let handler = handlers
+                .iter()
+                .find(|h| h.topics().contains(&message.topic));
             if let Some(handler) = handler {
                 let status = handler.handle(message);
 

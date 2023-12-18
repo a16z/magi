@@ -12,17 +12,27 @@ use crate::{common::RawTransaction, engine::ExecutionPayload};
 
 use super::Handler;
 
-pub struct BlockHandlerV1 {
+pub struct BlockHandler {
     chain_id: u64,
     block_sender: Sender<ExecutionPayload>,
     unsafe_signer_recv: watch::Receiver<Address>,
+    blocks_v1_topic: IdentTopic,
+    blocks_v2_topic: IdentTopic,
 }
 
-impl Handler for BlockHandlerV1 {
+impl Handler for BlockHandler {
     fn handle(&self, msg: Message) -> MessageAcceptance {
         tracing::debug!("received block");
 
-        match decode_block_msg::<ExecutionPayloadV1SSZ>(msg.data) {
+        let decoded = if msg.topic == self.blocks_v1_topic.hash() {
+            decode_block_msg::<ExecutionPayloadV1SSZ>(msg.data)
+        } else if msg.topic == self.blocks_v2_topic.hash() {
+            decode_block_msg::<ExecutionPayloadV2SSZ>(msg.data)
+        } else {
+            return MessageAcceptance::Reject;
+        };
+
+        match decoded {
             Ok((payload, signature, payload_hash)) => {
                 if self.block_valid(&payload, signature, payload_hash) {
                     _ = self.block_sender.send(payload);
@@ -39,12 +49,12 @@ impl Handler for BlockHandlerV1 {
         }
     }
 
-    fn topic(&self) -> TopicHash {
-        IdentTopic::new(format!("/optimism/{}/0/blocks", self.chain_id)).into()
+    fn topics(&self) -> Vec<TopicHash> {
+        vec![self.blocks_v1_topic.hash(), self.blocks_v2_topic.hash()]
     }
 }
 
-impl BlockHandlerV1 {
+impl BlockHandler {
     pub fn new(
         chain_id: u64,
         unsafe_recv: watch::Receiver<Address>,
@@ -55,6 +65,8 @@ impl BlockHandlerV1 {
             chain_id,
             block_sender: sender,
             unsafe_signer_recv: unsafe_recv,
+            blocks_v1_topic: IdentTopic::new(format!("/optimism/{}/0/blocks", chain_id)).into(),
+            blocks_v2_topic: IdentTopic::new(format!("/optimism/{}/1/blocks", chain_id)).into(),
         };
 
         (handler, recv)

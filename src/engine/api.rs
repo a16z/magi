@@ -231,7 +231,9 @@ impl Engine for EngineApi {
         let encoded = format!("{:x}", payload_id);
         let padded = format!("0x{:0>16}", encoded);
         let params = vec![Value::String(padded)];
-        let res = self.post::<GetPayloadResponse>(ENGINE_GET_PAYLOAD_V2, params).await?;
+        let res = self
+            .post::<GetPayloadResponse>(ENGINE_GET_PAYLOAD_V2, params)
+            .await?;
         Ok(res.execution_payload)
     }
 }
