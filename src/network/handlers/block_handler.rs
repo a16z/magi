@@ -167,7 +167,7 @@ impl From<ExecutionPayloadV1SSZ> for ExecutionPayload {
             base_fee_per_gas: convert_uint(value.base_fee_per_gas),
             block_hash: convert_hash(value.block_hash),
             transactions: convert_tx_list(value.transactions),
-            withdrawals: Vec::new(),
+            withdrawals: None,
         }
     }
 }
@@ -216,7 +216,7 @@ impl From<ExecutionPayloadV2SSZ> for ExecutionPayload {
             base_fee_per_gas: convert_uint(value.base_fee_per_gas),
             block_hash: convert_hash(value.block_hash),
             transactions: convert_tx_list(value.transactions),
-            withdrawals: Vec::new(),
+            withdrawals: Some(Vec::new()),
         }
     }
 }
