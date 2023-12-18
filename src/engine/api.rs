@@ -11,11 +11,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::engine::DEFAULT_AUTH_PORT;
-use crate::engine::ENGINE_GET_PAYLOAD_V1;
 
 use super::{
     Engine, ExecutionPayload, ForkChoiceUpdate, ForkchoiceState, JwtSecret, PayloadAttributes,
-    PayloadId, PayloadStatus, ENGINE_FORKCHOICE_UPDATED_V1, ENGINE_NEW_PAYLOAD_V1,
+    PayloadId, PayloadStatus, ENGINE_FORKCHOICE_UPDATED_V2, ENGINE_GET_PAYLOAD_V2,
+    ENGINE_NEW_PAYLOAD_V2,
 };
 
 use super::{JSONRPC_VERSION, STATIC_ID};
@@ -217,13 +217,13 @@ impl Engine for EngineApi {
         };
         let forkchoice_state_param = serde_json::to_value(forkchoice_state)?;
         let params = vec![forkchoice_state_param, payload_attributes_param];
-        let res = self.post(ENGINE_FORKCHOICE_UPDATED_V1, params).await?;
+        let res = self.post(ENGINE_FORKCHOICE_UPDATED_V2, params).await?;
         Ok(res)
     }
 
     async fn new_payload(&self, execution_payload: ExecutionPayload) -> Result<PayloadStatus> {
         let params = vec![serde_json::to_value(execution_payload)?];
-        let res = self.post(ENGINE_NEW_PAYLOAD_V1, params).await?;
+        let res = self.post(ENGINE_NEW_PAYLOAD_V2, params).await?;
         Ok(res)
     }
 
@@ -231,7 +231,7 @@ impl Engine for EngineApi {
         let encoded = format!("{:x}", payload_id);
         let padded = format!("0x{:0>16}", encoded);
         let params = vec![Value::String(padded)];
-        let res = self.post(ENGINE_GET_PAYLOAD_V1, params).await?;
+        let res = self.post(ENGINE_GET_PAYLOAD_V2, params).await?;
         Ok(res)
     }
 }

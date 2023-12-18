@@ -12,17 +12,17 @@ use crate::{common::RawTransaction, engine::ExecutionPayload};
 
 use super::Handler;
 
-pub struct BlockHandler {
+pub struct BlockHandlerV1 {
     chain_id: u64,
     block_sender: Sender<ExecutionPayload>,
     unsafe_signer_recv: watch::Receiver<Address>,
 }
 
-impl Handler for BlockHandler {
+impl Handler for BlockHandlerV1 {
     fn handle(&self, msg: Message) -> MessageAcceptance {
         tracing::debug!("received block");
 
-        match decode_block_msg(msg.data) {
+        match decode_block_msg::<ExecutionPayloadV1SSZ>(msg.data) {
             Ok((payload, signature, payload_hash)) => {
                 if self.block_valid(&payload, signature, payload_hash) {
                     _ = self.block_sender.send(payload);
@@ -44,7 +44,7 @@ impl Handler for BlockHandler {
     }
 }
 
-impl BlockHandler {
+impl BlockHandlerV1 {
     pub fn new(
         chain_id: u64,
         unsafe_recv: watch::Receiver<Address>,
@@ -83,7 +83,11 @@ impl BlockHandler {
     }
 }
 
-fn decode_block_msg(data: Vec<u8>) -> Result<(ExecutionPayload, Signature, PayloadHash)> {
+fn decode_block_msg<T>(data: Vec<u8>) -> Result<(ExecutionPayload, Signature, PayloadHash)>
+where
+    T: SimpleSerialize,
+    ExecutionPayload: From<T>,
+{
     let mut decoder = snap::raw::Decoder::new();
     let decompressed = decoder.decompress_vec(&data)?;
     let sig_data = &decompressed[..65];
@@ -91,7 +95,7 @@ fn decode_block_msg(data: Vec<u8>) -> Result<(ExecutionPayload, Signature, Paylo
 
     let signature = Signature::try_from(sig_data)?;
 
-    let payload: ExecutionPayloadSSZ = deserialize(block_data)?;
+    let payload: T = deserialize(block_data)?;
     let payload: ExecutionPayload = ExecutionPayload::from(payload);
 
     let payload_hash = PayloadHash::from(block_data);
@@ -129,7 +133,7 @@ type VecAddress = Vector<u8, 20>;
 type Transaction = List<u8, 1073741824>;
 
 #[derive(SimpleSerialize, Default)]
-struct ExecutionPayloadSSZ {
+struct ExecutionPayloadV1SSZ {
     pub parent_hash: Bytes32,
     pub fee_recipient: VecAddress,
     pub state_root: Bytes32,
@@ -146,8 +150,8 @@ struct ExecutionPayloadSSZ {
     pub transactions: List<Transaction, 1048576>,
 }
 
-impl From<ExecutionPayloadSSZ> for ExecutionPayload {
-    fn from(value: ExecutionPayloadSSZ) -> Self {
+impl From<ExecutionPayloadV1SSZ> for ExecutionPayload {
+    fn from(value: ExecutionPayloadV1SSZ) -> Self {
         Self {
             parent_hash: convert_hash(value.parent_hash),
             fee_recipient: convert_address(value.fee_recipient),
@@ -163,6 +167,56 @@ impl From<ExecutionPayloadSSZ> for ExecutionPayload {
             base_fee_per_gas: convert_uint(value.base_fee_per_gas),
             block_hash: convert_hash(value.block_hash),
             transactions: convert_tx_list(value.transactions),
+            withdrawals: Vec::new(),
+        }
+    }
+}
+
+#[derive(SimpleSerialize, Default)]
+struct ExecutionPayloadV2SSZ {
+    pub parent_hash: Bytes32,
+    pub fee_recipient: VecAddress,
+    pub state_root: Bytes32,
+    pub receipts_root: Bytes32,
+    pub logs_bloom: Vector<u8, 256>,
+    pub prev_randao: Bytes32,
+    pub block_number: u64,
+    pub gas_limit: u64,
+    pub gas_used: u64,
+    pub timestamp: u64,
+    pub extra_data: List<u8, 32>,
+    pub base_fee_per_gas: U256,
+    pub block_hash: Bytes32,
+    pub transactions: List<Transaction, 1048576>,
+    pub withdrawals: List<Withdrawal, 16>,
+}
+
+#[derive(SimpleSerialize, Default)]
+struct Withdrawal {
+    index: u64,
+    validator_index: u64,
+    address: VecAddress,
+    amount: u64,
+}
+
+impl From<ExecutionPayloadV2SSZ> for ExecutionPayload {
+    fn from(value: ExecutionPayloadV2SSZ) -> Self {
+        Self {
+            parent_hash: convert_hash(value.parent_hash),
+            fee_recipient: convert_address(value.fee_recipient),
+            state_root: convert_hash(value.state_root),
+            receipts_root: convert_hash(value.receipts_root),
+            logs_bloom: convert_byte_vector(value.logs_bloom),
+            prev_randao: convert_hash(value.prev_randao),
+            block_number: value.block_number.into(),
+            gas_limit: value.gas_limit.into(),
+            gas_used: value.gas_used.into(),
+            timestamp: value.timestamp.into(),
+            extra_data: convert_byte_list(value.extra_data),
+            base_fee_per_gas: convert_uint(value.base_fee_per_gas),
+            block_hash: convert_hash(value.block_hash),
+            transactions: convert_tx_list(value.transactions),
+            withdrawals: Vec::new(),
         }
     }
 }

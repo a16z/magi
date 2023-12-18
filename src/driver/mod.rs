@@ -21,7 +21,7 @@ use crate::{
     derive::{state::State, Pipeline},
     engine::{Engine, EngineApi, ExecutionPayload},
     l1::{BlockUpdate, ChainWatcher},
-    network::{handlers::block_handler::BlockHandler, service::Service},
+    network::{handlers::block_handler::BlockHandlerV1, service::Service},
     rpc,
     telemetry::metrics,
 };
@@ -103,7 +103,7 @@ impl Driver<EngineApi> {
             watch::channel(config.chain.system_config.unsafe_block_signer);
 
         let (block_handler, unsafe_block_recv) =
-            BlockHandler::new(config.chain.l2_chain_id, unsafe_block_signer_recv);
+            BlockHandlerV1::new(config.chain.l2_chain_id, unsafe_block_signer_recv);
 
         let service = Service::new("0.0.0.0:9876".parse()?, config.chain.l2_chain_id)
             .add_handler(Box::new(block_handler));

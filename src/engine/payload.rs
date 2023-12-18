@@ -39,6 +39,8 @@ pub struct ExecutionPayload {
     pub block_hash: H256,
     /// An array of transaction objects where each object is a byte list
     pub transactions: Vec<RawTransaction>,
+    /// An array of beaconchain withdrawals. Always empty as this exists only for L1 compatibility
+    pub withdrawals: Vec<()>,
 }
 
 impl TryFrom<Block<Transaction>> for ExecutionPayload {
@@ -71,6 +73,7 @@ impl TryFrom<Block<Transaction>> for ExecutionPayload {
                 .into(),
             block_hash: value.hash.unwrap(),
             transactions: encoded_txs,
+            withdrawals: Vec::new(),
         })
     }
 }
