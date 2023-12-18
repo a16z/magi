@@ -1,6 +1,6 @@
 use ethers::types::{Block, Bytes, Transaction, H160, H256, U64};
 use eyre::Result;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Deserializer};
 
 use crate::{
     common::{Epoch, RawTransaction},
@@ -40,8 +40,18 @@ pub struct ExecutionPayload {
     /// An array of transaction objects where each object is a byte list
     pub transactions: Vec<RawTransaction>,
     /// An array of beaconchain withdrawals. Always empty as this exists only for L1 compatibility
-    #[serde(default)]
+    #[serde(default, deserialize_with = "default_on_null")]
     pub withdrawals: Vec<()>,
+}
+
+fn default_on_null<'de, D, T>(d: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Default + Deserialize<'de>,
+{
+    let opt = Option::deserialize(d)?;
+    let val = opt.unwrap_or_else(T::default);
+    Ok(val)
 }
 
 impl TryFrom<Block<Transaction>> for ExecutionPayload {
