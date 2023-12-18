@@ -65,8 +65,8 @@ impl BlockHandler {
             chain_id,
             block_sender: sender,
             unsafe_signer_recv: unsafe_recv,
-            blocks_v1_topic: IdentTopic::new(format!("/optimism/{}/0/blocks", chain_id)).into(),
-            blocks_v2_topic: IdentTopic::new(format!("/optimism/{}/1/blocks", chain_id)).into(),
+            blocks_v1_topic: IdentTopic::new(format!("/optimism/{}/0/blocks", chain_id)),
+            blocks_v2_topic: IdentTopic::new(format!("/optimism/{}/1/blocks", chain_id)),
         };
 
         (handler, recv)
