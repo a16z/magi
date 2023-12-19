@@ -6,7 +6,7 @@ use std::{
 
 use ethers::{
     providers::{Http, Provider},
-    types::Address,
+    types::{Address, BlockNumber},
 };
 use eyre::Result;
 use reqwest::Url;
@@ -75,37 +75,56 @@ impl Driver<EngineApi> {
         let http = Http::new_with_client(Url::parse(&config.l2_rpc_url)?, client);
         let provider = Provider::new(http);
 
-        let head = if config.chain.meta.enable_deposited_txs {
-            info::HeadInfoQuery::get_head_info(&info::HeadInfoFetcher::from(&provider), &config)
-                .await
-        } else {
-            specular::info::HeadInfoQuery::get_head_info(
-                &specular::info::HeadInfoFetcher::from(&provider),
-                &config,
-            )
-            .await
-        };
+        macro_rules! get_head_info {
+            ($bn:expr) => {
+                if config.chain.meta.enable_deposited_txs {
+                    info::HeadInfoQuery::get_head_info(
+                        &info::HeadInfoFetcher::from(&provider),
+                        &config,
+                        $bn,
+                    )
+                    .await
+                } else {
+                    specular::info::HeadInfoQuery::get_head_info(
+                        &specular::info::HeadInfoFetcher::from(&provider),
+                        &config,
+                        $bn,
+                    )
+                    .await
+                }
+            };
+        }
 
-        let finalized_head = head.l2_block_info;
-        let finalized_epoch = head.l1_epoch;
-        let finalized_seq = head.sequence_number;
+        let finalized_head = get_head_info!(BlockNumber::Finalized);
+        let safe_head = get_head_info!(BlockNumber::Safe);
+        let latest_head = get_head_info!(BlockNumber::Latest);
 
-        tracing::info!("starting from head: {:?}", finalized_head.hash);
+        let finalized_l2_block = finalized_head.l2_block_info;
+        let finalized_epoch = finalized_head.l1_epoch;
+        let finalized_seq = finalized_head.sequence_number;
+
+        tracing::info!(
+            "starting from head: finalized {:?}, safe {:?}, latest {:?}",
+            finalized_l2_block.hash,
+            safe_head.l2_block_info.hash,
+            latest_head.l2_block_info.hash
+        );
 
         let l1_start_block =
             get_l1_start_block(finalized_epoch.number, config.chain.channel_timeout);
 
         let config = Arc::new(config);
         let chain_watcher =
-            ChainWatcher::new(l1_start_block, finalized_head.number, config.clone())?;
+            ChainWatcher::new(l1_start_block, finalized_l2_block.number, config.clone())?;
 
         let state = Arc::new(RwLock::new(State::new(
-            finalized_head,
-            finalized_epoch,
+            safe_head.l2_block_info,
+            safe_head.l1_epoch,
             config.clone(),
         )));
 
-        let engine_driver = EngineDriver::new(finalized_head, finalized_epoch, provider, &config)?;
+        let engine_driver =
+            EngineDriver::new(finalized_head, safe_head, latest_head, provider, &config)?;
         let pipeline = Pipeline::new(state.clone(), config.clone(), finalized_seq)?;
 
         let _addr = rpc::run_server(config.clone()).await?;

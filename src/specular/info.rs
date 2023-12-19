@@ -59,14 +59,18 @@ impl<'a, P: JsonRpcClient> InnerProvider for HeadInfoFetcher<'a, P> {
 pub struct HeadInfoQuery {}
 
 impl HeadInfoQuery {
-    pub async fn get_head_info<P: InnerProvider>(p: &P, config: &Config) -> HeadInfo {
+    pub async fn get_head_info<P: InnerProvider>(
+        p: &P,
+        config: &Config,
+        block_number: BlockNumber,
+    ) -> HeadInfo {
         if let Some(block) = p
-            .get_block_with_txs(BlockId::Number(BlockNumber::Finalized))
+            .get_block_with_txs(BlockId::Number(block_number))
             .await
             .ok()
             .flatten()
         {
-            if let Ok(info) = to_specular_head_info(p, block).await {
+            if let Ok(info) = to_specular_head_info(p, config, block).await {
                 return info;
             }
         }
@@ -81,6 +85,7 @@ impl HeadInfoQuery {
 
 async fn to_specular_head_info<P: InnerProvider>(
     p: &P,
+    config: &Config,
     block: Block<Transaction>,
 ) -> Result<HeadInfo> {
     if let Some(tx) = block.transactions.first() {
@@ -103,6 +108,11 @@ async fn to_specular_head_info<P: InnerProvider>(
         )
         .await?
         .to_low_u64_be();
+
+    if epoch_number < config.chain.l1_start_epoch.number {
+        eyre::bail!("L1Oracle is not initialized on L2 yet");
+    }
+
     let epoch_timestamp = p
         .get_storage_at(
             SystemAccounts::default().l1_oracle,
@@ -266,7 +276,8 @@ mod tests {
     async fn test_get_head_info_fails() {
         let provider = test_utils::mock_provider(None, None);
         let config = test_utils::optimism_config();
-        let head_info = HeadInfoQuery::get_head_info(&provider, &config).await;
+        let head_info =
+            HeadInfoQuery::get_head_info(&provider, &config, BlockNumber::Finalized).await;
         assert_eq!(test_utils::default_head_info(), head_info);
     }
 
@@ -274,7 +285,8 @@ mod tests {
     async fn test_get_head_info_empty_block() {
         let provider = test_utils::mock_provider(Some(Block::default()), Some(Epoch::default()));
         let config = test_utils::optimism_config();
-        let head_info = HeadInfoQuery::get_head_info(&provider, &config).await;
+        let head_info =
+            HeadInfoQuery::get_head_info(&provider, &config, BlockNumber::Finalized).await;
         assert_eq!(test_utils::default_head_info(), head_info);
     }
 
@@ -285,7 +297,8 @@ mod tests {
             Some(test_utils::default_head_info().l1_epoch),
         );
         let config = test_utils::optimism_config();
-        let head_info = HeadInfoQuery::get_head_info(&provider, &config).await;
+        let head_info =
+            HeadInfoQuery::get_head_info(&provider, &config, BlockNumber::Finalized).await;
         // In Optimism's case their `valid_block` does not contain the AttributeDeposit transaction
         // so their `get_head_info` will fallback to the genesis head.
         // However in our case we get the epoch from the storage, so we can get the correct head info.

@@ -35,8 +35,12 @@ impl<'a, P: JsonRpcClient> InnerProvider for HeadInfoFetcher<'a, P> {
 pub struct HeadInfoQuery {}
 
 impl HeadInfoQuery {
-    pub async fn get_head_info<P: InnerProvider>(p: &P, config: &Config) -> HeadInfo {
-        p.get_block_with_txs(BlockId::Number(BlockNumber::Finalized))
+    pub async fn get_head_info<P: InnerProvider>(
+        p: &P,
+        config: &Config,
+        block_number: BlockNumber,
+    ) -> HeadInfo {
+        p.get_block_with_txs(BlockId::Number(block_number))
             .await
             .ok()
             .flatten()
@@ -156,7 +160,8 @@ mod tests {
     async fn test_get_head_info_fails() {
         let provider = test_utils::mock_provider(None);
         let config = test_utils::optimism_config();
-        let head_info = HeadInfoQuery::get_head_info(&provider, &config).await;
+        let head_info =
+            HeadInfoQuery::get_head_info(&provider, &config, BlockNumber::Finalized).await;
         assert_eq!(test_utils::default_head_info(), head_info);
     }
 
@@ -164,7 +169,8 @@ mod tests {
     async fn test_get_head_info_empty_block() {
         let provider = test_utils::mock_provider(Some(Block::default()));
         let config = test_utils::optimism_config();
-        let head_info = HeadInfoQuery::get_head_info(&provider, &config).await;
+        let head_info =
+            HeadInfoQuery::get_head_info(&provider, &config, BlockNumber::Finalized).await;
         assert_eq!(test_utils::default_head_info(), head_info);
     }
 
@@ -172,7 +178,8 @@ mod tests {
     async fn test_get_head_info_valid_block() {
         let provider = test_utils::mock_provider(test_utils::valid_block());
         let config = test_utils::optimism_config();
-        let head_info = HeadInfoQuery::get_head_info(&provider, &config).await;
+        let head_info =
+            HeadInfoQuery::get_head_info(&provider, &config, BlockNumber::Finalized).await;
         assert_eq!(test_utils::default_head_info(), head_info);
     }
 }

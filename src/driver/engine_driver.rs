@@ -16,6 +16,8 @@ use crate::{
     engine::{Engine, EngineApi, ExecutionPayload, ForkchoiceState, PayloadAttributes, Status},
 };
 
+use super::HeadInfo;
+
 pub struct EngineDriver<E: Engine> {
     /// The L2 execution engine
     engine: Arc<E>,
@@ -390,8 +392,9 @@ fn should_skip(block: &Block<Transaction>, attributes: &PayloadAttributes) -> Re
 
 impl EngineDriver<EngineApi> {
     pub fn new(
-        finalized_head: BlockInfo,
-        finalized_epoch: Epoch,
+        finalized_head: HeadInfo,
+        safe_head: HeadInfo,
+        unsafe_head: HeadInfo,
         provider: Provider<Http>,
         config: &Arc<Config>,
     ) -> Result<Self> {
@@ -401,12 +404,12 @@ impl EngineDriver<EngineApi> {
             engine,
             provider,
             blocktime: config.chain.blocktime,
-            unsafe_head: finalized_head,
-            unsafe_epoch: finalized_epoch,
-            safe_head: finalized_head,
-            safe_epoch: finalized_epoch,
-            finalized_head,
-            finalized_epoch,
+            unsafe_head: unsafe_head.l2_block_info,
+            unsafe_epoch: unsafe_head.l1_epoch,
+            safe_head: safe_head.l2_block_info,
+            safe_epoch: safe_head.l1_epoch,
+            finalized_head: finalized_head.l2_block_info,
+            finalized_epoch: finalized_head.l1_epoch,
         })
     }
 }

@@ -18,12 +18,12 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(finalized_head: BlockInfo, finalized_epoch: Epoch, config: Arc<Config>) -> Self {
+    pub fn new(safe_head: BlockInfo, safe_epoch: Epoch, config: Arc<Config>) -> Self {
         Self {
             l1_info: BTreeMap::new(),
             l1_hashes: BTreeMap::new(),
-            safe_head: finalized_head,
-            safe_epoch: finalized_epoch,
+            safe_head,
+            safe_epoch,
             current_epoch_num: 0,
             config,
         }
