@@ -141,6 +141,8 @@ pub struct ChainConfig {
     pub max_seq_drift: u64,
     /// Timestamp of the regolith hardfork
     pub regolith_time: u64,
+    /// Timestamp of the canyon hardfork
+    pub canyon_time: u64,
     /// Network blocktime
     #[serde(default = "default_blocktime")]
     pub blocktime: u64,
@@ -252,6 +254,7 @@ impl ChainConfig {
             max_seq_drift: 600,
             blocktime: 2,
             regolith_time: 0,
+            canyon_time: u64::MAX,
         }
     }
 
@@ -289,6 +292,7 @@ impl ChainConfig {
             seq_window_size: 3600,
             max_seq_drift: 600,
             regolith_time: 1679079600,
+            canyon_time: 1699981200,
             blocktime: 2,
         }
     }
@@ -326,6 +330,7 @@ impl ChainConfig {
             seq_window_size: 3600,
             max_seq_drift: 600,
             regolith_time: 0,
+            canyon_time: 1699981200,
             blocktime: 2,
         }
     }
@@ -363,6 +368,7 @@ impl ChainConfig {
             max_seq_drift: 600,
             blocktime: 2,
             regolith_time: 0,
+            canyon_time: u64::MAX,
         }
     }
 
@@ -398,6 +404,7 @@ impl ChainConfig {
             seq_window_size: 3600,
             max_seq_drift: 600,
             regolith_time: 1683219600,
+            canyon_time: 1699981200,
             blocktime: 2,
         }
     }
@@ -476,6 +483,7 @@ pub struct ExternalChainConfig {
     l1_chain_id: u64,
     l2_chain_id: u64,
     regolith_time: u64,
+    canyon_time: u64,
     batch_inbox_address: Address,
     deposit_contract_address: Address,
     l1_system_config_address: Address,
@@ -537,6 +545,7 @@ impl From<ExternalChainConfig> for ChainConfig {
             seq_window_size: external.seq_window_size,
             max_seq_drift: external.max_sequencer_drift,
             regolith_time: external.regolith_time,
+            canyon_time: external.canyon_time,
             blocktime: external.block_time,
             l2_to_l1_message_passer: addr("0x4200000000000000000000000000000000000016"),
         }
@@ -582,6 +591,7 @@ impl From<ChainConfig> for ExternalChainConfig {
             l1_chain_id: chain_config.l1_chain_id,
             l2_chain_id: chain_config.l2_chain_id,
             regolith_time: chain_config.regolith_time,
+            canyon_time: chain_config.canyon_time,
             batch_inbox_address: chain_config.batch_inbox,
             deposit_contract_address: chain_config.deposit_contract,
             l1_system_config_address: chain_config.system_config_contract,
@@ -708,6 +718,7 @@ mod test {
             "l1_chain_id": 900,
             "l2_chain_id": 901,
             "regolith_time": 0,
+            "canyon_time": 0,
             "batch_inbox_address": "0xff00000000000000000000000000000000000000",
             "deposit_contract_address": "0x6900000000000000000000000000000000000001",
             "l1_system_config_address": "0x6900000000000000000000000000000000000009"
@@ -754,6 +765,7 @@ mod test {
         assert_eq!(chain.seq_window_size, 200);
         assert_eq!(chain.max_seq_drift, 300);
         assert_eq!(chain.regolith_time, 0);
+        assert_eq!(chain.canyon_time, 0);
         assert_eq!(chain.blocktime, 2);
         assert_eq!(
             chain.l2_to_l1_message_passer,

@@ -44,7 +44,7 @@ pub fn start(addr: NetworkAddress, chain_id: u64) -> Result<Receiver<Peer>> {
                 }
             }
 
-            sleep(Duration::from_secs(30)).await;
+            sleep(Duration::from_secs(10)).await;
         }
     });
 

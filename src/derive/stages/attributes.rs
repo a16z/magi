@@ -74,6 +74,12 @@ impl Attributes {
             timestamp: l1_info.block_info.timestamp,
         });
 
+        let withdrawals = if batch.timestamp >= self.config.chain.canyon_time {
+            Some(Vec::new())
+        } else {
+            None
+        };
+
         let timestamp = U64([batch.timestamp]);
         let l1_inclusion_block = Some(batch.l1_inclusion_block);
         let seq_number = Some(self.sequence_number);
@@ -88,6 +94,7 @@ impl Attributes {
             transactions,
             no_tx_pool: true,
             gas_limit: U64([l1_info.system_config.gas_limit.as_u64()]),
+            withdrawals,
             epoch,
             l1_inclusion_block,
             seq_number,
