@@ -354,3 +354,192 @@ fn check_epoch_update_batch(batch: &SpecularBatchV0, state: &State) -> Result<()
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    mod decode_batches {
+        use std::sync::{Arc, RwLock};
+
+        use ethers::{
+            types::{
+                transaction::eip2718::TypedTransaction, Bytes, Signature, TransactionRequest, H256,
+            },
+            utils::rlp::{Encodable, RlpStream},
+        };
+
+        use crate::{
+            common::RawTransaction,
+            config::{ChainConfig, Config},
+            derive::state::State,
+            specular::{
+                common::{
+                    SetL1OracleValuesInput, SET_L1_ORACLE_VALUES_ABI, SET_L1_ORACLE_VALUES_SELECTOR,
+                },
+                config::SystemAccounts,
+                stages::{
+                    batcher_transactions::SpecularBatcherTransaction, batches::decode_batches,
+                },
+            },
+        };
+
+        struct SubBatch {
+            first_l2_block_num: u64,
+            tx_blocks: Vec<Vec<RawTransaction>>,
+        }
+
+        impl SubBatch {
+            fn new(first_l2_block_num: u64, tx_blocks: Vec<Vec<RawTransaction>>) -> Self {
+                Self {
+                    first_l2_block_num,
+                    tx_blocks,
+                }
+            }
+        }
+
+        impl Encodable for SubBatch {
+            fn rlp_append(&self, s: &mut RlpStream) {
+                s.begin_list(2);
+                s.append(&self.first_l2_block_num);
+                s.begin_list(self.tx_blocks.len());
+                for tx_block in &self.tx_blocks {
+                    s.begin_list(tx_block.len());
+                    for tx in tx_block {
+                        s.append(&tx.0);
+                    }
+                }
+            }
+        }
+
+        struct BatcherTransactionData {
+            version: u8,
+            sub_batches: Vec<SubBatch>,
+        }
+
+        impl BatcherTransactionData {
+            fn new(version: u8, sub_batches: Vec<SubBatch>) -> Self {
+                Self {
+                    version,
+                    sub_batches,
+                }
+            }
+
+            fn encode_sub_batches(&self) -> bytes::Bytes {
+                let mut rlp = RlpStream::new();
+                rlp.append_list(&self.sub_batches);
+                rlp.out().freeze()
+            }
+        }
+
+        #[test]
+        fn decode() -> eyre::Result<()> {
+            let config = Arc::new(Config {
+                l1_rpc_url: Default::default(),
+                l2_rpc_url: Default::default(),
+                l2_engine_url: Default::default(),
+                chain: ChainConfig::optimism(),
+                jwt_secret: Default::default(),
+                checkpoint_sync_url: Default::default(),
+                rpc_port: Default::default(),
+                devnet: false,
+                local_sequencer: Default::default(),
+            });
+            let state = RwLock::new(State::new(
+                Default::default(),
+                Default::default(),
+                config.clone(),
+            ));
+
+            let epoch_num: u64 = 1;
+            let epoch_hash: H256 = Default::default();
+            let timestamp: u64 = 2;
+            let base_fee: u64 = 1;
+            let state_root: H256 = Default::default();
+            let first_l2_block_num = 1;
+            let l1_inclusion_block = 1;
+
+            let fake_signature = Signature {
+                v: 0,
+                r: Default::default(),
+                s: Default::default(),
+            };
+            let oracle_tx_values: SetL1OracleValuesInput = (
+                epoch_num.into(),
+                timestamp.into(),
+                base_fee.into(),
+                epoch_hash,
+                state_root,
+                config.chain.system_config.l1_fee_overhead,
+                config.chain.system_config.l1_fee_scalar,
+            );
+            let oracle_tx_data = SET_L1_ORACLE_VALUES_ABI
+                .encode_with_selector(*SET_L1_ORACLE_VALUES_SELECTOR, oracle_tx_values)?;
+            let oracle_tx: TypedTransaction = TransactionRequest::new()
+                .to(SystemAccounts::default().l1_oracle)
+                .data(oracle_tx_data)
+                .into();
+            let encoded_oracle_tx = oracle_tx.rlp_signed(&fake_signature).to_vec();
+
+            let non_oracle_tx: TypedTransaction = TransactionRequest::new().into();
+            let encoded_non_oracle_tx = non_oracle_tx.rlp_signed(&fake_signature).to_vec();
+
+            let batch1 = SubBatch::new(
+                first_l2_block_num,
+                vec![
+                    vec![RawTransaction(encoded_oracle_tx.clone())],
+                    vec![RawTransaction(encoded_non_oracle_tx.clone())],
+                ],
+            );
+            let batch2 = SubBatch::new(
+                first_l2_block_num + 2,
+                vec![vec![RawTransaction(encoded_non_oracle_tx.clone())]],
+            );
+
+            let version: u8 = 0;
+            let batch = BatcherTransactionData::new(version, vec![batch1, batch2]);
+
+            let batcher_tx = SpecularBatcherTransaction {
+                l1_inclusion_block,
+                version: batch.version,
+                tx_batch: Bytes(batch.encode_sub_batches()),
+            };
+            let batches = decode_batches(&batcher_tx, &state, &config)?;
+
+            assert_eq!(batches.len(), 3);
+
+            assert_eq!(batches[0].epoch_num, epoch_num);
+            assert_eq!(batches[0].epoch_hash, epoch_hash);
+            assert_eq!(batches[0].timestamp, timestamp);
+            assert_eq!(batches[0].l2_block_number, first_l2_block_num);
+            assert_eq!(batches[0].transactions.len(), 1);
+            assert_eq!(batches[0].transactions[0].0, encoded_oracle_tx);
+            assert_eq!(batches[0].l1_inclusion_block, l1_inclusion_block);
+            assert_eq!(batches[0].l1_oracle_values, Some(oracle_tx_values));
+
+            assert_eq!(batches[1].epoch_num, epoch_num);
+            assert_eq!(batches[1].epoch_hash, epoch_hash);
+            assert_eq!(
+                batches[1].timestamp,
+                timestamp + config.as_ref().chain.blocktime
+            );
+            assert_eq!(batches[1].l2_block_number, first_l2_block_num + 1);
+            assert_eq!(batches[1].transactions.len(), 1);
+            assert_eq!(batches[1].transactions[0].0, encoded_non_oracle_tx);
+            assert_eq!(batches[1].l1_inclusion_block, l1_inclusion_block);
+            assert_eq!(batches[1].l1_oracle_values, None);
+
+            assert_eq!(batches[2].epoch_num, epoch_num);
+            assert_eq!(batches[2].epoch_hash, epoch_hash);
+            assert_eq!(
+                batches[2].timestamp,
+                timestamp + 2 * config.as_ref().chain.blocktime
+            );
+            assert_eq!(batches[2].l2_block_number, first_l2_block_num + 2);
+            assert_eq!(batches[2].transactions.len(), 1);
+            assert_eq!(batches[2].transactions[0].0, encoded_non_oracle_tx);
+            assert_eq!(batches[2].l1_inclusion_block, l1_inclusion_block);
+            assert_eq!(batches[2].l1_oracle_values, None);
+
+            Ok(())
+        }
+    }
+}
