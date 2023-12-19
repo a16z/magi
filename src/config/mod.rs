@@ -315,7 +315,7 @@ impl ChainConfig {
                 gas_limit: U256::from(30_000_000),
                 l1_fee_overhead: U256::from(188),
                 l1_fee_scalar: U256::from(684000),
-                unsafe_block_signer: addr("0x0000000000000000000000000000000000000000"),
+                unsafe_block_signer: addr("0x57CACBB0d30b01eb2462e5dC940c161aff3230D3"),
             },
             system_config_contract: addr("0x034edd2a225f7f429a63e0f1d2084b9e0a93b538"),
             batch_inbox: addr("0xff00000000000000000000000000000011155420"),
