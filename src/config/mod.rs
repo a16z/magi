@@ -441,6 +441,7 @@ impl ChainConfig {
             seq_window_size: 3600,
             max_seq_drift: 600,
             regolith_time: 0,
+            canyon_time: 1699981200,
             blocktime: 2,
         }
     }
