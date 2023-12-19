@@ -78,6 +78,7 @@ impl Cli {
             "optimism-sepolia" => ChainConfig::optimism_sepolia(),
             "base" => ChainConfig::base(),
             "base-goerli" => ChainConfig::base_goerli(),
+            "base-sepolia" => ChainConfig::base_sepolia(),
             file if file.ends_with(".json") => ChainConfig::from_json(file),
             _ => panic!(
                 "Invalid network name. \\

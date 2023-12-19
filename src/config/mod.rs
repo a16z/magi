@@ -394,10 +394,46 @@ impl ChainConfig {
             deposit_contract: addr("0xe93c8cd0d409341205a592f8c4ac1a5fe5585cfa"),
             l2_to_l1_message_passer: addr("0x4200000000000000000000000000000000000016"),
             max_channel_size: 100_000_000,
-            channel_timeout: 100,
+            channel_timeout: 300,
             seq_window_size: 3600,
             max_seq_drift: 600,
             regolith_time: 1683219600,
+            blocktime: 2,
+        }
+    }
+
+    pub fn base_sepolia() -> Self {
+        Self {
+            network: "base-sepolia".to_string(),
+            l1_chain_id: 11155111,
+            l2_chain_id: 84532,
+            l1_start_epoch: Epoch {
+                number: 4370868,
+                hash: hash("0xcac9a83291d4dec146d6f7f69ab2304f23f5be87b1789119a0c5b1e4482444ed"),
+                timestamp: 1695768288,
+            },
+            l2_genesis: BlockInfo {
+                hash: hash("0x0dcc9e089e30b90ddfc55be9a37dd15bc551aeee999d2e2b51414c54eaf934e4"),
+                number: 0,
+                parent_hash: H256::zero(),
+                timestamp: 1695768288,
+            },
+            system_config: SystemConfig {
+                batch_sender: addr("0x6cdebe940bc0f26850285caca097c11c33103e47"),
+                gas_limit: U256::from(25_000_000),
+                l1_fee_overhead: U256::from(2100),
+                l1_fee_scalar: U256::from(1000000),
+                unsafe_block_signer: addr("0xb830b99c95Ea32300039624Cb567d324D4b1D83C"),
+            },
+            system_config_contract: addr("0xf272670eb55e895584501d564AfEB048bEd26194"),
+            batch_inbox: addr("0xff00000000000000000000000000000000084532"),
+            deposit_contract: addr("0x49f53e41452C74589E85cA1677426Ba426459e85"),
+            l2_to_l1_message_passer: addr("0x4200000000000000000000000000000000000016"),
+            max_channel_size: 100_000_000,
+            channel_timeout: 300,
+            seq_window_size: 3600,
+            max_seq_drift: 600,
+            regolith_time: 0,
             blocktime: 2,
         }
     }
