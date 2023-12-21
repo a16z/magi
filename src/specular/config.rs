@@ -31,6 +31,8 @@ struct ExternalGenesisInfo {
 struct SystemConfigInfo {
     #[serde(rename = "batcherAddr")]
     batcher_addr: Address,
+    overhead: H256,
+    scalar: H256,
     #[serde(rename = "gasLimit")]
     gas_limit: u64,
 }
@@ -76,8 +78,8 @@ impl From<ExternalChainConfig> for ChainConfig {
             system_config: SystemConfig {
                 batch_sender: external.genesis.system_config.batcher_addr,
                 gas_limit: U256::from(external.genesis.system_config.gas_limit),
-                l1_fee_overhead: U256::from(0),       // not used
-                l1_fee_scalar: U256::from(0),         // not used
+                l1_fee_overhead: external.genesis.system_config.overhead.0.into(),
+                l1_fee_scalar: external.genesis.system_config.scalar.0.into(),
                 unsafe_block_signer: Address::zero(), // not used?
             },
             batch_inbox: external.batch_inbox_address,

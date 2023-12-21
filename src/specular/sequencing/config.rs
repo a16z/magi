@@ -46,7 +46,7 @@ impl SystemConfig {
             batch_sender: config.batch_sender,
             gas_limit: config.gas_limit.as_u64(),
             l1_fee_overhead: config.l1_fee_overhead,
-            l1_fee_scalar: config.l1_fee_overhead,
+            l1_fee_scalar: config.l1_fee_scalar,
         }
     }
 }
