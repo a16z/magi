@@ -98,7 +98,7 @@ pub struct Cli {
     p2p_secret_key: Option<SecretKey>,
 
     /// Bootnodes to which you need to connect initially. A list of addresses separated by a space is expected in ENR format
-    ///     
+    ///
     /// If not specified, the optimism mainnet will be used.
     ///
     /// Example:

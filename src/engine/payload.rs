@@ -36,6 +36,9 @@ pub struct ExecutionPayload {
     pub block_hash: H256,
     /// An array of transaction objects where each object is a byte list
     pub transactions: Vec<RawTransaction>,
+    /// An array of beaconchain withdrawals. Always empty as this exists only for L1 compatibility
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub withdrawals: Option<Vec<()>>,
 }
 
 impl TryFrom<Block<Transaction>> for ExecutionPayload {
@@ -68,6 +71,7 @@ impl TryFrom<Block<Transaction>> for ExecutionPayload {
                 .into(),
             block_hash: value.hash.unwrap(),
             transactions: encoded_txs,
+            withdrawals: Some(Vec::new()),
         })
     }
 }
@@ -94,6 +98,10 @@ pub struct PayloadAttributes {
     /// This field overrides the gas limit used during block-building.
     /// If not specified as rollup, a STATUS_INVALID is returned.
     pub gas_limit: U64,
+    /// Beaconchain withdrawals. This exists only for compatibility with L1, and is not used. Prior
+    /// to Canyon, this value is always None. After Canyon it is an empty array. Note that we use
+    /// the () type here since we never have a non empty array.
+    pub withdrawals: Option<Vec<()>>,
     /// The batch epoch number from derivation. This value is not expected by the engine is skipped
     /// during serialization and deserialization.
     #[serde(skip)]

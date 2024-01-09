@@ -336,6 +336,8 @@ pub struct ChainConfig {
     pub channel_timeout: u64,
     /// Timestamp of the regolith hardfork
     pub regolith_time: u64,
+    /// Timestamp of the canyon hardfork
+    pub canyon_time: u64,
     /// The batch inbox address
     pub batch_inbox_address: Address,
     /// The deposit contract address
@@ -465,6 +467,7 @@ impl ChainConfig {
             max_sequencer_drift: 600,
             block_time: 2,
             regolith_time: 0,
+            canyon_time: u64::MAX,
         }
     }
 
@@ -508,6 +511,7 @@ impl ChainConfig {
             seq_window_size: 3600,
             max_sequencer_drift: 600,
             regolith_time: 1679079600,
+            canyon_time: 1699981200,
             block_time: 2,
         }
     }
@@ -540,7 +544,7 @@ impl ChainConfig {
                     gas_limit: 30_000_000,
                     overhead: U256::from(188),
                     scalar: U256::from(684000),
-                    unsafe_block_signer: addr("0x0000000000000000000000000000000000000000"),
+                    unsafe_block_signer: addr("0x57CACBB0d30b01eb2462e5dC940c161aff3230D3"),
                 },
             },
             l1_system_config_address: addr("0x034edd2a225f7f429a63e0f1d2084b9e0a93b538"),
@@ -552,6 +556,7 @@ impl ChainConfig {
             seq_window_size: 3600,
             max_sequencer_drift: 600,
             regolith_time: 0,
+            canyon_time: 1699981200,
             block_time: 2,
         }
     }
@@ -595,6 +600,7 @@ impl ChainConfig {
             max_sequencer_drift: 600,
             block_time: 2,
             regolith_time: 0,
+            canyon_time: u64::MAX,
         }
     }
 
@@ -632,11 +638,49 @@ impl ChainConfig {
             deposit_contract_address: addr("0xe93c8cd0d409341205a592f8c4ac1a5fe5585cfa"),
             l2_to_l1_message_passer: addr("0x4200000000000000000000000000000000000016"),
             max_channel_size: 100_000_000,
-            channel_timeout: 100,
+            channel_timeout: 300,
             seq_window_size: 3600,
             max_sequencer_drift: 600,
             regolith_time: 1683219600,
+            canyon_time: 1699981200,
             block_time: 2,
+        }
+    }
+
+    pub fn base_sepolia() -> Self {
+        Self {
+            network: "base-sepolia".to_string(),
+            l1_chain_id: 11155111,
+            l2_chain_id: 84532,
+            l1_start_epoch: Epoch {
+                number: 4370868,
+                hash: hash("0xcac9a83291d4dec146d6f7f69ab2304f23f5be87b1789119a0c5b1e4482444ed"),
+                timestamp: 1695768288,
+            },
+            l2_genesis: BlockInfo {
+                hash: hash("0x0dcc9e089e30b90ddfc55be9a37dd15bc551aeee999d2e2b51414c54eaf934e4"),
+                number: 0,
+                parent_hash: H256::zero(),
+                timestamp: 1695768288,
+            },
+            system_config: SystemConfig {
+                batch_sender: addr("0x6cdebe940bc0f26850285caca097c11c33103e47"),
+                gas_limit: U256::from(25_000_000),
+                l1_fee_overhead: U256::from(2100),
+                l1_fee_scalar: U256::from(1000000),
+                unsafe_block_signer: addr("0xb830b99c95Ea32300039624Cb567d324D4b1D83C"),
+            },
+            system_config_contract: addr("0xf272670eb55e895584501d564AfEB048bEd26194"),
+            batch_inbox: addr("0xff00000000000000000000000000000000084532"),
+            deposit_contract: addr("0x49f53e41452C74589E85cA1677426Ba426459e85"),
+            l2_to_l1_message_passer: addr("0x4200000000000000000000000000000000000016"),
+            max_channel_size: 100_000_000,
+            channel_timeout: 300,
+            seq_window_size: 3600,
+            max_seq_drift: 600,
+            regolith_time: 0,
+            canyon_time: 1699981200,
+            blocktime: 2,
         }
     }
 
@@ -746,6 +790,7 @@ mod test {
             "l1_chain_id": 900,
             "l2_chain_id": 901,
             "regolith_time": 0,
+            "canyon_time": 0,
             "batch_inbox_address": "0xff00000000000000000000000000000000000000",
             "deposit_contract_address": "0x6900000000000000000000000000000000000001",
             "l1_system_config_address": "0x6900000000000000000000000000000000000009"
@@ -791,7 +836,12 @@ mod test {
         assert_eq!(chain.seq_window_size, 200);
         assert_eq!(chain.max_sequencer_drift, 300);
         assert_eq!(chain.regolith_time, 0);
+        assert_eq!(chain.canyon_time, 0);
         assert_eq!(chain.block_time, 2);
+        assert_eq!(
+            chain.l2_to_l1_message_passer,
+            addr("0x4200000000000000000000000000000000000016")
+        );
     }
 
     #[test]
@@ -834,9 +884,9 @@ mod test {
           "l1_system_config_address": "0x229047fed2591dbec1ef1118d64f7af3db9eb290",
           "l2_to_l1_message_passer": "0x4200000000000000000000000000000000000016"
         }"#
-        .chars()
-        .filter(|c| !c.is_whitespace())
-        .collect();
+            .chars()
+            .filter(|c| !c.is_whitespace())
+            .collect();
 
         assert_eq!(json, expected_json);
 

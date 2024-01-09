@@ -4,5 +4,5 @@ pub mod block_handler;
 
 pub trait Handler: Send {
     fn handle(&self, msg: Message) -> MessageAcceptance;
-    fn topic(&self) -> TopicHash;
+    fn topics(&self) -> Vec<TopicHash>;
 }

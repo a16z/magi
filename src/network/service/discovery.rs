@@ -50,7 +50,7 @@ pub fn start(
                 }
             }
 
-            sleep(Duration::from_secs(30)).await;
+            sleep(Duration::from_secs(10)).await;
         }
     });
 
