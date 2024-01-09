@@ -140,7 +140,7 @@ impl Driver<EngineApi> {
             config.p2p_bootnodes.clone(),
             config.p2p_secret_key.clone(),
             config.p2p_sequencer_secret_key.clone(),
-            IdentTopic::new(block_handler.topic().to_string()),
+            IdentTopic::new(block_handler.topics()[0].to_string()),
         )
         .add_handler(Box::new(block_handler));
 

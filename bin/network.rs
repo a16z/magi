@@ -83,7 +83,7 @@ async fn main() -> Result<()> {
         Some(bootnodes),
         None,
         None,
-        IdentTopic::new(block_handler.topic().to_string()),
+        IdentTopic::new(block_handler.topics()[0].to_string()),
     )
     .add_handler(Box::new(block_handler))
     .start(receiver)?;

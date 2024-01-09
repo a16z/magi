@@ -236,7 +236,7 @@ impl From<ExecutionPayloadV2SSZ> for ExecutionPayload {
     }
 }
 
-impl TryFrom<ExecutionPayload> for ExecutionPayloadSSZ {
+impl TryFrom<ExecutionPayload> for ExecutionPayloadV2SSZ {
     type Error = eyre::Report;
 
     fn try_from(value: ExecutionPayload) -> Result<Self> {
@@ -255,6 +255,7 @@ impl TryFrom<ExecutionPayload> for ExecutionPayloadSSZ {
             base_fee_per_gas: value.base_fee_per_gas.as_u64().into(),
             block_hash: convert_hash_to_bytes32(value.block_hash)?,
             transactions: convert_tx_to_list(value.transactions)?,
+            withdrawals: List::default(),
         })
     }
 }
@@ -320,7 +321,7 @@ fn convert_tx_list(value: List<Transaction, 1048576>) -> Vec<RawTransaction> {
 
 pub fn encode_block_msg(payload: ExecutionPayload, signer: &Signer) -> Result<Vec<u8>> {
     // Start preparing payload for distribution.
-    let payload_ssz: ExecutionPayloadSSZ = payload.try_into()?;
+    let payload_ssz: ExecutionPayloadV2SSZ = payload.try_into()?;
     let payload_bytes = serialize(&payload_ssz)?;
 
     // Signature.

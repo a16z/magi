@@ -65,6 +65,7 @@ impl Pipeline {
             chain.regolith_time,
             seq,
             unsafe_seq,
+            chain.canyon_time,
         );
 
         Ok(Self {
