@@ -96,36 +96,34 @@ impl Driver<EngineApi> {
         let provider = Provider::new(http);
         let fetcher = info::HeadInfoFetcher::from(&provider);
 
-        let finalized_info = HeadInfoQuery::get_finalized(&fetcher, &config.chain).await;
-        let safe_info = HeadInfoQuery::get_safe(&fetcher, &config.chain).await;
-        let unsafe_info = HeadInfoQuery::get_unsafe(&fetcher, &config.chain).await;
+        let heads = HeadInfoQuery::get_heads(&fetcher, &config.chain).await?;
 
-        tracing::info!("starting finalized from head: {:?}", finalized_info.head);
+        tracing::info!("starting finalized from head: {:?}", heads.finalized.head);
 
         let l1_start_block =
-            get_l1_start_block(finalized_info.epoch.number, config.chain.channel_timeout);
+            get_l1_start_block(heads.finalized.epoch.number, config.chain.channel_timeout);
 
         let config = Arc::new(config);
         let chain_watcher: ChainWatcher =
-            ChainWatcher::new(l1_start_block, finalized_info.head.number, config.clone())?;
+            ChainWatcher::new(l1_start_block, heads.finalized.head.number, config.clone())?;
 
         let state = Arc::new(RwLock::new(State::new(
-            finalized_info.head,
-            finalized_info.epoch,
-            unsafe_info.head,
-            unsafe_info.epoch,
+            heads.finalized.head,
+            heads.finalized.epoch,
+            heads.latest.head,
+            heads.latest.epoch,
             config.chain.seq_window_size,
         )));
 
         let sync_status = Arc::new(ArcSwap::from_pointee(Default::default()));
 
         let engine_driver =
-            EngineDriver::new(finalized_info, safe_info, unsafe_info, provider, &config)?;
+            EngineDriver::new(heads.finalized, heads.safe, heads.latest, provider, &config)?;
         let pipeline = Pipeline::new(
             state.clone(),
             &config.chain,
-            finalized_info.seq_number,
-            unsafe_info.seq_number,
+            heads.finalized.seq_number,
+            heads.latest.seq_number,
         )?;
 
         let _addr = rpc::run_server(config.clone(), sync_status.clone()).await?;
