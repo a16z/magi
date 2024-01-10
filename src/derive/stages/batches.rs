@@ -4,23 +4,24 @@ use std::collections::BTreeMap;
 use std::io::Read;
 use std::sync::{Arc, RwLock};
 
-use ethers::types::H256;
-use ethers::utils::rlp::{DecoderError, Rlp};
-
+use ethers::utils::rlp::Rlp;
 use eyre::Result;
 use libflate::zlib::Decoder;
 
-use crate::common::RawTransaction;
 use crate::config::Config;
 use crate::derive::state::State;
 use crate::derive::PurgeableIterator;
 
+use super::block_input::BlockInput;
 use super::channels::Channel;
-use super::span_batch::{BlockInput, SpanBatch};
+use super::single_batch::SingleBatch;
+use super::span_batch::SpanBatch;
 
 pub struct Batches<I> {
     /// Mapping of timestamps to batches
     batches: BTreeMap<u64, Batch>,
+    /// Pending block inputs to be outputed
+    pending_inputs: Vec<BlockInput<u64>>,
     channel_iter: I,
     state: Arc<RwLock<State>>,
     config: Arc<Config>,
@@ -30,7 +31,7 @@ impl<I> Iterator for Batches<I>
 where
     I: Iterator<Item = Channel>,
 {
-    type Item = Batch;
+    type Item = BlockInput<u64>;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.try_next().unwrap_or_else(|_| {
@@ -54,6 +55,7 @@ impl<I> Batches<I> {
     pub fn new(channel_iter: I, state: Arc<RwLock<State>>, config: Arc<Config>) -> Self {
         Self {
             batches: BTreeMap::new(),
+            pending_inputs: Vec::new(),
             channel_iter,
             state,
             config,
@@ -65,32 +67,32 @@ impl<I> Batches<I>
 where
     I: Iterator<Item = Channel>,
 {
-    fn try_next(&mut self) -> Result<Option<Batch>> {
+    fn try_next(&mut self) -> Result<Option<BlockInput<u64>>> {
+        if !self.pending_inputs.is_empty() {
+            return Ok(Some(self.pending_inputs.remove(0)));
+        }
+
         let channel = self.channel_iter.next();
         if let Some(channel) = channel {
             let batches = decode_batches(&channel)?;
             batches.into_iter().for_each(|batch| {
-                tracing::debug!(
-                    "saw batch: t={}, ph={:?}, e={}",
-                    batch.timestamp,
-                    batch.parent_hash,
-                    batch.epoch_num
-                );
-                self.batches.insert(batch.timestamp, batch);
+                let timestamp = batch.timestamp(&self.config);
+                tracing::debug!("saw batch: t={}", timestamp);
+                self.batches.insert(timestamp, batch);
             });
         }
 
         let derived_batch = loop {
             if let Some((_, batch)) = self.batches.first_key_value() {
+                let timestamp = batch.timestamp(&self.config);
                 match self.batch_status(batch) {
                     BatchStatus::Accept => {
                         let batch = batch.clone();
-                        self.batches.remove(&batch.timestamp);
+                        self.batches.remove(&timestamp);
                         break Some(batch);
                     }
                     BatchStatus::Drop => {
                         tracing::warn!("dropping invalid batch");
-                        let timestamp = batch.timestamp;
                         self.batches.remove(&timestamp);
                     }
                     BatchStatus::Future | BatchStatus::Undecided => {
@@ -102,7 +104,16 @@ where
             }
         };
 
-        let batch = if derived_batch.is_none() {
+        Ok(if let Some(derived_batch) = derived_batch {
+            let mut inputs = derived_batch.as_inputs(&self.config);
+            if !inputs.is_empty() {
+                let first = inputs.remove(0);
+                self.pending_inputs.append(&mut inputs);
+                Some(first)
+            } else {
+                None
+            }
+        } else {
             let state = self.state.read().unwrap();
 
             let current_l1_block = state.current_epoch_num;
@@ -120,10 +131,8 @@ where
                         next_epoch
                     };
 
-                    Some(Batch {
-                        epoch_num: epoch.number,
-                        epoch_hash: epoch.hash,
-                        parent_hash: safe_head.parent_hash,
+                    Some(BlockInput {
+                        epoch: epoch.number,
                         timestamp: next_timestamp,
                         transactions: Vec::new(),
                         l1_inclusion_block: current_l1_block,
@@ -134,11 +143,7 @@ where
             } else {
                 None
             }
-        } else {
-            derived_batch
-        };
-
-        Ok(batch)
+        })
     }
 
     fn batch_status(&self, batch: &Batch) -> BatchStatus {
@@ -295,8 +300,8 @@ where
 
         let block_inputs = batch.block_inputs(&self.config);
         for (i, input) in block_inputs.iter().enumerate() {
-            let input_epoch = state.epoch_by_number(input.epoch_num).unwrap();
-            let next_epoch = state.epoch_by_number(input.epoch_num + 1);
+            let input_epoch = state.epoch_by_number(input.epoch).unwrap();
+            let next_epoch = state.epoch_by_number(input.epoch + 1);
 
             if input.timestamp < input_epoch.timestamp {
                 return BatchStatus::Drop;
@@ -382,14 +387,20 @@ pub enum Batch {
     Span(SpanBatch),
 }
 
-#[derive(Debug, Clone)]
-pub struct SingleBatch {
-    pub parent_hash: H256,
-    pub epoch_num: u64,
-    pub epoch_hash: H256,
-    pub timestamp: u64,
-    pub transactions: Vec<RawTransaction>,
-    pub l1_inclusion_block: u64,
+impl Batch {
+    pub fn timestamp(&self, config: &Config) -> u64 {
+        match self {
+            Batch::Single(batch) => batch.timestamp,
+            Batch::Span(batch) => batch.rel_timestamp + config.chain.l2_genesis.timestamp,
+        }
+    }
+
+    pub fn as_inputs(&self, config: &Config) -> Vec<BlockInput<u64>> {
+        match self {
+            Batch::Single(batch) => batch.block_input(),
+            Batch::Span(batch) => batch.block_inputs(config),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -398,29 +409,4 @@ enum BatchStatus {
     Accept,
     Undecided,
     Future,
-}
-
-impl SingleBatch {
-    fn decode(rlp: &Rlp, l1_inclusion_block: u64) -> Result<Self, DecoderError> {
-        let parent_hash = rlp.val_at(0)?;
-        let epoch_num = rlp.val_at(1)?;
-        let epoch_hash = rlp.val_at(2)?;
-        let timestamp = rlp.val_at(3)?;
-        let transactions = rlp.list_at(4)?;
-
-        Ok(SingleBatch {
-            parent_hash,
-            epoch_num,
-            epoch_hash,
-            timestamp,
-            transactions,
-            l1_inclusion_block,
-        })
-    }
-
-    fn has_invalid_transactions(&self) -> bool {
-        self.transactions
-            .iter()
-            .any(|tx| tx.0.is_empty() || tx.0[0] == 0x7E)
-    }
 }

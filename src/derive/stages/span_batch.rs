@@ -6,6 +6,8 @@ use eyre::Result;
 
 use crate::{common::RawTransaction, config::Config};
 
+use super::block_input::BlockInput;
+
 #[derive(Debug, Clone)]
 pub struct SpanBatch {
     pub rel_timestamp: u64,
@@ -17,12 +19,6 @@ pub struct SpanBatch {
     pub block_tx_counts: Vec<u64>,
     pub transactions: Vec<RawTransaction>,
     pub l1_inclusion_block: u64,
-}
-
-pub struct BlockInput {
-    pub timestamp: u64,
-    pub epoch_num: u64,
-    pub transactions: Vec<RawTransaction>,
 }
 
 impl SpanBatch {
@@ -51,7 +47,7 @@ impl SpanBatch {
         })
     }
 
-    pub fn block_inputs(&self, config: &Config) -> Vec<BlockInput> {
+    pub fn block_inputs(&self, config: &Config) -> Vec<BlockInput<u64>> {
         let origin_changed_bit = self.origin_bits[0];
         let end_epoch_num = self.l1_origin_num;
         let start_epoch_num = self.l1_origin_num
@@ -78,10 +74,11 @@ impl SpanBatch {
                 + config.chain.l2_genesis.timestamp
                 + i as u64 * config.chain.blocktime;
 
-            let block_input = BlockInput {
+            let block_input = BlockInput::<u64> {
                 timestamp,
-                epoch_num,
+                epoch: epoch_num,
                 transactions,
+                l1_inclusion_block: self.l1_inclusion_block,
             };
 
             inputs.push(block_input);
