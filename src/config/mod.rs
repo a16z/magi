@@ -493,6 +493,7 @@ pub struct ExternalChainConfig {
     l2_chain_id: u64,
     regolith_time: u64,
     canyon_time: u64,
+    delta_time: u64,
     batch_inbox_address: Address,
     deposit_contract_address: Address,
     l1_system_config_address: Address,
@@ -555,6 +556,7 @@ impl From<ExternalChainConfig> for ChainConfig {
             max_seq_drift: external.max_sequencer_drift,
             regolith_time: external.regolith_time,
             canyon_time: external.canyon_time,
+            delta_time: external.delta_time,
             blocktime: external.block_time,
             l2_to_l1_message_passer: addr("0x4200000000000000000000000000000000000016"),
         }
@@ -601,6 +603,7 @@ impl From<ChainConfig> for ExternalChainConfig {
             l2_chain_id: chain_config.l2_chain_id,
             regolith_time: chain_config.regolith_time,
             canyon_time: chain_config.canyon_time,
+            delta_time: chain_config.delta_time,
             batch_inbox_address: chain_config.batch_inbox,
             deposit_contract_address: chain_config.deposit_contract,
             l1_system_config_address: chain_config.system_config_contract,

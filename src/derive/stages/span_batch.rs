@@ -49,7 +49,6 @@ impl SpanBatch {
 
     pub fn block_inputs(&self, config: &Config) -> Vec<BlockInput<u64>> {
         let origin_changed_bit = self.origin_bits[0];
-        let end_epoch_num = self.l1_origin_num;
         let start_epoch_num = self.l1_origin_num
             - self
                 .origin_bits

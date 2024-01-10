@@ -5,7 +5,7 @@ use ethers::{
 
 use crate::common::RawTransaction;
 
-use super::span_batch::BlockInput;
+use super::block_input::BlockInput;
 
 #[derive(Debug, Clone)]
 pub struct SingleBatch {
@@ -41,10 +41,10 @@ impl SingleBatch {
             .any(|tx| tx.0.is_empty() || tx.0[0] == 0x7E)
     }
 
-    pub fn block_input(&self) -> BlockInput {
+    pub fn block_input(&self) -> BlockInput<u64> {
         BlockInput {
             timestamp: self.timestamp,
-            epoch_num: self.epoch_num,
+            epoch: self.epoch_num,
             transactions: self.transactions.clone(),
             l1_inclusion_block: self.l1_inclusion_block,
         }

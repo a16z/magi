@@ -13,10 +13,10 @@ use crate::derive::PurgeableIterator;
 use crate::engine::PayloadAttributes;
 use crate::l1::L1Info;
 
-use super::batches::Batch;
+use super::block_input::BlockInput;
 
 pub struct Attributes {
-    batch_iter: Box<dyn PurgeableIterator<Item = Batch>>,
+    block_input_iter: Box<dyn PurgeableIterator<Item = BlockInput<u64>>>,
     state: Arc<RwLock<State>>,
     sequence_number: u64,
     epoch_hash: H256,
@@ -27,15 +27,16 @@ impl Iterator for Attributes {
     type Item = PayloadAttributes;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.batch_iter
+        self.block_input_iter
             .next()
+            .map(|input| input.to_full_epoch(&self.state).unwrap())
             .map(|batch| self.derive_attributes(batch))
     }
 }
 
 impl PurgeableIterator for Attributes {
     fn purge(&mut self) {
-        self.batch_iter.purge();
+        self.block_input_iter.purge();
         self.sequence_number = 0;
         self.epoch_hash = self.state.read().unwrap().safe_epoch.hash;
     }
@@ -43,7 +44,7 @@ impl PurgeableIterator for Attributes {
 
 impl Attributes {
     pub fn new(
-        batch_iter: Box<dyn PurgeableIterator<Item = Batch>>,
+        block_input_iter: Box<dyn PurgeableIterator<Item = BlockInput<u64>>>,
         state: Arc<RwLock<State>>,
         config: Arc<Config>,
         seq: u64,
@@ -51,7 +52,7 @@ impl Attributes {
         let epoch_hash = state.read().unwrap().safe_epoch.hash;
 
         Self {
-            batch_iter,
+            block_input_iter,
             state,
             sequence_number: seq,
             epoch_hash,
@@ -59,32 +60,27 @@ impl Attributes {
         }
     }
 
-    fn derive_attributes(&mut self, batch: Batch) -> PayloadAttributes {
-        tracing::debug!("attributes derived from block {}", batch.epoch_num);
-        tracing::debug!("batch epoch hash {:?}", batch.epoch_hash);
+    fn derive_attributes(&mut self, input: BlockInput<Epoch>) -> PayloadAttributes {
+        tracing::debug!("attributes derived from block {}", input.epoch.number);
+        tracing::debug!("batch epoch hash {:?}", input.epoch.hash);
 
-        self.update_sequence_number(batch.epoch_hash);
+        self.update_sequence_number(input.epoch.hash);
 
         let state = self.state.read().unwrap();
-        let l1_info = state.l1_info_by_hash(batch.epoch_hash).unwrap();
+        let l1_info = state.l1_info_by_hash(input.epoch.hash).unwrap();
 
-        let epoch = Some(Epoch {
-            number: batch.epoch_num,
-            hash: batch.epoch_hash,
-            timestamp: l1_info.block_info.timestamp,
-        });
-
-        let withdrawals = if batch.timestamp >= self.config.chain.canyon_time {
+        let withdrawals = if input.timestamp >= self.config.chain.canyon_time {
             Some(Vec::new())
         } else {
             None
         };
 
-        let timestamp = U64([batch.timestamp]);
-        let l1_inclusion_block = Some(batch.l1_inclusion_block);
+        let timestamp = U64([input.timestamp]);
+        let l1_inclusion_block = Some(input.l1_inclusion_block);
         let seq_number = Some(self.sequence_number);
         let prev_randao = l1_info.block_info.mix_hash;
-        let transactions = Some(self.derive_transactions(batch, l1_info));
+        let epoch = Some(input.epoch.clone());
+        let transactions = Some(self.derive_transactions(input, l1_info));
         let suggested_fee_recipient = SystemAccounts::default().fee_vault;
 
         PayloadAttributes {
@@ -101,10 +97,14 @@ impl Attributes {
         }
     }
 
-    fn derive_transactions(&self, batch: Batch, l1_info: &L1Info) -> Vec<RawTransaction> {
+    fn derive_transactions(
+        &self,
+        input: BlockInput<Epoch>,
+        l1_info: &L1Info,
+    ) -> Vec<RawTransaction> {
         let mut transactions = Vec::new();
 
-        let attributes_tx = self.derive_attributes_deposited(l1_info, batch.timestamp);
+        let attributes_tx = self.derive_attributes_deposited(l1_info, input.timestamp);
         transactions.push(attributes_tx);
 
         if self.sequence_number == 0 {
@@ -112,7 +112,7 @@ impl Attributes {
             transactions.append(&mut user_deposited_txs);
         }
 
-        let mut rest = batch.transactions;
+        let mut rest = input.transactions;
         transactions.append(&mut rest);
 
         transactions

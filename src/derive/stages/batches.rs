@@ -48,6 +48,7 @@ where
     fn purge(&mut self) {
         self.channel_iter.purge();
         self.batches.clear();
+        self.pending_inputs.clear();
     }
 }
 
@@ -149,7 +150,7 @@ where
     fn batch_status(&self, batch: &Batch) -> BatchStatus {
         match batch {
             Batch::Single(batch) => self.single_batch_status(batch),
-            Batch::Span(_) => panic!("not implemented"),
+            Batch::Span(batch) => self.span_batch_status(batch),
         }
     }
 
@@ -239,20 +240,35 @@ where
         let head = state.safe_head;
         let next_timestamp = head.timestamp + self.config.chain.blocktime;
 
-        let batch_timestamp = batch.rel_timestamp + self.config.chain.l2_genesis.timestamp;
-        if batch_timestamp < self.config.chain.delta_time {
+        // check for delta activation
+
+        let batch_origin = if batch.l1_origin_num == epoch.number {
+            Some(epoch)
+        } else if batch.l1_origin_num == epoch.number + 1 {
+            next_epoch
+        } else {
+            tracing::warn!("invalid batch origin epoch number");
             return BatchStatus::Drop;
+        };
+
+        if let Some(batch_origin) = batch_origin {
+            if batch_origin.timestamp < self.config.chain.delta_time {
+                return BatchStatus::Drop;
+            }
+        } else {
+            return BatchStatus::Undecided;
         }
 
         // check timestamp range
 
-        match batch_timestamp.cmp(&next_timestamp) {
-            Ordering::Greater => return BatchStatus::Future,
-            Ordering::Less => return BatchStatus::Drop,
-            Ordering::Equal => (),
+        let span_start_timestamp = batch.rel_timestamp + self.config.chain.l2_genesis.timestamp;
+        let span_end_timestamp =
+            span_start_timestamp + batch.block_count * self.config.chain.blocktime;
+
+        if span_start_timestamp > next_timestamp {
+            return BatchStatus::Future;
         }
 
-        let span_end_timestamp = batch_timestamp + batch.block_count * self.config.chain.blocktime;
         if span_end_timestamp < next_timestamp {
             return BatchStatus::Drop;
         }
@@ -397,7 +413,7 @@ impl Batch {
 
     pub fn as_inputs(&self, config: &Config) -> Vec<BlockInput<u64>> {
         match self {
-            Batch::Single(batch) => batch.block_input(),
+            Batch::Single(batch) => vec![batch.block_input()],
             Batch::Span(batch) => batch.block_inputs(config),
         }
     }
