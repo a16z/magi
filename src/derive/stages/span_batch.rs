@@ -94,7 +94,8 @@ fn take_data(data: &[u8], length: usize) -> (&[u8], &[u8]) {
 fn decode_bitlist(data: &[u8], len: u64) -> (Vec<bool>, &[u8]) {
     let mut bitlist = Vec::new();
 
-    let len_up = len.div_ceil(8);
+    let len_up = (len + 7) / 8;
+
     let skipped_bits = (len_up * 8 - len) as usize;
     let (bytes, data) = take_data(data, len_up as usize);
 
