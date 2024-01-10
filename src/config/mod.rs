@@ -731,6 +731,7 @@ mod test {
             "l2_chain_id": 901,
             "regolith_time": 0,
             "canyon_time": 0,
+            "delta_time": 0,
             "batch_inbox_address": "0xff00000000000000000000000000000000000000",
             "deposit_contract_address": "0x6900000000000000000000000000000000000001",
             "l1_system_config_address": "0x6900000000000000000000000000000000000009"
