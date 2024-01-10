@@ -4,6 +4,10 @@ use std::{
     time::Duration,
 };
 
+use ethers::{
+    providers::{JsonRpcClient, Middleware, Provider},
+    types::BlockNumber,
+};
 use eyre::Result;
 use tokio::{
     sync::{watch, RwLock as TokioRwLock},
@@ -18,28 +22,32 @@ use crate::{
 
 use super::SequencingSource;
 
-pub struct SequencingDriver<E: Engine, S: SequencingSource> {
+pub struct SequencingDriver<E: Engine, S: SequencingSource, U: JsonRpcClient> {
     /// The engine driver
     engine_driver: Arc<TokioRwLock<EngineDriver<E>>>,
     /// State struct to keep track of global state
     state: Arc<RwLock<State>>,
     /// Local sequencing source
     sequencing_src: S,
+    /// L1 provider for ad-hoc queries
+    provider: Provider<U>,
     /// Channel to receive the shutdown signal from
     shutdown_recv: watch::Receiver<bool>,
 }
 
-impl<S: SequencingSource> SequencingDriver<EngineApi, S> {
+impl<S: SequencingSource, U: JsonRpcClient> SequencingDriver<EngineApi, S, U> {
     pub fn new(
         engine_driver: Arc<TokioRwLock<EngineDriver<EngineApi>>>,
         state: Arc<RwLock<State>>,
         sequencing_src: S,
+        provider: Provider<U>,
         shutdown_recv: watch::Receiver<bool>,
-    ) -> SequencingDriver<EngineApi, S> {
+    ) -> SequencingDriver<EngineApi, S, U> {
         SequencingDriver {
             engine_driver,
             state,
             sequencing_src,
+            provider,
             shutdown_recv,
         }
     }
@@ -60,6 +68,10 @@ impl<S: SequencingSource> SequencingDriver<EngineApi, S> {
     pub async fn start(&mut self) -> Result<()> {
         tracing::info!("starting sequencing driver; waiting for engine...");
         self.await_engine_ready().await;
+        if let Err(err) = self.await_engine_sync().await {
+            tracing::error!("fatal error during sync: {:?}", err);
+            self.shutdown().await;
+        }
         loop {
             self.check_shutdown().await;
             if let Err(err) = self.advance().await {
@@ -99,7 +111,7 @@ impl<S: SequencingSource> SequencingDriver<EngineApi, S> {
                 .await
             }
             None => {
-                tracing::info!("no payload to build");
+                tracing::trace!("no payload to build");
                 Ok(())
             }
         }
@@ -110,5 +122,32 @@ impl<S: SequencingSource> SequencingDriver<EngineApi, S> {
             self.check_shutdown().await;
             sleep(Duration::from_secs(1)).await;
         }
+    }
+
+    async fn await_engine_sync(&self) -> Result<()> {
+        loop {
+            if let Some(l1_finalized_block) =
+                self.provider.get_block(BlockNumber::Finalized).await?
+            {
+                if let Some(l1_finalized_block) = l1_finalized_block.number {
+                    let l1_finalized_block = l1_finalized_block.as_u64();
+                    let current_synced_l1_block = self.state.read().unwrap().current_epoch_num;
+                    if l1_finalized_block <= current_synced_l1_block {
+                        // The derivation pipeline should already process all l2 blocks that can be marked
+                        // as finalized as this point. Sequencer can start creating new blocks now.
+                        break;
+                    } else {
+                        tracing::info!(
+                            "waiting for engine to sync. synced={} finalized={}",
+                            current_synced_l1_block,
+                            l1_finalized_block
+                        );
+                    }
+                }
+            }
+            sleep(Duration::from_secs(1)).await;
+        }
+        tracing::info!("engine synced.");
+        Ok(())
     }
 }
