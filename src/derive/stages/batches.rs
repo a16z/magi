@@ -16,6 +16,7 @@ use crate::derive::state::State;
 use crate::derive::PurgeableIterator;
 
 use super::channels::Channel;
+use super::span_batch::{BlockInput, SpanBatch};
 
 pub struct Batches<I> {
     /// Mapping of timestamps to batches
@@ -141,6 +142,13 @@ where
     }
 
     fn batch_status(&self, batch: &Batch) -> BatchStatus {
+        match batch {
+            Batch::Single(batch) => self.single_batch_status(batch),
+            Batch::Span(_) => panic!("not implemented"),
+        }
+    }
+
+    fn single_batch_status(&self, batch: &SingleBatch) -> BatchStatus {
         let state = self.state.read().unwrap();
         let epoch = state.safe_epoch;
         let next_epoch = state.epoch_by_number(epoch.number + 1);
@@ -218,12 +226,121 @@ where
 
         BatchStatus::Accept
     }
+
+    fn span_batch_status(&self, batch: &SpanBatch) -> BatchStatus {
+        let state = self.state.read().unwrap();
+        let epoch = state.safe_epoch;
+        let next_epoch = state.epoch_by_number(epoch.number + 1);
+        let head = state.safe_head;
+        let next_timestamp = head.timestamp + self.config.chain.blocktime;
+
+        let batch_timestamp = batch.rel_timestamp + self.config.chain.l2_genesis.timestamp;
+        if batch_timestamp < self.config.chain.delta_time {
+            return BatchStatus::Drop;
+        }
+
+        // check timestamp range
+
+        match batch_timestamp.cmp(&next_timestamp) {
+            Ordering::Greater => return BatchStatus::Future,
+            Ordering::Less => return BatchStatus::Drop,
+            Ordering::Equal => (),
+        }
+
+        let span_end_timestamp = batch_timestamp + batch.block_count * self.config.chain.blocktime;
+        if span_end_timestamp < next_timestamp {
+            return BatchStatus::Drop;
+        }
+
+        // check that block builds on existing chain
+
+        if head.hash.as_bytes()[..20] != batch.parent_check {
+            return BatchStatus::Drop;
+        }
+
+        // sequencer window checks
+
+        let origin_changed_bit = batch.origin_bits[0];
+        let end_epoch_num = batch.l1_origin_num;
+        let start_epoch_num = batch.l1_origin_num
+            - batch
+                .origin_bits
+                .iter()
+                .map(|b| if *b { 1 } else { 0 })
+                .sum::<u64>()
+            + if origin_changed_bit { 1 } else { 0 };
+
+        if start_epoch_num + self.config.chain.seq_window_size < batch.l1_inclusion_block {
+            return BatchStatus::Drop;
+        }
+
+        // is this right?
+        if start_epoch_num > epoch.number + 1 {
+            return BatchStatus::Drop;
+        }
+
+        if let Some(l1_origin) = state.epoch_by_number(end_epoch_num) {
+            if batch.l1_origin_check != l1_origin.hash.as_bytes()[..20] {
+                return BatchStatus::Drop;
+            }
+        } else {
+            return BatchStatus::Drop;
+        }
+
+        if start_epoch_num < epoch.number {
+            return BatchStatus::Drop;
+        }
+
+        // check sequencer drift
+
+        let block_inputs = batch.block_inputs(&self.config);
+        for (i, input) in block_inputs.iter().enumerate() {
+            let input_epoch = state.epoch_by_number(input.epoch_num).unwrap();
+            let next_epoch = state.epoch_by_number(input.epoch_num + 1);
+
+            if input.timestamp < input_epoch.timestamp {
+                return BatchStatus::Drop;
+            }
+
+            if input.timestamp > input_epoch.timestamp + self.config.chain.max_seq_drift {
+                if input.transactions.len() == 0 {
+                    if !batch.origin_bits[i] {
+                        if let Some(next_epoch) = next_epoch {
+                            if input.timestamp >= next_epoch.timestamp {
+                                return BatchStatus::Drop;
+                            }
+                        } else {
+                            return BatchStatus::Undecided;
+                        }
+                    }
+                } else {
+                    return BatchStatus::Drop;
+                }
+            }
+        }
+
+        // overlapped block checks
+
+        for input in block_inputs {
+            if input.timestamp >= next_timestamp {
+                // TODO: compare with existing L2 blocks
+            }
+        }
+
+        BatchStatus::Accept
+    }
 }
 
 fn decode_batches(channel: &Channel) -> Result<Vec<Batch>> {
     let mut channel_data = Vec::new();
-    let mut d = Decoder::new(channel.data.as_slice())?;
-    d.read_to_end(&mut channel_data)?;
+    let d = Decoder::new(channel.data.as_slice())?;
+    for b in d.bytes() {
+        if let Ok(b) = b {
+            channel_data.push(b);
+        } else {
+            break;
+        }
+    }
 
     let mut batches = Vec::new();
     let mut offset = 0;
@@ -234,21 +351,39 @@ fn decode_batches(channel: &Channel) -> Result<Vec<Batch>> {
 
         let batch_data: Vec<u8> = batch_rlp.as_val()?;
 
+        let version = batch_data[0];
         let batch_content = &batch_data[1..];
-        let rlp = Rlp::new(batch_content);
-        let size = rlp.payload_info()?.total();
 
-        let batch = Batch::decode(&rlp, channel.l1_inclusion_block)?;
-        batches.push(batch);
+        match version {
+            0 => {
+                let rlp = Rlp::new(batch_content);
+                let size = rlp.payload_info()?.total();
 
-        offset += size + batch_info.header_len + 1;
+                let batch = SingleBatch::decode(&rlp, channel.l1_inclusion_block)?;
+                batches.push(Batch::Single(batch));
+
+                offset += size + batch_info.header_len + 1;
+            }
+            1 => {
+                let batch = SpanBatch::decode(batch_content, channel.l1_inclusion_block)?;
+                batches.push(Batch::Span(batch));
+                break;
+            }
+            _ => eyre::bail!("invalid batch version"),
+        };
     }
 
     Ok(batches)
 }
 
 #[derive(Debug, Clone)]
-pub struct Batch {
+pub enum Batch {
+    Single(SingleBatch),
+    Span(SpanBatch),
+}
+
+#[derive(Debug, Clone)]
+pub struct SingleBatch {
     pub parent_hash: H256,
     pub epoch_num: u64,
     pub epoch_hash: H256,
@@ -265,7 +400,7 @@ enum BatchStatus {
     Future,
 }
 
-impl Batch {
+impl SingleBatch {
     fn decode(rlp: &Rlp, l1_inclusion_block: u64) -> Result<Self, DecoderError> {
         let parent_hash = rlp.val_at(0)?;
         let epoch_num = rlp.val_at(1)?;
@@ -273,7 +408,7 @@ impl Batch {
         let timestamp = rlp.val_at(3)?;
         let transactions = rlp.list_at(4)?;
 
-        Ok(Batch {
+        Ok(SingleBatch {
             parent_hash,
             epoch_num,
             epoch_hash,

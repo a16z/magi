@@ -143,6 +143,8 @@ pub struct ChainConfig {
     pub regolith_time: u64,
     /// Timestamp of the canyon hardfork
     pub canyon_time: u64,
+    /// Timestamp of the delta hardfork
+    pub delta_time: u64,
     /// Network blocktime
     #[serde(default = "default_blocktime")]
     pub blocktime: u64,
@@ -255,6 +257,7 @@ impl ChainConfig {
             blocktime: 2,
             regolith_time: 0,
             canyon_time: u64::MAX,
+            delta_time: u64::MAX,
         }
     }
 
@@ -293,6 +296,7 @@ impl ChainConfig {
             max_seq_drift: 600,
             regolith_time: 1679079600,
             canyon_time: 1699981200,
+            delta_time: 1703116800,
             blocktime: 2,
         }
     }
@@ -331,6 +335,7 @@ impl ChainConfig {
             max_seq_drift: 600,
             regolith_time: 0,
             canyon_time: 1699981200,
+            delta_time: 1703203200,
             blocktime: 2,
         }
     }
@@ -369,6 +374,7 @@ impl ChainConfig {
             blocktime: 2,
             regolith_time: 0,
             canyon_time: u64::MAX,
+            delta_time: u64::MAX,
         }
     }
 
@@ -405,6 +411,7 @@ impl ChainConfig {
             max_seq_drift: 600,
             regolith_time: 1683219600,
             canyon_time: 1699981200,
+            delta_time: 1703116800,
             blocktime: 2,
         }
     }
@@ -442,6 +449,7 @@ impl ChainConfig {
             max_seq_drift: 600,
             regolith_time: 0,
             canyon_time: 1699981200,
+            delta_time: 1703203200,
             blocktime: 2,
         }
     }

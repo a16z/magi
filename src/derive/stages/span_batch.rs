@@ -4,9 +4,9 @@ use ethers::{
 };
 use eyre::Result;
 
-use crate::common::RawTransaction;
+use crate::{common::RawTransaction, config::Config};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SpanBatch {
     pub rel_timestamp: u64,
     pub l1_origin_num: u64,
@@ -16,12 +16,17 @@ pub struct SpanBatch {
     pub origin_bits: Vec<bool>,
     pub block_tx_counts: Vec<u64>,
     pub transactions: Vec<RawTransaction>,
+    pub l1_inclusion_block: u64,
 }
 
-impl TryFrom<&[u8]> for SpanBatch {
-    type Error = eyre::Report;
+pub struct BlockInput {
+    pub timestamp: u64,
+    pub epoch_num: u64,
+    pub transactions: Vec<RawTransaction>,
+}
 
-    fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
+impl SpanBatch {
+    pub fn decode(data: &[u8], l1_inclusion_block: u64) -> Result<Self> {
         let (rel_timestamp, data) = unsigned_varint::decode::u64(data)?;
         let (l1_origin_num, data) = unsigned_varint::decode::u64(data)?;
         let (parent_check, data) = take_data(data, 20);
@@ -42,7 +47,47 @@ impl TryFrom<&[u8]> for SpanBatch {
             block_tx_counts,
             origin_bits,
             transactions,
+            l1_inclusion_block,
         })
+    }
+
+    pub fn block_inputs(&self, config: &Config) -> Vec<BlockInput> {
+        let origin_changed_bit = self.origin_bits[0];
+        let end_epoch_num = self.l1_origin_num;
+        let start_epoch_num = self.l1_origin_num
+            - self
+                .origin_bits
+                .iter()
+                .map(|b| if *b { 1 } else { 0 })
+                .sum::<u64>()
+            + if origin_changed_bit { 1 } else { 0 };
+
+        let mut inputs = Vec::new();
+        let mut epoch_num = start_epoch_num;
+        let mut tx_index = 0usize;
+        for i in 0..self.block_count as usize {
+            if self.origin_bits[i] {
+                epoch_num += 1;
+            }
+
+            let tx_end = self.block_tx_counts[i] as usize;
+            let transactions = self.transactions[tx_index..tx_index + tx_end].to_vec();
+            tx_index += self.block_tx_counts[i] as usize;
+
+            let timestamp = self.rel_timestamp
+                + config.chain.l2_genesis.timestamp
+                + i as u64 * config.chain.blocktime;
+
+            let block_input = BlockInput {
+                timestamp,
+                epoch_num,
+                transactions,
+            };
+
+            inputs.push(block_input);
+        }
+
+        inputs
     }
 }
 
@@ -385,10 +430,13 @@ mod test {
         let version = batch_data[0];
         assert_eq!(version, 1);
 
-        let batch = SpanBatch::try_from(&batch_data[1..]).unwrap();
+        let batch = SpanBatch::decode(&batch_data[1..], 0).unwrap();
+
         assert_eq!(
             batch.transactions.len(),
             batch.block_tx_counts.iter().sum::<u64>() as usize
         );
+
+        assert_eq!(batch.l1_inclusion_block, 0);
     }
 }
