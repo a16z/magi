@@ -22,7 +22,7 @@ pub struct SpanBatch {
 }
 
 impl SpanBatch {
-    pub fn decode(data: &[u8], l1_inclusion_block: u64) -> Result<Self> {
+    pub fn decode(data: &[u8], l1_inclusion_block: u64, chain_id: u64) -> Result<Self> {
         let (rel_timestamp, data) = unsigned_varint::decode::u64(data)?;
         let (l1_origin_num, data) = unsigned_varint::decode::u64(data)?;
         let (parent_check, data) = take_data(data, 20);
@@ -32,7 +32,7 @@ impl SpanBatch {
         let (block_tx_counts, data) = decode_block_tx_counts(data, block_count)?;
 
         let total_txs = block_tx_counts.iter().sum();
-        let (transactions, _) = decode_transactions(420, data, total_txs)?;
+        let (transactions, _) = decode_transactions(chain_id, data, total_txs)?;
 
         Ok(SpanBatch {
             rel_timestamp,
@@ -95,18 +95,18 @@ fn decode_bitlist(data: &[u8], len: u64) -> (Vec<bool>, &[u8]) {
     let mut bitlist = Vec::new();
 
     let len_up = (len + 7) / 8;
-
-    let skipped_bits = (len_up * 8 - len) as usize;
     let (bytes, data) = take_data(data, len_up as usize);
 
-    for byte in bytes {
-        for i in 1..=8 {
-            let bit = (byte >> (8 - i)) & 1 == 1;
+    for byte in bytes.iter().rev() {
+        for i in 0..8 {
+            let bit = (byte >> i) & 1 == 1;
             bitlist.push(bit);
         }
     }
 
-    (bitlist[skipped_bits..].to_vec(), data)
+    let bitlist = bitlist[..len as usize].to_vec();
+
+    (bitlist, data)
 }
 
 fn decode_block_tx_counts(data: &[u8], block_count: u64) -> Result<(Vec<u64>, &[u8])> {
@@ -145,20 +145,30 @@ fn decode_transactions(
     let (protected_bits, data) = decode_bitlist(data, legacy_tx_count);
 
     let mut txs = Vec::new();
-
     let mut legacy_i = 0;
+    let mut tos_i = 0;
+
     for i in 0..tx_count as usize {
+        let mut encoder = RlpStream::new();
+        encoder.begin_unbounded_list();
+
         match &tx_datas[i] {
             TxData::Legacy {
                 value,
                 gas_price,
                 data,
             } => {
-                let mut encoder = RlpStream::new_list(9);
                 encoder.append(&tx_nonces[i]);
                 encoder.append(gas_price);
                 encoder.append(&tx_gas_limits[i]);
-                encoder.append(&tos[i]);
+
+                if contract_creation_bits[i] {
+                    encoder.append(&"");
+                } else {
+                    encoder.append(&tos[tos_i]);
+                    tos_i += 1;
+                }
+
                 encoder.append(value);
                 encoder.append(&data.to_vec());
 
@@ -173,6 +183,7 @@ fn decode_transactions(
                 encoder.append(&signatures[i].0);
                 encoder.append(&signatures[i].1);
 
+                encoder.finalize_unbounded_list();
                 let raw_tx = RawTransaction(encoder.out().to_vec());
                 txs.push(raw_tx);
 
@@ -184,12 +195,18 @@ fn decode_transactions(
                 data,
                 access_list,
             } => {
-                let mut encoder = RlpStream::new_list(11);
                 encoder.append(&chain_id);
                 encoder.append(&tx_nonces[i]);
                 encoder.append(gas_price);
                 encoder.append(&tx_gas_limits[i]);
-                encoder.append(&tos[i]);
+
+                if contract_creation_bits[i] {
+                    encoder.append(&"");
+                } else {
+                    encoder.append(&tos[tos_i]);
+                    tos_i += 1;
+                }
+
                 encoder.append(value);
                 encoder.append(&data.to_vec());
                 encoder.append(access_list);
@@ -199,6 +216,7 @@ fn decode_transactions(
                 encoder.append(&signatures[i].0);
                 encoder.append(&signatures[i].1);
 
+                encoder.finalize_unbounded_list();
                 let mut raw = encoder.out().to_vec();
                 raw.insert(0, 1);
                 let raw_tx = RawTransaction(raw);
@@ -211,22 +229,30 @@ fn decode_transactions(
                 data,
                 access_list,
             } => {
-                let mut encoder = RlpStream::new_list(12);
                 encoder.append(&chain_id);
                 encoder.append(&tx_nonces[i]);
                 encoder.append(max_priority_fee);
                 encoder.append(max_fee);
                 encoder.append(&tx_gas_limits[i]);
-                encoder.append(&tos[i]);
+
+                if contract_creation_bits[i] {
+                    encoder.append(&"");
+                } else {
+                    encoder.append(&tos[tos_i]);
+                    tos_i += 1;
+                }
+
                 encoder.append(value);
                 encoder.append(&data.to_vec());
                 encoder.append(access_list);
 
                 let parity = if y_parity_bits[i] { 1u64 } else { 0u64 };
+
                 encoder.append(&parity);
                 encoder.append(&signatures[i].0);
                 encoder.append(&signatures[i].1);
 
+                encoder.finalize_unbounded_list();
                 let mut raw = encoder.out().to_vec();
                 raw.insert(0, 2);
                 let raw_tx = RawTransaction(raw);
@@ -381,9 +407,10 @@ fn decode_u256(data: &[u8]) -> (U256, &[u8]) {
 
 #[cfg(test)]
 mod test {
+    use std::io::Read;
+
     use ethers::utils::rlp::Rlp;
     use libflate::zlib::Decoder;
-    use std::io::Read;
 
     use crate::derive::stages::{
         batcher_transactions::BatcherTransaction,
@@ -422,7 +449,7 @@ mod test {
         let version = batch_data[0];
         assert_eq!(version, 1);
 
-        let batch = SpanBatch::decode(&batch_data[1..], 0).unwrap();
+        let batch = SpanBatch::decode(&batch_data[1..], 0, 420).unwrap();
 
         assert_eq!(
             batch.transactions.len(),

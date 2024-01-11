@@ -75,7 +75,7 @@ where
 
         let channel = self.channel_iter.next();
         if let Some(channel) = channel {
-            let batches = decode_batches(&channel)?;
+            let batches = decode_batches(&channel, self.config.chain.l2_chain_id)?;
             batches.into_iter().for_each(|batch| {
                 let timestamp = batch.timestamp(&self.config);
                 tracing::debug!("saw batch: t={}", timestamp);
@@ -359,7 +359,7 @@ where
     }
 }
 
-fn decode_batches(channel: &Channel) -> Result<Vec<Batch>> {
+fn decode_batches(channel: &Channel, chain_id: u64) -> Result<Vec<Batch>> {
     let mut channel_data = Vec::new();
     let d = Decoder::new(channel.data.as_slice())?;
     for b in d.bytes() {
@@ -393,7 +393,7 @@ fn decode_batches(channel: &Channel) -> Result<Vec<Batch>> {
                 offset += size + batch_info.header_len + 1;
             }
             1 => {
-                let batch = SpanBatch::decode(batch_content, channel.l1_inclusion_block)?;
+                let batch = SpanBatch::decode(batch_content, channel.l1_inclusion_block, chain_id)?;
                 batches.push(Batch::Span(batch));
                 break;
             }
