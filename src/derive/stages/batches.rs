@@ -106,7 +106,7 @@ where
         };
 
         Ok(if let Some(derived_batch) = derived_batch {
-            let mut inputs = derived_batch.as_inputs(&self.config);
+            let mut inputs = self.filter_inputs(derived_batch.as_inputs(&self.config));
             if !inputs.is_empty() {
                 let first = inputs.remove(0);
                 self.pending_inputs.append(&mut inputs);
@@ -145,6 +145,13 @@ where
                 None
             }
         })
+    }
+
+    fn filter_inputs(&self, inputs: Vec<BlockInput<u64>>) -> Vec<BlockInput<u64>> {
+        inputs
+            .into_iter()
+            .filter(|input| input.timestamp > self.state.read().unwrap().safe_head.timestamp)
+            .collect()
     }
 
     fn batch_status(&self, batch: &Batch) -> BatchStatus {
