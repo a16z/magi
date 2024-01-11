@@ -126,16 +126,12 @@ where
             if let Some(next_epoch) = next_epoch {
                 if current_l1_block > epoch.number + seq_window_size {
                     let next_timestamp = safe_head.timestamp + self.config.chain.blocktime;
-                    let _epoch = if next_timestamp < next_epoch.timestamp {
+                    let epoch = if next_timestamp < next_epoch.timestamp {
                         epoch
                     } else {
                         next_epoch
                     };
 
-                    // TODO: remove
-                    panic!("empty batch triggered");
-
-                    #[allow(unreachable_code)]
                     Some(BlockInput {
                         epoch: epoch.number,
                         timestamp: next_timestamp,
