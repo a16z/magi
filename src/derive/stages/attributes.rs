@@ -29,7 +29,7 @@ impl Iterator for Attributes {
     fn next(&mut self) -> Option<Self::Item> {
         self.block_input_iter
             .next()
-            .map(|input| input.as_full_epoch(&self.state).unwrap())
+            .map(|input| input.with_full_epoch(&self.state).unwrap())
             .map(|batch| self.derive_attributes(batch))
     }
 }
