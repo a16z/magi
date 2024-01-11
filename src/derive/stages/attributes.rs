@@ -27,9 +27,10 @@ impl Iterator for Attributes {
     type Item = PayloadAttributes;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.batch_iter
-            .next()
-            .map(|batch| self.derive_attributes(batch))
+        self.batch_iter.next().map(|batch| {
+            self.update_sequence_number(batch.epoch_hash);
+            self.derive_attributes(batch)
+        })
     }
 }
 
@@ -63,43 +64,72 @@ impl Attributes {
         }
     }
 
-    pub fn derive_attributes_for_epoch(
+    pub fn derive_attributes_for_next_block(
         &mut self,
         epoch: Epoch,
         l1_info: &L1Info,
         block_timestamp: u64,
     ) -> PayloadAttributes {
-        let unsafe_epoch = self.state.read().expect("lock poisoned").unsafe_epoch;
-
-        if unsafe_epoch.hash != epoch.hash {
-            self.unsafe_seq_num = 0;
-        } else {
-            self.unsafe_seq_num += 1;
-        }
-
-        let timestamp = U64([block_timestamp]);
-        let l1_inclusion_block = Some(epoch.number);
-        let seq_number = Some(self.unsafe_seq_num);
-        let prev_randao = l1_info.block_info.mix_hash;
-
-        let transactions = Some(self.derive_transactions(
+        self.derive_attributes_internal(
+            epoch,
+            l1_info,
             block_timestamp,
             vec![],
+            self.unsafe_seq_num,
+            Some(epoch.number),
+        )
+    }
+
+    fn derive_attributes(&self, batch: Batch) -> PayloadAttributes {
+        tracing::debug!("attributes derived from block {}", batch.epoch_num);
+        tracing::debug!("batch epoch hash {:?}", batch.epoch_hash);
+
+        let state = self.state.read().unwrap();
+        let l1_info = state.l1_info_by_hash(batch.epoch_hash).unwrap();
+
+        let epoch = Epoch {
+            number: batch.epoch_num,
+            hash: batch.epoch_hash,
+            timestamp: l1_info.block_info.timestamp,
+        };
+
+        self.derive_attributes_internal(
+            epoch,
+            l1_info,
+            batch.timestamp,
+            batch.transactions,
+            self.seq_num,
+            Some(batch.l1_inclusion_block),
+        )
+    }
+
+    fn derive_attributes_internal(
+        &self,
+        epoch: Epoch,
+        l1_info: &L1Info,
+        timestamp: u64,
+        transactions: Vec<RawTransaction>,
+        seq_number: u64,
+        l1_inclusion_block: Option<u64>,
+    ) -> PayloadAttributes {
+        let transactions = Some(self.derive_transactions(
+            timestamp,
+            transactions,
             l1_info,
             epoch.hash,
-            self.unsafe_seq_num,
+            seq_number,
         ));
         let suggested_fee_recipient = SystemAccounts::default().fee_vault;
 
-        let withdrawals = if block_timestamp >= self.canyon_time {
+        let withdrawals = if timestamp >= self.canyon_time {
             Some(Vec::new())
         } else {
             None
         };
 
         PayloadAttributes {
-            timestamp,
-            prev_randao,
+            timestamp: U64([timestamp]),
+            prev_randao: l1_info.block_info.mix_hash,
             suggested_fee_recipient,
             transactions,
             no_tx_pool: false,
@@ -107,56 +137,7 @@ impl Attributes {
             withdrawals,
             epoch: Some(epoch),
             l1_inclusion_block,
-            seq_number,
-        }
-    }
-
-    fn derive_attributes(&mut self, batch: Batch) -> PayloadAttributes {
-        tracing::debug!("attributes derived from block {}", batch.epoch_num);
-        tracing::debug!("batch epoch hash {:?}", batch.epoch_hash);
-
-        self.update_sequence_number(batch.epoch_hash);
-
-        let state = self.state.read().unwrap();
-        let l1_info = state.l1_info_by_hash(batch.epoch_hash).unwrap();
-
-        let epoch = Some(Epoch {
-            number: batch.epoch_num,
-            hash: batch.epoch_hash,
-            timestamp: l1_info.block_info.timestamp,
-        });
-
-        let withdrawals = if batch.timestamp >= self.canyon_time {
-            Some(Vec::new())
-        } else {
-            None
-        };
-
-        let timestamp = U64([batch.timestamp]);
-        let l1_inclusion_block = Some(batch.l1_inclusion_block);
-        let seq_number = Some(self.seq_num);
-        let prev_randao = l1_info.block_info.mix_hash;
-
-        let transactions = Some(self.derive_transactions(
-            batch.timestamp,
-            batch.transactions,
-            l1_info,
-            self.epoch_hash,
-            self.seq_num,
-        ));
-        let suggested_fee_recipient = SystemAccounts::default().fee_vault;
-
-        PayloadAttributes {
-            timestamp,
-            prev_randao,
-            suggested_fee_recipient,
-            transactions,
-            no_tx_pool: false,
-            gas_limit: U64([l1_info.system_config.gas_limit]),
-            withdrawals,
-            epoch,
-            l1_inclusion_block,
-            seq_number,
+            seq_number: Some(seq_number),
         }
     }
 
@@ -222,6 +203,16 @@ impl Attributes {
 
         self.epoch_hash = batch_epoch_hash;
     }
+
+    pub(crate) fn update_unsafe_seq_num(&mut self, epoch: &Epoch) {
+        let unsafe_epoch = self.state.read().expect("lock poisoned").unsafe_epoch;
+
+        if unsafe_epoch.hash != epoch.hash {
+            self.unsafe_seq_num = 0;
+        } else {
+            self.unsafe_seq_num += 1;
+        }
+    }
 }
 
 #[cfg(test)]
@@ -241,7 +232,7 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
-    fn test_derive_attributes_for_epoch_same_epoch() {
+    fn test_derive_attributes_for_next_block_same_epoch() {
         // Let's say we just started, the unsafe/safe/finalized heads are same.
         // New block would be generated in the same epoch.
         // Prepare required state.
@@ -305,7 +296,7 @@ mod tests {
 
         let mut attributes =
             Attributes::new(Box::new(batches), state, chain.regolith_time, 0, 0, 0);
-        let attrs = attributes.derive_attributes_for_epoch(epoch, &l1_info, now + 2);
+        let attrs = attributes.derive_attributes_for_next_block(epoch, &l1_info, now + 2);
 
         // Check fields.
         assert_eq!(attrs.timestamp, (now + 2).into(), "timestamp doesn't match");
@@ -353,7 +344,7 @@ mod tests {
     }
 
     #[test]
-    fn test_derive_attributes_for_epoch_new_epoch() {
+    fn test_derive_attributes_for_next_block_new_epoch() {
         // Now let's say we will generate a payload in a new epoch.
         // Must contain deposit transactions.
         let chain = ChainConfig::optimism_goerli();
@@ -438,7 +429,7 @@ mod tests {
 
         let mut attributes =
             Attributes::new(Box::new(batches), state, chain.regolith_time, 0, 0, 0);
-        let attrs = attributes.derive_attributes_for_epoch(new_epoch, &l1_info, now + 2);
+        let attrs = attributes.derive_attributes_for_next_block(new_epoch, &l1_info, now + 2);
 
         // Check fields.
         assert_eq!(attrs.timestamp, (now + 2).into(), "timestamp doesn't match");

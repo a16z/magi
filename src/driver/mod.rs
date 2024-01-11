@@ -283,7 +283,7 @@ impl<E: Engine> Driver<E> {
     /// Produces a block if the conditions are met.
     /// If successful the block would be signed by sequencer and shared by P2P.
     async fn run_sequencer_step(&mut self) -> Result<()> {
-        if let Some(seq_config) = self.sequencer_config.clone() {
+        if let Some(seq_config) = self.sequencer_config.as_ref() {
             // Get unsafe head to build a new block on top of it.
             let unsafe_head = self.engine_driver.unsafe_info.head;
             let unsafe_epoch = self.engine_driver.unsafe_info.epoch;
@@ -332,7 +332,7 @@ impl<E: Engine> Driver<E> {
 
             let mut attributes =
                 self.pipeline
-                    .derive_attributes_for_epoch(epoch, &l1_info, new_blocktime);
+                    .derive_attributes_for_next_block(epoch, &l1_info, new_blocktime);
 
             tracing::trace!("produced payload attributes {} {:?}", block_num, attributes);
 

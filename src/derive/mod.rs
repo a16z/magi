@@ -81,14 +81,15 @@ impl Pipeline {
         Ok(())
     }
 
-    pub fn derive_attributes_for_epoch(
+    pub fn derive_attributes_for_next_block(
         &mut self,
         epoch: Epoch,
         l1_info: &L1Info,
         block_timestamp: u64,
     ) -> PayloadAttributes {
+        self.attributes.update_unsafe_seq_num(&epoch);
         self.attributes
-            .derive_attributes_for_epoch(epoch, l1_info, block_timestamp)
+            .derive_attributes_for_next_block(epoch, l1_info, block_timestamp)
     }
 
     pub fn peek(&mut self) -> Option<&PayloadAttributes> {
