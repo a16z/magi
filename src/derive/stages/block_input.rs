@@ -19,7 +19,7 @@ pub struct BlockInput<E: EpochType> {
 }
 
 impl BlockInput<u64> {
-    pub fn to_full_epoch(self, state: &Arc<RwLock<State>>) -> Result<BlockInput<Epoch>> {
+    pub fn as_full_epoch(self, state: &Arc<RwLock<State>>) -> Result<BlockInput<Epoch>> {
         let state = state.read().map_err(|_| eyre::eyre!("lock poisoned"))?;
         let epoch = state
             .epoch_by_number(self.epoch)

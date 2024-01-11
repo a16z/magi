@@ -29,7 +29,7 @@ impl Iterator for Attributes {
     fn next(&mut self) -> Option<Self::Item> {
         self.block_input_iter
             .next()
-            .map(|input| input.to_full_epoch(&self.state).unwrap())
+            .map(|input| input.as_full_epoch(&self.state).unwrap())
             .map(|batch| self.derive_attributes(batch))
     }
 }
@@ -79,7 +79,7 @@ impl Attributes {
         let l1_inclusion_block = Some(input.l1_inclusion_block);
         let seq_number = Some(self.sequence_number);
         let prev_randao = l1_info.block_info.mix_hash;
-        let epoch = Some(input.epoch.clone());
+        let epoch = Some(input.epoch);
         let transactions = Some(self.derive_transactions(input, l1_info));
         let suggested_fee_recipient = SystemAccounts::default().fee_vault;
 

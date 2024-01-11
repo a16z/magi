@@ -140,7 +140,7 @@ fn decode_transactions(
     let legacy_tx_count = tx_datas
         .iter()
         .filter(|tx| {
-            if let TxData::Legacy { .. } = tx {
+            if matches!(tx, TxData::Legacy { .. }) {
                 true
             } else {
                 false

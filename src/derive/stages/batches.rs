@@ -331,7 +331,7 @@ where
             }
 
             if input.timestamp > input_epoch.timestamp + self.config.chain.max_seq_drift {
-                if input.transactions.len() == 0 {
+                if input.transactions.is_empty() {
                     if !batch.origin_bits[i] {
                         if let Some(next_epoch) = next_epoch {
                             if input.timestamp >= next_epoch.timestamp {
