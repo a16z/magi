@@ -174,6 +174,7 @@ impl Behaviour {
 }
 
 enum Event {
+    #[allow(dead_code)]
     Ping(ping::Event),
     Gossipsub(gossipsub::Event),
 }
