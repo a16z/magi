@@ -89,6 +89,7 @@ where
                 match self.batch_status(batch) {
                     BatchStatus::Accept => {
                         let batch = batch.clone();
+                        tracing::info!("accepted batch with timestamp: {}", timestamp);
                         self.batches.remove(&timestamp);
                         break Some(batch);
                     }
@@ -267,6 +268,7 @@ where
 
         if let Some(batch_origin) = batch_origin {
             if batch_origin.timestamp < self.config.chain.delta_time {
+                tracing::warn!("span batch seen before delta start");
                 return BatchStatus::Drop;
             }
         } else {
