@@ -419,14 +419,20 @@ fn decode_u256(data: &[u8]) -> (U256, &[u8]) {
 mod test {
     use std::io::Read;
 
-    use ethers::{utils::{rlp::Rlp, keccak256}, types::H256};
+    use ethers::{
+        types::H256,
+        utils::{keccak256, rlp::Rlp},
+    };
     use libflate::zlib::Decoder;
 
-    use crate::{derive::stages::{
-        batcher_transactions::BatcherTransaction,
-        channels::{Channel, PendingChannel},
-        span_batch::SpanBatch,
-    }, config::ChainConfig};
+    use crate::{
+        config::ChainConfig,
+        derive::stages::{
+            batcher_transactions::BatcherTransaction,
+            channels::{Channel, PendingChannel},
+            span_batch::SpanBatch,
+        },
+    };
 
     #[test]
     fn test_decode() {
@@ -459,14 +465,16 @@ mod test {
         let version = batch_data[0];
         assert_eq!(version, 1);
 
-        let config = crate::config::Config { chain: ChainConfig::optimism_sepolia(), ..Default::default() };
+        let config = crate::config::Config {
+            chain: ChainConfig::optimism_sepolia(),
+            ..Default::default()
+        };
         let batch = SpanBatch::decode(&batch_data[1..], 0, config.chain.l2_chain_id).unwrap();
 
         assert_eq!(
             batch.transactions.len(),
             batch.block_tx_counts.iter().sum::<u64>() as usize
         );
-
 
         assert_eq!(batch.l1_inclusion_block, 0);
 

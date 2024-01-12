@@ -89,7 +89,6 @@ where
                 match self.batch_status(batch) {
                     BatchStatus::Accept => {
                         let batch = batch.clone();
-                        tracing::info!("accepted batch with timestamp: {}", timestamp);
                         self.batches.remove(&timestamp);
                         break Some(batch);
                     }
@@ -98,7 +97,6 @@ where
                         self.batches.remove(&timestamp);
                     }
                     BatchStatus::Future | BatchStatus::Undecided => {
-                        tracing::info!("future or undecided batch");
                         break None;
                     }
                 }
@@ -133,6 +131,11 @@ where
                     } else {
                         next_epoch
                     };
+
+                    // TODO: REMOVE TESTING ONLY
+                    if next_timestamp >= self.config.chain.delta_time {
+                        panic!("attempted to insert empty batch after delta")
+                    }
 
                     Some(BlockInput {
                         epoch: epoch.number,
@@ -273,7 +276,6 @@ where
                 return BatchStatus::Drop;
             }
         } else {
-            println!("a");
             return BatchStatus::Undecided;
         }
 
@@ -284,8 +286,6 @@ where
             span_start_timestamp + batch.block_count * self.config.chain.blocktime;
 
         if span_start_timestamp > next_timestamp {
-            println!("b");
-            panic!("here");
             return BatchStatus::Future;
         }
 
