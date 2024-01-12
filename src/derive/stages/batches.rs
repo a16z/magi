@@ -273,6 +273,7 @@ where
                 return BatchStatus::Drop;
             }
         } else {
+            println!("a");
             return BatchStatus::Undecided;
         }
 
@@ -283,6 +284,7 @@ where
             span_start_timestamp + batch.block_count * self.config.chain.blocktime;
 
         if span_start_timestamp > next_timestamp {
+            println!("b");
             return BatchStatus::Future;
         }
 
