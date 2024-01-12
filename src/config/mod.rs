@@ -37,7 +37,7 @@ impl FromStr for SyncMode {
 }
 
 /// A system configuration
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Default)]
 pub struct Config {
     /// The base chain RPC URL
     pub l1_rpc_url: String,
@@ -150,6 +150,12 @@ pub struct ChainConfig {
     pub blocktime: u64,
     /// L2 To L1 Message passer address
     pub l2_to_l1_message_passer: Address,
+}
+
+impl Default for ChainConfig {
+    fn default() -> Self {
+        ChainConfig::optimism()
+    }
 }
 
 /// Optimism system config contract values

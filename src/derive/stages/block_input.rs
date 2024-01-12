@@ -11,6 +11,7 @@ pub trait EpochType {}
 impl EpochType for u64 {}
 impl EpochType for Epoch {}
 
+#[derive(Debug)]
 pub struct BlockInput<E: EpochType> {
     pub timestamp: u64,
     pub epoch: E,

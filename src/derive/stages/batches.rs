@@ -255,6 +255,7 @@ where
             next_epoch
         } else {
             tracing::warn!("invalid batch origin epoch number");
+            println!("{}, {}", batch.l1_origin_num, epoch.number);
             return BatchStatus::Drop;
         };
 
@@ -302,7 +303,6 @@ where
             return BatchStatus::Drop;
         }
 
-        // is this right?
         if start_epoch_num > epoch.number + 1 {
             return BatchStatus::Drop;
         }
