@@ -247,11 +247,14 @@ where
         let head = state.safe_head;
         let next_timestamp = head.timestamp + self.config.chain.blocktime;
 
+        let start_epoch_num = batch.start_epoch_num();
+        let end_epoch_num = batch.l1_origin_num;
+
         // check for delta activation
 
-        let batch_origin = if batch.l1_origin_num == epoch.number {
+        let batch_origin = if start_epoch_num == epoch.number {
             Some(epoch)
-        } else if batch.l1_origin_num == epoch.number + 1 {
+        } else if start_epoch_num == epoch.number + 1 {
             next_epoch
         } else {
             tracing::warn!("invalid batch origin epoch number");
@@ -288,16 +291,6 @@ where
         }
 
         // sequencer window checks
-
-        let origin_changed_bit = batch.origin_bits[0];
-        let end_epoch_num = batch.l1_origin_num;
-        let start_epoch_num = batch.l1_origin_num
-            - batch
-                .origin_bits
-                .iter()
-                .map(|b| if *b { 1 } else { 0 })
-                .sum::<u64>()
-            + if origin_changed_bit { 1 } else { 0 };
 
         if start_epoch_num + self.config.chain.seq_window_size < batch.l1_inclusion_block {
             return BatchStatus::Drop;

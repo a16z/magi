@@ -85,6 +85,16 @@ impl SpanBatch {
 
         inputs
     }
+
+    pub fn start_epoch_num(&self) -> u64 {
+        self.l1_origin_num
+            - self
+                .origin_bits
+                .iter()
+                .map(|b| if *b { 1 } else { 0 })
+                .sum::<u64>()
+            + if self.origin_bits[0] { 1 } else { 0 }
+    }
 }
 
 fn take_data(data: &[u8], length: usize) -> (&[u8], &[u8]) {
