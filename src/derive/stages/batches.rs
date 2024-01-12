@@ -285,6 +285,7 @@ where
 
         if span_start_timestamp > next_timestamp {
             println!("b");
+            panic!("here");
             return BatchStatus::Future;
         }
 
