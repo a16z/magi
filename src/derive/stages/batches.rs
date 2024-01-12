@@ -257,8 +257,11 @@ where
         } else if start_epoch_num == epoch.number + 1 {
             next_epoch
         } else {
-            tracing::warn!("invalid batch origin epoch number");
-            println!("{}, {}", batch.l1_origin_num, epoch.number);
+            tracing::warn!(
+                "invalid batch origin epoch number: batch={}, current={}",
+                start_epoch_num,
+                epoch.number
+            );
             return BatchStatus::Drop;
         };
 

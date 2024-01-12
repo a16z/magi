@@ -470,7 +470,7 @@ mod test {
 
         assert_eq!(batch.l1_inclusion_block, 0);
 
-        println!("{:?}", batch.origin_bits);
+        println!("starting epoch: {}", batch.start_epoch_num());
 
         let inputs = batch.block_inputs(&config);
         inputs.iter().for_each(|input| {
