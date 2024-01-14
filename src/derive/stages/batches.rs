@@ -176,7 +176,10 @@ where
         // check timestamp range
         match batch.timestamp.cmp(&next_timestamp) {
             Ordering::Greater => return BatchStatus::Future,
-            Ordering::Less => return BatchStatus::Drop,
+            Ordering::Less => {
+                tracing::warn!("past batch");
+                return BatchStatus::Drop;
+            },
             Ordering::Equal => (),
         }
 
@@ -338,6 +341,7 @@ where
             let next_epoch = state.epoch_by_number(input.epoch + 1);
 
             if input.timestamp < input_epoch.timestamp {
+                tracing::warn!("input timestamp too low");
                 return BatchStatus::Drop;
             }
 
