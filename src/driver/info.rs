@@ -9,7 +9,6 @@ pub trait InnerProvider {
     async fn get_block_with_txs(
         &self,
         block_id: BlockId,
-        config: &Config,
     ) -> Result<Option<Block<Transaction>>, ProviderError>;
 }
 
@@ -28,22 +27,8 @@ impl<'a, P: JsonRpcClient> InnerProvider for HeadInfoFetcher<'a, P> {
     async fn get_block_with_txs(
         &self,
         block_id: BlockId,
-        config: &Config,
     ) -> Result<Option<Block<Transaction>>, ProviderError> {
-        let block = self.inner.get_block(block_id).await?;
-        if let Some(block) = block {
-            let lookback = config.chain.max_seq_drift / config.chain.blocktime;
-            let start = block
-                .number
-                .unwrap()
-                .as_u64()
-                .saturating_sub(lookback)
-                .max(config.chain.l2_genesis.number);
-
-            self.inner.get_block_with_txs(start).await
-        } else {
-            Ok(None)
-        }
+        self.inner.get_block_with_txs(block_id).await
     }
 }
 
@@ -51,7 +36,7 @@ pub struct HeadInfoQuery {}
 
 impl HeadInfoQuery {
     pub async fn get_head_info<P: InnerProvider>(p: &P, config: &Config) -> HeadInfo {
-        p.get_block_with_txs(BlockId::Number(BlockNumber::Finalized), config)
+        p.get_block_with_txs(BlockId::Number(BlockNumber::Finalized))
             .await
             .ok()
             .flatten()
@@ -156,7 +141,6 @@ mod test_utils {
         async fn get_block_with_txs(
             &self,
             _: BlockId,
-            _: &Config,
         ) -> Result<Option<Block<Transaction>>, ProviderError> {
             Ok(self.block.clone())
         }

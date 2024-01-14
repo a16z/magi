@@ -88,7 +88,7 @@ impl Driver<EngineApi> {
         let chain_watcher =
             ChainWatcher::new(l1_start_block, finalized_head.number, config.clone())?;
 
-        let state = State::new(finalized_head, finalized_epoch, config.clone());
+        let state = State::new(finalized_head, finalized_epoch, &provider, config.clone()).await;
         let state = Arc::new(RwLock::new(state));
 
         let engine_driver = EngineDriver::new(finalized_head, finalized_epoch, provider, &config)?;
