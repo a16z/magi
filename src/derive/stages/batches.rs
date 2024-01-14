@@ -361,7 +361,7 @@ where
         // overlapped block checks
 
         for input in block_inputs {
-            if input.timestamp >= next_timestamp {
+            if input.timestamp < next_timestamp {
                 if let Some(_) = state.l2_info_by_timestamp(input.timestamp) {
                     // check overlapped blocks
                 } else {
