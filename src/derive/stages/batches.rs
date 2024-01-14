@@ -256,7 +256,8 @@ where
         let span_end_timestamp =
             span_start_timestamp + batch.block_count * self.config.chain.blocktime;
 
-        let prev_l2_block = if let Some(block) = state.l2_info_by_timestamp(span_start_timestamp) {
+        let prev_timestamp = span_start_timestamp - self.config.chain.blocktime;
+        let prev_l2_block = if let Some(block) = state.l2_info_by_timestamp(prev_timestamp) {
             block
         } else {
             tracing::warn!("prev l2 block not found");
