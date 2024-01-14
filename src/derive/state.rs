@@ -108,12 +108,12 @@ impl State {
         let prune_until =
             self.safe_head.number - self.config.chain.max_seq_drift / self.config.chain.blocktime;
 
-        while let Some((num, _)) = self.l2_info.first_key_value() {
+        while let Some((num, _)) = self.l2_refs.first_key_value() {
             if *num >= prune_until {
                 break;
             }
 
-            self.l2_info.pop_first();
+            self.l2_refs.pop_first();
         }
     }
 }
