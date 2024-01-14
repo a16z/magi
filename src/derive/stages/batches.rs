@@ -257,12 +257,13 @@ where
             span_start_timestamp + batch.block_count * self.config.chain.blocktime;
 
         let prev_timestamp = span_start_timestamp - self.config.chain.blocktime;
-        let prev_l2_block = if let Some(block) = state.l2_info_by_timestamp(prev_timestamp) {
-            block
-        } else {
-            tracing::warn!("prev l2 block not found");
-            return BatchStatus::Drop;
-        };
+        let (prev_l2_block, prev_l2_epoch) =
+            if let Some(block) = state.l2_info_by_timestamp(prev_timestamp) {
+                block
+            } else {
+                tracing::warn!("prev l2 block not found");
+                return BatchStatus::Drop;
+            };
 
         let start_epoch_num = batch.start_epoch_num();
         let end_epoch_num = batch.l1_origin_num;
@@ -324,7 +325,8 @@ where
             return BatchStatus::Drop;
         }
 
-        if start_epoch_num < prev_l2_block.number {
+        if start_epoch_num < prev_l2_epoch.number {
+            tracing::warn!("invalid start epoch number");
             return BatchStatus::Drop;
         }
 
