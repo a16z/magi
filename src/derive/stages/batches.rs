@@ -257,17 +257,10 @@ where
 
         // check for delta activation
 
-        let batch_origin = if start_epoch_num == epoch.number {
-            Some(epoch)
-        } else if start_epoch_num == epoch.number + 1 {
+        let batch_origin = if start_epoch_num == epoch.number + 1 {
             next_epoch
         } else {
-            tracing::warn!(
-                "invalid batch origin epoch number: batch={}, current={}",
-                start_epoch_num,
-                epoch.number
-            );
-            return BatchStatus::Drop;
+            Some(epoch)
         };
 
         if let Some(batch_origin) = batch_origin {
