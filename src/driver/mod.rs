@@ -87,15 +87,8 @@ impl Driver<EngineApi> {
         let config = Arc::new(config);
         let chain_watcher =
             ChainWatcher::new(l1_start_block, finalized_head.number, config.clone())?;
-        
-        let state = State::new(finalized_head, finalized_epoch, config.clone());
-        // let lookback = config.chain.max_seq_drift / config.chain.blocktime;
-        // let start = finalized_head.number.saturating_sub(lookback);
-        // let start = start.max(config.chain.l2_genesis.number);
-        // for i in start..finalized_head.number {
-        //     provider.
-        // }
 
+        let state = State::new(finalized_head, finalized_epoch, config.clone());
         let state = Arc::new(RwLock::new(state));
 
         let engine_driver = EngineDriver::new(finalized_head, finalized_epoch, provider, &config)?;
@@ -134,7 +127,6 @@ impl<E: Engine> Driver<E> {
     pub async fn start(&mut self) -> Result<()> {
         self.await_engine_ready().await;
         self.chain_watcher.start()?;
-
 
         loop {
             self.check_shutdown().await;

@@ -259,6 +259,15 @@ where
         let span_end_timestamp =
             span_start_timestamp + batch.block_count * self.config.chain.blocktime;
 
+        // check if batch is from the past
+
+        if span_end_timestamp < next_timestamp {
+            tracing::warn!("past batch");
+            return BatchStatus::Drop;
+        }
+
+        // find previous l2 block
+
         let prev_timestamp = span_start_timestamp - self.config.chain.blocktime;
         let (prev_l2_block, prev_l2_epoch) =
             if let Some(block) = state.l2_info_by_timestamp(prev_timestamp) {
@@ -288,15 +297,10 @@ where
             return BatchStatus::Undecided;
         }
 
-        // check timestamp range
+        // check if batch is from the future
 
         if span_start_timestamp > next_timestamp {
             return BatchStatus::Future;
-        }
-
-        if span_end_timestamp < next_timestamp {
-            tracing::warn!("span batch ends before next block");
-            return BatchStatus::Drop;
         }
 
         // check that block builds on existing chain
