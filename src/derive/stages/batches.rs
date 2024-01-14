@@ -174,7 +174,7 @@ where
             Ordering::Less => {
                 tracing::warn!("past batch");
                 return BatchStatus::Drop;
-            },
+            }
             Ordering::Equal => (),
         }
 
