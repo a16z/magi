@@ -48,17 +48,15 @@ impl SpanBatch {
     }
 
     pub fn block_inputs(&self, config: &Config) -> Vec<BlockInput<u64>> {
-        let origin_changed_bit = self.origin_bits[0];
-        let start_epoch_num = self.l1_origin_num
+        let init_epoch_num = self.l1_origin_num
             - self
                 .origin_bits
                 .iter()
                 .map(|b| if *b { 1 } else { 0 })
-                .sum::<u64>()
-            + if origin_changed_bit { 1 } else { 0 };
+                .sum::<u64>();
 
         let mut inputs = Vec::new();
-        let mut epoch_num = start_epoch_num;
+        let mut epoch_num = init_epoch_num;
         let mut tx_index = 0usize;
         for i in 0..self.block_count as usize {
             if self.origin_bits[i] {
