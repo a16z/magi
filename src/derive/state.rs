@@ -87,7 +87,7 @@ impl State {
         self.safe_head = safe_head;
         self.safe_epoch = safe_epoch;
 
-        self.l2_info.insert(self.safe_epoch.number, self.safe_head);
+        self.l2_info.insert(self.safe_head.number, self.safe_head);
     }
 
     fn prune(&mut self) {
