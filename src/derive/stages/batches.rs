@@ -252,6 +252,17 @@ where
         let head = state.safe_head;
         let next_timestamp = head.timestamp + self.config.chain.blocktime;
 
+        let span_start_timestamp = batch.rel_timestamp + self.config.chain.l2_genesis.timestamp;
+        let span_end_timestamp =
+            span_start_timestamp + batch.block_count * self.config.chain.blocktime;
+
+        let prev_l2_block = if let Some(block) = state.l2_info_by_timestamp(span_start_timestamp) {
+            block
+        } else {
+            tracing::warn!("prev l2 block not found");
+            return BatchStatus::Drop;
+        };
+
         let start_epoch_num = batch.start_epoch_num();
         let end_epoch_num = batch.l1_origin_num;
 
@@ -274,43 +285,45 @@ where
 
         // check timestamp range
 
-        let span_start_timestamp = batch.rel_timestamp + self.config.chain.l2_genesis.timestamp;
-        let span_end_timestamp =
-            span_start_timestamp + batch.block_count * self.config.chain.blocktime;
-
         if span_start_timestamp > next_timestamp {
             return BatchStatus::Future;
         }
 
         if span_end_timestamp < next_timestamp {
+            tracing::warn!("span batch ends before next block");
             return BatchStatus::Drop;
         }
 
         // check that block builds on existing chain
 
-        if head.hash.as_bytes()[..20] != batch.parent_check {
+        if prev_l2_block.hash.as_bytes()[..20] != batch.parent_check {
+            tracing::warn!("batch parent check failed");
             return BatchStatus::Drop;
         }
 
         // sequencer window checks
 
         if start_epoch_num + self.config.chain.seq_window_size < batch.l1_inclusion_block {
+            tracing::warn!("sequence window check failed");
             return BatchStatus::Drop;
         }
 
-        if start_epoch_num > epoch.number + 1 {
+        if start_epoch_num > prev_l2_block.number + 1 {
+            tracing::warn!("invalid start epoch number");
             return BatchStatus::Drop;
         }
 
         if let Some(l1_origin) = state.epoch_by_number(end_epoch_num) {
             if batch.l1_origin_check != l1_origin.hash.as_bytes()[..20] {
+                tracing::warn!("origin check failed");
                 return BatchStatus::Drop;
             }
         } else {
+            tracing::warn!("origin not found");
             return BatchStatus::Drop;
         }
 
-        if start_epoch_num < epoch.number {
+        if start_epoch_num < prev_l2_block.number {
             return BatchStatus::Drop;
         }
 
@@ -346,7 +359,12 @@ where
 
         for input in block_inputs {
             if input.timestamp >= next_timestamp {
-                // TODO: compare with existing L2 blocks
+                if let Some(_) = state.l2_info_by_timestamp(input.timestamp) {
+                    // check overlapped blocks
+                } else {
+                    tracing::warn!("overlapped l2 block not found");
+                    return BatchStatus::Drop;
+                }
             }
         }
 
