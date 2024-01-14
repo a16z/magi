@@ -262,7 +262,7 @@ impl ChainConfig {
             max_seq_drift: 600,
             blocktime: 2,
             regolith_time: 0,
-            canyon_time: u64::MAX,
+            canyon_time: 170499240,
             delta_time: u64::MAX,
         }
     }
@@ -379,7 +379,7 @@ impl ChainConfig {
             max_seq_drift: 600,
             blocktime: 2,
             regolith_time: 0,
-            canyon_time: u64::MAX,
+            canyon_time: 1704992401,
             delta_time: u64::MAX,
         }
     }
