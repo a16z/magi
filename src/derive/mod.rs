@@ -120,11 +120,16 @@ mod tests {
 
             chain_watcher.start().unwrap();
 
-            let state = Arc::new(RwLock::new(State::new(
-                config.chain.l2_genesis,
-                config.chain.l1_start_epoch,
-                config.clone(),
-            )));
+            let provider = Provider::try_from(env::var("L2_TEST_RPC_URL").unwrap()).unwrap();
+            let state = Arc::new(RwLock::new(
+                State::new(
+                    config.chain.l2_genesis,
+                    config.chain.l1_start_epoch,
+                    &provider,
+                    config.clone(),
+                )
+                .await,
+            ));
 
             let mut pipeline = Pipeline::new(state.clone(), config.clone(), 0).unwrap();
 
