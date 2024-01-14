@@ -132,11 +132,6 @@ where
                         next_epoch
                     };
 
-                    // TODO: REMOVE TESTING ONLY
-                    if next_timestamp >= self.config.chain.delta_time {
-                        panic!("attempted to insert empty batch after delta")
-                    }
-
                     Some(BlockInput {
                         epoch: epoch.number,
                         timestamp: next_timestamp,
@@ -370,8 +365,11 @@ where
 
         for input in block_inputs {
             if input.timestamp < next_timestamp {
-                if let Some(_) = state.l2_info_by_timestamp(input.timestamp) {
-                    // check overlapped blocks
+                if let Some((_, epoch)) = state.l2_info_by_timestamp(input.timestamp) {
+                    if input.epoch != epoch.number {
+                        tracing::warn!("epoch mismatch in overlapped blocks");
+                        return BatchStatus::Drop;
+                    }
                 } else {
                     tracing::warn!("overlapped l2 block not found");
                     return BatchStatus::Drop;
