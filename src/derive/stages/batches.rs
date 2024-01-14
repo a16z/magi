@@ -250,30 +250,22 @@ where
         let head = state.safe_head;
         let next_timestamp = head.timestamp + self.config.chain.blocktime;
 
+        let start_epoch_num = batch.start_epoch_num();
+        let end_epoch_num = batch.l1_origin_num;
         let span_start_timestamp = batch.rel_timestamp + self.config.chain.l2_genesis.timestamp;
         let span_end_timestamp =
             span_start_timestamp + batch.block_count * self.config.chain.blocktime;
 
-        // check if batch is from the past
+        // check batch timestamp
 
         if span_end_timestamp < next_timestamp {
             tracing::warn!("past batch");
             return BatchStatus::Drop;
         }
 
-        // find previous l2 block
-
-        let prev_timestamp = span_start_timestamp - self.config.chain.blocktime;
-        let (prev_l2_block, prev_l2_epoch) =
-            if let Some(block) = state.l2_info_by_timestamp(prev_timestamp) {
-                block
-            } else {
-                tracing::warn!("prev l2 block not found");
-                return BatchStatus::Drop;
-            };
-
-        let start_epoch_num = batch.start_epoch_num();
-        let end_epoch_num = batch.l1_origin_num;
+        if span_start_timestamp > next_timestamp {
+            return BatchStatus::Future;
+        }
 
         // check for delta activation
 
@@ -292,11 +284,16 @@ where
             return BatchStatus::Undecided;
         }
 
-        // check if batch is from the future
+        // find previous l2 block
 
-        if span_start_timestamp > next_timestamp {
-            return BatchStatus::Future;
-        }
+        let prev_timestamp = span_start_timestamp - self.config.chain.blocktime;
+        let (prev_l2_block, prev_l2_epoch) =
+            if let Some(block) = state.l2_info_by_timestamp(prev_timestamp) {
+                block
+            } else {
+                tracing::warn!("prev l2 block not found");
+                return BatchStatus::Drop;
+            };
 
         // check that block builds on existing chain
 
