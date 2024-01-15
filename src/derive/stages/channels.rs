@@ -140,7 +140,7 @@ where
 
 /// An intermediate pending channel
 #[derive(Debug)]
-struct PendingChannel {
+pub struct PendingChannel {
     channel_id: u128,
     frames: Vec<Frame>,
     size: Option<u16>,

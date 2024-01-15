@@ -57,8 +57,8 @@ impl SequencerConfig {
     }
 }
 
-/// A system configuration. Can be built by combining different sources using `ConfigBuilder`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// A system configuration
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Config {
     /// The base chain RPC URL
     pub l1_rpc_url: String,
@@ -338,6 +338,8 @@ pub struct ChainConfig {
     pub regolith_time: u64,
     /// Timestamp of the canyon hardfork
     pub canyon_time: u64,
+    /// Timestamp of the delta hardfork
+    pub delta_time: u64,
     /// The batch inbox address
     pub batch_inbox_address: Address,
     /// The deposit contract address
@@ -349,10 +351,16 @@ pub struct ChainConfig {
     pub l2_to_l1_message_passer: Address,
 }
 
+impl Default for ChainConfig {
+    fn default() -> Self {
+        ChainConfig::optimism()
+    }
+}
+
 impl TryFrom<&str> for ChainConfig {
     type Error = eyre::Report;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
+    fn try_from(value: &str) -> std::result::Result<Self, Self::Error> {
         let chain = match value {
             "optimism" => ChainConfig::optimism(),
             "optimism-goerli" => ChainConfig::optimism_goerli(),
@@ -468,7 +476,8 @@ impl ChainConfig {
             max_sequencer_drift: 600,
             block_time: 2,
             regolith_time: 0,
-            canyon_time: u64::MAX,
+            canyon_time: 170499240,
+            delta_time: u64::MAX,
         }
     }
 
@@ -513,6 +522,7 @@ impl ChainConfig {
             max_sequencer_drift: 600,
             regolith_time: 1679079600,
             canyon_time: 1699981200,
+            delta_time: 1703116800,
             block_time: 2,
         }
     }
@@ -558,6 +568,7 @@ impl ChainConfig {
             max_sequencer_drift: 600,
             regolith_time: 0,
             canyon_time: 1699981200,
+            delta_time: 1703203200,
             block_time: 2,
         }
     }
@@ -601,7 +612,8 @@ impl ChainConfig {
             max_sequencer_drift: 600,
             block_time: 2,
             regolith_time: 0,
-            canyon_time: u64::MAX,
+            canyon_time: 1704992401,
+            delta_time: u64::MAX,
         }
     }
 
@@ -644,6 +656,7 @@ impl ChainConfig {
             max_sequencer_drift: 600,
             regolith_time: 1683219600,
             canyon_time: 1699981200,
+            delta_time: 1703116800,
             block_time: 2,
         }
     }
@@ -684,6 +697,7 @@ impl ChainConfig {
             channel_timeout: 300,
             regolith_time: 0,
             canyon_time: 1699981200,
+            delta_time: 1703203200,
             batch_inbox_address: addr("0xff00000000000000000000000000000000084532"),
             deposit_contract_address: addr("0x49f53e41452C74589E85cA1677426Ba426459e85"),
             l1_system_config_address: addr("0xf272670eb55e895584501d564AfEB048bEd26194"),
@@ -796,8 +810,9 @@ mod test {
             "channel_timeout": 120,
             "l1_chain_id": 900,
             "l2_chain_id": 901,
-            "regolith_time": 0,
-            "canyon_time": 0,
+            "regolith_time": 1,
+            "canyon_time": 2,
+            "delta_time": 3,
             "batch_inbox_address": "0xff00000000000000000000000000000000000000",
             "deposit_contract_address": "0x6900000000000000000000000000000000000001",
             "l1_system_config_address": "0x6900000000000000000000000000000000000009"
@@ -844,6 +859,7 @@ mod test {
         assert_eq!(chain.max_sequencer_drift, 300);
         assert_eq!(chain.regolith_time, 0);
         assert_eq!(chain.canyon_time, 0);
+        assert_eq!(chain.delta_time, 3);
         assert_eq!(chain.block_time, 2);
         assert_eq!(
             chain.l2_to_l1_message_passer,

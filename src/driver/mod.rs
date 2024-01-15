@@ -107,13 +107,16 @@ impl Driver<EngineApi> {
         let chain_watcher: ChainWatcher =
             ChainWatcher::new(l1_start_block, heads.finalized.head.number, config.clone())?;
 
-        let state = Arc::new(RwLock::new(State::new(
+        let state = State::new(
             heads.finalized.head,
             heads.finalized.epoch,
             heads.latest.head,
             heads.latest.epoch,
-            config.chain.seq_window_size,
-        )));
+            &config.chain,
+            &provider,
+        )
+        .await;
+        let state = Arc::new(RwLock::new(state));
 
         let sync_status = Arc::new(ArcSwap::from_pointee(Default::default()));
 

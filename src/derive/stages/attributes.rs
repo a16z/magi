@@ -11,10 +11,10 @@ use crate::l1::L1Info;
 use crate::types::attributes::{AttributesDeposited, DepositedTransaction};
 use crate::types::{attributes::RawTransaction, common::Epoch};
 
-use super::batches::Batch;
+use super::block_input::BlockInput;
 
 pub struct Attributes {
-    batch_iter: Box<dyn PurgeableIterator<Item = Batch>>,
+    block_input_iter: Box<dyn PurgeableIterator<Item = BlockInput<u64>>>,
     state: Arc<RwLock<State>>,
     seq_num: u64,
     epoch_hash: H256,
@@ -27,16 +27,19 @@ impl Iterator for Attributes {
     type Item = PayloadAttributes;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.batch_iter.next().map(|batch| {
-            self.update_sequence_number(batch.epoch_hash);
-            self.derive_attributes(batch)
-        })
+        self.block_input_iter
+            .next()
+            .map(|input| input.with_full_epoch(&self.state).unwrap())
+            .map(|batch| {
+                self.update_sequence_number(batch.epoch_hash);
+                self.derive_attributes(batch)
+            })
     }
 }
 
 impl PurgeableIterator for Attributes {
     fn purge(&mut self) {
-        self.batch_iter.purge();
+        self.block_input_iter.purge();
         self.seq_num = 0;
         self.epoch_hash = self.state.read().unwrap().safe_epoch.hash;
     }
@@ -44,7 +47,7 @@ impl PurgeableIterator for Attributes {
 
 impl Attributes {
     pub fn new(
-        batch_iter: Box<dyn PurgeableIterator<Item = Batch>>,
+        block_input_iter: Box<dyn PurgeableIterator<Item = BlockInput<u64>>>,
         state: Arc<RwLock<State>>,
         regolith_time: u64,
         seq_num: u64,
@@ -54,7 +57,7 @@ impl Attributes {
         let epoch_hash = state.read().expect("lock poisoned").safe_epoch.hash;
 
         Self {
-            batch_iter,
+            block_input_iter,
             state,
             seq_num,
             epoch_hash,
@@ -80,26 +83,26 @@ impl Attributes {
         )
     }
 
-    fn derive_attributes(&self, batch: Batch) -> PayloadAttributes {
-        tracing::debug!("attributes derived from block {}", batch.epoch_num);
-        tracing::debug!("batch epoch hash {:?}", batch.epoch_hash);
+    fn derive_attributes(&self, input: BlockInput<Epoch>) -> PayloadAttributes {
+        tracing::debug!("attributes derived from block {}", input.epoch.number);
+        tracing::debug!("batch epoch hash {:?}", input.epoch.hash);
 
         let state = self.state.read().unwrap();
-        let l1_info = state.l1_info_by_hash(batch.epoch_hash).unwrap();
+        let l1_info = state.l1_info_by_hash(input.epoch.hash).unwrap();
 
         let epoch = Epoch {
-            number: batch.epoch_num,
-            hash: batch.epoch_hash,
+            number: input.epoch_num,
+            hash: input.epoch_hash,
             timestamp: l1_info.block_info.timestamp,
         };
 
         self.derive_attributes_internal(
             epoch,
             l1_info,
-            batch.timestamp,
-            batch.transactions,
+            input.timestamp,
+            input.transactions,
             self.seq_num,
-            Some(batch.l1_inclusion_block),
+            Some(input.l1_inclusion_block),
         )
     }
 
