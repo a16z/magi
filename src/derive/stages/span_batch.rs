@@ -4,7 +4,7 @@ use ethers::{
 };
 use eyre::Result;
 
-use crate::{common::RawTransaction, config::Config};
+use crate::types::attributes::RawTransaction;
 
 use super::block_input::BlockInput;
 
@@ -47,7 +47,7 @@ impl SpanBatch {
         })
     }
 
-    pub fn block_inputs(&self, config: &Config) -> Vec<BlockInput<u64>> {
+    pub fn block_inputs(&self, l2_time: u64, block_time: u64) -> Vec<BlockInput<u64>> {
         let init_epoch_num = self.l1_origin_num
             - self
                 .origin_bits
@@ -67,9 +67,7 @@ impl SpanBatch {
             let transactions = self.transactions[tx_index..tx_index + tx_end].to_vec();
             tx_index += self.block_tx_counts[i] as usize;
 
-            let timestamp = self.rel_timestamp
-                + config.chain.l2_genesis.timestamp
-                + i as u64 * config.chain.blocktime;
+            let timestamp = self.rel_timestamp + l2_time + i as u64 * block_time;
 
             let block_input = BlockInput::<u64> {
                 timestamp,
@@ -416,6 +414,7 @@ fn decode_u256(data: &[u8]) -> (U256, &[u8]) {
 #[cfg(test)]
 mod test {
     use std::io::Read;
+    use std::sync::Arc;
 
     use ethers::{
         types::H256,
@@ -463,11 +462,8 @@ mod test {
         let version = batch_data[0];
         assert_eq!(version, 1);
 
-        let config = crate::config::Config {
-            chain: ChainConfig::optimism_sepolia(),
-            ..Default::default()
-        };
-        let batch = SpanBatch::decode(&batch_data[1..], 0, config.chain.l2_chain_id).unwrap();
+        let chain = Arc::new(ChainConfig::optimism_sepolia());
+        let batch = SpanBatch::decode(&batch_data[1..], 0, chain.l2_chain_id).unwrap();
 
         assert_eq!(
             batch.transactions.len(),
@@ -478,9 +474,9 @@ mod test {
 
         println!("starting epoch: {}", batch.start_epoch_num());
 
-        let inputs = batch.block_inputs(&config);
+        let inputs = batch.block_inputs(chain.genesis.l2_time, chain.block_time);
         inputs.iter().for_each(|input| {
-            let block_number = (input.timestamp - config.chain.l2_genesis.timestamp) / 2;
+            let block_number = (input.timestamp - chain.genesis.l2_time) / 2;
             println!("block: {}, epoch: {}", block_number, input.epoch);
             input.transactions.iter().for_each(|tx| {
                 println!("{:?}", H256::from(keccak256(&tx.0)));

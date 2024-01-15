@@ -40,6 +40,8 @@ use self::engine_driver::EngineDriver;
 
 mod engine_driver;
 mod info;
+mod types;
+pub use types::*;
 
 /// Driver is responsible for advancing the execution node by feeding
 /// the derived chain into the engine API
@@ -112,8 +114,8 @@ impl Driver<EngineApi> {
             heads.finalized.epoch,
             heads.latest.head,
             heads.latest.epoch,
-            &config.chain,
             &provider,
+            Arc::clone(&config.chain),
         )
         .await;
         let state = Arc::new(RwLock::new(state));
@@ -124,7 +126,7 @@ impl Driver<EngineApi> {
             EngineDriver::new(heads.finalized, heads.safe, heads.latest, provider, &config)?;
         let pipeline = Pipeline::new(
             state.clone(),
-            &config.chain,
+            Arc::clone(&config.chain),
             heads.finalized.seq_number,
             heads.latest.seq_number,
         )?;

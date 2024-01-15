@@ -41,7 +41,7 @@ impl Iterator for Pipeline {
 impl Pipeline {
     pub fn new(
         state: Arc<RwLock<State>>,
-        chain: &ChainConfig,
+        chain: Arc<ChainConfig>,
         seq: u64,
         unsafe_seq: u64,
     ) -> Result<Self> {
@@ -52,13 +52,7 @@ impl Pipeline {
             chain.max_channel_size,
             chain.channel_timeout,
         );
-        let batches = Batches::new(
-            channels,
-            state.clone(),
-            chain.seq_window_size,
-            chain.max_sequencer_drift,
-            chain.block_time,
-        );
+        let batches = Batches::new(channels, state.clone(), Arc::clone(&chain));
         let attributes = Attributes::new(
             Box::new(batches),
             state,
@@ -140,7 +134,7 @@ mod tests {
         };
 
         let config = Arc::new(Config {
-            chain: ChainConfig::optimism_goerli(),
+            chain: Arc::new(ChainConfig::optimism_goerli()),
             l1_rpc_url: rpc,
             l2_rpc_url: l2_rpc,
             rpc_port: 9545,
@@ -163,10 +157,10 @@ mod tests {
             config.chain.l2_genesis(),
             config.chain.l1_start_epoch(),
             &provider,
-            &config.chain,
+            Arc::clone(&config.chain),
         )));
 
-        let mut pipeline = Pipeline::new(state.clone(), &config.chain, 0, 0).unwrap();
+        let mut pipeline = Pipeline::new(state.clone(), Arc::clone(&config.chain), 0, 0).unwrap();
 
         chain_watcher.recv_from_channel().await.unwrap();
         chain_watcher.recv_from_channel().await.unwrap();

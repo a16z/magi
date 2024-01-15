@@ -1,4 +1,4 @@
-use std::{fmt::Debug, fs, iter, net::SocketAddr, path::Path, str::FromStr};
+use std::{fmt::Debug, fs, iter, net::SocketAddr, path::Path, str::FromStr, sync::Arc};
 
 use discv5::enr::{CombinedKey, Enr};
 use ethers::types::{Address, H256, U256};
@@ -58,7 +58,7 @@ impl SequencerConfig {
 }
 
 /// A system configuration
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     /// The base chain RPC URL
     pub l1_rpc_url: String,
@@ -70,7 +70,7 @@ pub struct Config {
     pub l2_engine_url: String,
 
     /// The base chain config
-    pub chain: ChainConfig,
+    pub chain: Arc<ChainConfig>,
 
     /// Engine API JWT Secret
     /// This is used to authenticate with the engine API
@@ -143,7 +143,7 @@ impl Default for Config {
             l1_rpc_url: "http://127.0.0.1:8545".to_string(),
             l2_rpc_url: "http://127.0.0.1:9545".to_string(),
             l2_engine_url: "http://127.0.0.1:9551".to_string(),
-            chain: ChainConfig::optimism(),
+            chain: Arc::new(ChainConfig::optimism()),
             jwt_secret: Default::default(),
             checkpoint_sync_url: None,
             rpc_port: 7545,

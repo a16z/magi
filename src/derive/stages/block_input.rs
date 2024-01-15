@@ -3,8 +3,8 @@ use std::sync::{Arc, RwLock};
 use eyre::Result;
 
 use crate::{
-    common::{Epoch, RawTransaction},
     derive::state::State,
+    types::{attributes::RawTransaction, common::Epoch},
 };
 
 pub trait EpochType {}

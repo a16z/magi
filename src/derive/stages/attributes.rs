@@ -31,7 +31,7 @@ impl Iterator for Attributes {
             .next()
             .map(|input| input.with_full_epoch(&self.state).unwrap())
             .map(|batch| {
-                self.update_sequence_number(batch.epoch_hash);
+                self.update_sequence_number(batch.epoch.hash);
                 self.derive_attributes(batch)
             })
     }
@@ -91,8 +91,8 @@ impl Attributes {
         let l1_info = state.l1_info_by_hash(input.epoch.hash).unwrap();
 
         let epoch = Epoch {
-            number: input.epoch_num,
-            hash: input.epoch_hash,
+            number: input.epoch.number,
+            hash: input.epoch.hash,
             timestamp: l1_info.block_info.timestamp,
         };
 
@@ -239,7 +239,7 @@ mod tests {
         // Let's say we just started, the unsafe/safe/finalized heads are same.
         // New block would be generated in the same epoch.
         // Prepare required state.
-        let chain = ChainConfig::optimism_goerli();
+        let chain = Arc::new(ChainConfig::optimism_goerli());
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -277,7 +277,7 @@ mod tests {
             epoch,
             block_info,
             epoch,
-            chain.seq_window_size,
+            Arc::clone(&chain),
         )));
 
         state.write().unwrap().update_l1_info(l1_info.clone());
@@ -289,13 +289,7 @@ mod tests {
             chain.max_channel_size,
             chain.channel_timeout,
         );
-        let batches = Batches::new(
-            channels,
-            state.clone(),
-            chain.seq_window_size,
-            chain.max_sequencer_drift,
-            chain.block_time,
-        );
+        let batches = Batches::new(channels, state.clone(), Arc::clone(&chain));
 
         let mut attributes =
             Attributes::new(Box::new(batches), state, chain.regolith_time, 0, 0, 0);

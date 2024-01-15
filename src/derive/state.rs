@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use ethers::{
     providers::{Http, Middleware, Provider},
     types::H256,
 };
 
-use crate::config::ChainConfig;
 use crate::{
-    common::{BlockInfo, Epoch},
+    config::ChainConfig,
     driver::HeadInfo,
     l1::L1Info,
     types::common::{BlockInfo, Epoch},
@@ -22,10 +22,7 @@ pub struct State {
     pub unsafe_head: BlockInfo,
     pub unsafe_epoch: Epoch,
     pub current_epoch_num: u64,
-    seq_window_size: u64,
-    blocktime: u64,
-    l2_genesis_number: u64,
-    l2_genesis_timestamp: u64,
+    chain: Arc<ChainConfig>,
 }
 
 impl State {
@@ -34,10 +31,10 @@ impl State {
         finalized_epoch: Epoch,
         unsafe_head: BlockInfo,
         unsafe_epoch: Epoch,
-        chain: &ChainConfig,
         provider: &Provider<Http>,
+        chain: Arc<ChainConfig>,
     ) -> Self {
-        let l2_refs = l2_refs(finalized_head.number, provider, &config).await;
+        let l2_refs = l2_refs(finalized_head.number, provider, &chain).await;
 
         Self {
             l1_info: BTreeMap::new(),
@@ -48,10 +45,7 @@ impl State {
             unsafe_head,
             unsafe_epoch,
             current_epoch_num: 0,
-            seq_window_size: chain.seq_window_size,
-            blocktime: chain.blocktime,
-            l2_genesis_number: chain.l2_genesis().number,
-            l2_genesis_timestamp: chain.l2_genesis().timestamp,
+            chain,
         }
     }
 
@@ -72,8 +66,8 @@ impl State {
     }
 
     pub fn l2_info_by_timestamp(&self, timestmap: u64) -> Option<&(BlockInfo, Epoch)> {
-        let block_num =
-            (timestmap - self.l2_genesis_timestamp) / self.blocktime + self.l2_genesis_number;
+        let block_num = (timestmap - self.chain.genesis.l2_time) / self.chain.block_time
+            + self.chain.genesis.l2.number;
 
         self.l2_refs.get(&block_num)
     }
@@ -130,7 +124,10 @@ impl State {
     }
 
     fn prune(&mut self) {
-        let prune_until = self.safe_epoch.number.saturating_sub(self.seq_window_size);
+        let prune_until = self
+            .safe_epoch
+            .number
+            .saturating_sub(self.chain.seq_window_size);
 
         while let Some((block_num, block_hash)) = self.l1_hashes.first_key_value() {
             if *block_num >= prune_until {
@@ -142,7 +139,7 @@ impl State {
         }
 
         let prune_until =
-            self.safe_head.number - self.config.chain.max_seq_drift / self.config.chain.blocktime;
+            self.safe_head.number - self.chain.max_sequencer_drift / self.chain.block_time;
 
         while let Some((num, _)) = self.l2_refs.first_key_value() {
             if *num >= prune_until {
@@ -157,12 +154,12 @@ impl State {
 async fn l2_refs(
     head_num: u64,
     provider: &Provider<Http>,
-    config: &Config,
+    chain: &ChainConfig,
 ) -> BTreeMap<u64, (BlockInfo, Epoch)> {
-    let lookback = config.chain.max_seq_drift / config.chain.blocktime;
+    let lookback = chain.max_sequencer_drift / chain.block_time;
     let start = head_num
         .saturating_sub(lookback)
-        .max(config.chain.l2_genesis.number);
+        .max(chain.genesis.l2.number);
 
     let mut refs = BTreeMap::new();
     for i in start..=head_num {

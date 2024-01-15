@@ -8,9 +8,9 @@ use ethers::utils::rlp::Rlp;
 use eyre::Result;
 use libflate::zlib::Decoder;
 
+use crate::config::ChainConfig;
 use crate::derive::state::State;
 use crate::derive::PurgeableIterator;
-use crate::types::attributes::RawTransaction;
 
 use super::block_input::BlockInput;
 use super::channels::Channel;
@@ -24,9 +24,7 @@ pub struct Batches<I> {
     pending_inputs: Vec<BlockInput<u64>>,
     channel_iter: I,
     state: Arc<RwLock<State>>,
-    seq_window_size: u64,
-    max_seq_drift: u64,
-    blocktime: u64,
+    chain: Arc<ChainConfig>,
 }
 
 impl<I> Iterator for Batches<I>
@@ -55,21 +53,13 @@ where
 }
 
 impl<I> Batches<I> {
-    pub fn new(
-        channel_iter: I,
-        state: Arc<RwLock<State>>,
-        seq_window_size: u64,
-        max_seq_drift: u64,
-        blocktime: u64,
-    ) -> Self {
+    pub fn new(channel_iter: I, state: Arc<RwLock<State>>, chain: Arc<ChainConfig>) -> Self {
         Self {
             batches: BTreeMap::new(),
             pending_inputs: Vec::new(),
             channel_iter,
             state,
-            seq_window_size,
-            max_seq_drift,
-            blocktime,
+            chain,
         }
     }
 }
@@ -85,9 +75,9 @@ where
 
         let channel = self.channel_iter.next();
         if let Some(channel) = channel {
-            let batches = decode_batches(&channel, self.config.chain.l2_chain_id)?;
+            let batches = decode_batches(&channel, self.chain.l2_chain_id)?;
             batches.into_iter().for_each(|batch| {
-                let timestamp = batch.timestamp(&self.config);
+                let timestamp = batch.timestamp(self.chain.genesis.l2_time);
                 tracing::debug!("saw batch: t={}", timestamp);
                 self.batches.insert(timestamp, batch);
             });
@@ -95,7 +85,7 @@ where
 
         let derived_batch = loop {
             if let Some((_, batch)) = self.batches.first_key_value() {
-                let timestamp = batch.timestamp(&self.config);
+                let timestamp = batch.timestamp(self.chain.genesis.l2_time);
                 match self.batch_status(batch) {
                     BatchStatus::Accept => {
                         let batch = batch.clone();
@@ -116,7 +106,9 @@ where
         };
 
         Ok(if let Some(derived_batch) = derived_batch {
-            let mut inputs = self.filter_inputs(derived_batch.as_inputs(&self.config));
+            let mut inputs = self.filter_inputs(
+                derived_batch.as_inputs(self.chain.genesis.l2_time, self.chain.block_time),
+            );
             if !inputs.is_empty() {
                 let first = inputs.remove(0);
                 self.pending_inputs.append(&mut inputs);
@@ -131,7 +123,7 @@ where
             let safe_head = state.safe_head;
             let epoch = state.safe_epoch;
             let next_epoch = state.epoch_by_number(epoch.number + 1);
-            let seq_window_size = self.seq_window_size;
+            let seq_window_size = self.chain.seq_window_size;
 
             if let Some(next_epoch) = next_epoch {
                 if current_l1_block > epoch.number + seq_window_size {
@@ -141,7 +133,7 @@ where
                         epoch.number
                     );
 
-                    let next_timestamp = safe_head.timestamp + self.blocktime;
+                    let next_timestamp = safe_head.timestamp + self.chain.block_time;
                     let epoch = if next_timestamp < next_epoch.timestamp {
                         epoch
                     } else {
@@ -182,7 +174,7 @@ where
         let epoch = state.safe_epoch;
         let next_epoch = state.epoch_by_number(epoch.number + 1);
         let head = state.safe_head;
-        let next_timestamp = head.timestamp + self.blocktime;
+        let next_timestamp = head.timestamp + self.chain.block_time;
 
         // check timestamp range
         match batch.timestamp.cmp(&next_timestamp) {
@@ -201,7 +193,7 @@ where
         }
 
         // check the inclusion delay
-        if batch.epoch_num + self.seq_window_size < batch.l1_inclusion_block {
+        if batch.epoch_num + self.chain.seq_window_size < batch.l1_inclusion_block {
             tracing::warn!("inclusion window elapsed");
             return BatchStatus::Drop;
         }
@@ -228,7 +220,7 @@ where
             }
 
             // handle sequencer drift
-            if batch.timestamp > batch_origin.timestamp + self.max_seq_drift {
+            if batch.timestamp > batch_origin.timestamp + self.chain.max_sequencer_drift {
                 if batch.transactions.is_empty() {
                     if epoch.number == batch.epoch_num {
                         if let Some(next_epoch) = next_epoch {
@@ -264,13 +256,12 @@ where
         let epoch = state.safe_epoch;
         let next_epoch = state.epoch_by_number(epoch.number + 1);
         let head = state.safe_head;
-        let next_timestamp = head.timestamp + self.config.chain.blocktime;
+        let next_timestamp = head.timestamp + self.chain.block_time;
 
         let start_epoch_num = batch.start_epoch_num();
         let end_epoch_num = batch.l1_origin_num;
-        let span_start_timestamp = batch.rel_timestamp + self.config.chain.l2_genesis.timestamp;
-        let span_end_timestamp =
-            span_start_timestamp + batch.block_count * self.config.chain.blocktime;
+        let span_start_timestamp = batch.rel_timestamp + self.chain.genesis.l2_time;
+        let span_end_timestamp = span_start_timestamp + batch.block_count * self.chain.block_time;
 
         // check batch timestamp
 
@@ -292,7 +283,7 @@ where
         };
 
         if let Some(batch_origin) = batch_origin {
-            if batch_origin.timestamp < self.config.chain.delta_time {
+            if batch_origin.timestamp < self.chain.delta_time {
                 tracing::warn!("span batch seen before delta start");
                 return BatchStatus::Drop;
             }
@@ -302,7 +293,7 @@ where
 
         // find previous l2 block
 
-        let prev_timestamp = span_start_timestamp - self.config.chain.blocktime;
+        let prev_timestamp = span_start_timestamp - self.chain.block_time;
         let (prev_l2_block, prev_l2_epoch) =
             if let Some(block) = state.l2_info_by_timestamp(prev_timestamp) {
                 block
@@ -320,7 +311,7 @@ where
 
         // sequencer window checks
 
-        if start_epoch_num + self.config.chain.seq_window_size < batch.l1_inclusion_block {
+        if start_epoch_num + self.chain.seq_window_size < batch.l1_inclusion_block {
             tracing::warn!("sequence window check failed");
             return BatchStatus::Drop;
         }
@@ -347,7 +338,7 @@ where
 
         // check sequencer drift
 
-        let block_inputs = batch.block_inputs(&self.config);
+        let block_inputs = batch.block_inputs(self.chain.genesis.l2_time, self.chain.block_time);
         for (i, input) in block_inputs.iter().enumerate() {
             let input_epoch = state.epoch_by_number(input.epoch).unwrap();
             let next_epoch = state.epoch_by_number(input.epoch + 1);
@@ -357,7 +348,7 @@ where
                 return BatchStatus::Drop;
             }
 
-            if input.timestamp > input_epoch.timestamp + self.config.chain.max_seq_drift {
+            if input.timestamp > input_epoch.timestamp + self.chain.max_sequencer_drift {
                 if input.transactions.is_empty() {
                     if !batch.origin_bits[i] {
                         if let Some(next_epoch) = next_epoch {
@@ -446,17 +437,17 @@ pub enum Batch {
 }
 
 impl Batch {
-    pub fn timestamp(&self, config: &Config) -> u64 {
+    pub fn timestamp(&self, l2_time: u64) -> u64 {
         match self {
             Batch::Single(batch) => batch.timestamp,
-            Batch::Span(batch) => batch.rel_timestamp + config.chain.l2_genesis.timestamp,
+            Batch::Span(batch) => batch.rel_timestamp + l2_time,
         }
     }
 
-    pub fn as_inputs(&self, config: &Config) -> Vec<BlockInput<u64>> {
+    pub fn as_inputs(&self, l2_time: u64, block_time: u64) -> Vec<BlockInput<u64>> {
         match self {
             Batch::Single(batch) => vec![batch.block_input()],
-            Batch::Span(batch) => batch.block_inputs(config),
+            Batch::Span(batch) => batch.block_inputs(l2_time, block_time),
         }
     }
 }

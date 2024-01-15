@@ -44,7 +44,7 @@ tracing-subscriber = {version = "0.3.16", features = [
 ]}
 
 # Serialization
-serde = {version = "1.0.152", features = ["derive"]}
+serde = {version = "1.0.152", features = ["derive", "rc"]}
 serde_json = "1.0.93"
 
 # Backend Crates

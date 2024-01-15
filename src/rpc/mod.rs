@@ -32,7 +32,7 @@ pub trait Rpc {
     async fn sync_status(&self) -> Result<SyncStatus, Error>;
 
     #[method(name = "rollupConfig")]
-    async fn rollup_config(&self) -> Result<ChainConfig, Error>;
+    async fn rollup_config(&self) -> Result<Arc<ChainConfig>, Error>;
 
     #[method(name = "version")]
     async fn version(&self) -> Result<String, Error>;
@@ -98,8 +98,8 @@ impl RpcServer for RpcServerImpl {
         Ok(*sync_status)
     }
 
-    async fn rollup_config(&self) -> Result<ChainConfig, Error> {
-        Ok(self.config.chain.clone())
+    async fn rollup_config(&self) -> Result<Arc<ChainConfig>, Error> {
+        Ok(Arc::clone(&self.config.chain))
     }
 
     async fn version(&self) -> Result<String, Error> {
