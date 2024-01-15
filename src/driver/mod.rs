@@ -225,14 +225,14 @@ impl<E: Engine> Driver<E> {
 
             handle_attributes(
                 next_attributes,
-                ChainHeadType::Safe,
+                &ChainHeadType::Safe,
                 self.engine_driver.clone(),
             )
             .await?;
 
             let engine_driver = self.engine_driver.read().await;
             tracing::info!(
-                "safe head updated: {} {:?}",
+                "safe head updated: {} {}",
                 engine_driver.safe_head.number,
                 engine_driver.safe_head.hash,
             );

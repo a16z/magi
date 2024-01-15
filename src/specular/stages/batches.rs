@@ -235,8 +235,12 @@ fn decode_batches_v0(
         let batch_first_l2_num: u64 = batch_list.val_at(0)?;
         // Check for duplicates.
         if batch_first_l2_num < local_l2_num {
-            tracing::warn!("invalid batcher transaction: contains already accepted batches | safe_head={} first_l2_block_num={}", local_l2_num, batch_first_l2_num);
-            eyre::bail!("invalid batcher transaction: contains already accepted batches");
+            tracing::warn!(
+                "BatcherTx batches already seen | safe_head={} first_l2_block_num={}",
+                local_l2_num,
+                batch_first_l2_num
+            );
+            eyre::bail!("BatcherTx batches already seen");
         }
         // Insert empty batches for missing blocks.
         for i in local_l2_num + 1..batch_first_l2_num {

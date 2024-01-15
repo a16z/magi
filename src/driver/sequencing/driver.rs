@@ -1,3 +1,4 @@
+use std::result::Result as StdResult;
 use std::{
     process,
     sync::{Arc, RwLock},
@@ -16,7 +17,7 @@ use tokio::{
 
 use crate::{
     derive::state::State,
-    driver::engine_driver::{execute_action, ChainHeadType, EngineDriver},
+    driver::engine_driver::{execute_action, ChainHeadType, EngineDriver, EngineDriverError},
     engine::{Engine, EngineApi},
 };
 
@@ -75,37 +76,47 @@ impl<S: SequencingSource, U: JsonRpcClient> SequencingDriver<EngineApi, S, U> {
         loop {
             self.check_shutdown().await;
             if let Err(err) = self.advance().await {
-                tracing::error!("fatal error: {:?}", err);
-                self.shutdown().await;
+                match err {
+                    EngineDriverError::UnsafeHeadMismatch(_, _, _) => {
+                        tracing::warn!("possible L2 re-org encountered: {}", err);
+                    }
+                    _ => {
+                        tracing::error!("fatal error: {:?}", err);
+                        self.shutdown().await;
+                    }
+                }
             }
         }
     }
 
     /// Attempts to advance sequencing forward using attrs received from `sequencing_src`.
-    async fn advance(&mut self) -> Result<()> {
+    async fn advance(&mut self) -> StdResult<(), EngineDriverError> {
+        // Plan the next step to take (acquiring the engine driver read-lock).
         let step = {
             let engine_driver = self.engine_driver.read().await;
             // Get next attributes from sequencing source.
+            let parent_l2_block = engine_driver.unsafe_head;
             let attrs = self
                 .sequencing_src
-                .get_next_attributes(
-                    &self.state,
-                    &engine_driver.unsafe_head,
-                    &engine_driver.unsafe_epoch,
-                )
+                .get_next_attributes(&self.state, &parent_l2_block, &engine_driver.unsafe_epoch)
                 .await?;
             // Determine action to take on the next attributes.
             match attrs {
-                Some(attrs) => Some((attrs.clone(), engine_driver.determine_action(&attrs).await?)),
+                Some(attrs) => Some((
+                    attrs.clone(),
+                    engine_driver.determine_action(&attrs).await?,
+                    parent_l2_block,
+                )),
                 None => None,
             }
         };
+        // Execute the step.
         match step {
-            Some((attrs, action)) => {
+            Some((attrs, action, target)) => {
                 execute_action(
                     attrs,
                     action,
-                    ChainHeadType::Unsafe,
+                    &ChainHeadType::Unsafe(Some(target)),
                     self.engine_driver.clone(),
                 )
                 .await

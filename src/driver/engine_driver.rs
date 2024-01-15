@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use ethers::providers::{Http, Middleware, Provider};
 use ethers::types::{Transaction, U64};
 use ethers::{
@@ -7,6 +5,8 @@ use ethers::{
     utils::keccak256,
 };
 use eyre::Result;
+use std::{result::Result as StdResult, sync::Arc};
+use thiserror::Error;
 use tokio::sync::RwLock;
 use tokio::time::{sleep, Duration};
 
@@ -41,7 +41,9 @@ pub struct EngineDriver<E: Engine> {
 
 #[derive(Debug)]
 pub enum Action {
-    /// Indicates that the attributes should be skipped.
+    /// Indicates that the attributes should be skipped because
+    /// a corresponding block (with info `BlockInfo`) already exists.
+    /// The head should be updated to the given block.
     Skip(BlockInfo),
     /// Indicates that the attributes should be processed.
     /// If `bool` is true, reset unsafe head prior to processing.
@@ -49,8 +51,18 @@ pub enum Action {
 }
 
 pub enum ChainHeadType {
+    /// The safe head.
     Safe,
-    Unsafe,
+    /// The unsafe head. If a `BlockInfo` is provided, this represents the expected head.
+    Unsafe(Option<BlockInfo>),
+}
+
+#[derive(Debug, Error)]
+pub enum EngineDriverError {
+    #[error("mismatching unsafe head (expected: {1}, actual: {2}): {0}")]
+    UnsafeHeadMismatch(String, H256, H256),
+    #[error(transparent)]
+    Other(#[from] eyre::Error),
 }
 
 /// Handles the given attributes.
@@ -58,9 +70,9 @@ pub enum ChainHeadType {
 /// the engine driver RW lock by acquiring the write lock only as necessary.
 pub async fn handle_attributes<E: Engine>(
     attrs: PayloadAttributes,
-    target: ChainHeadType,
+    target: &ChainHeadType,
     engine_driver: Arc<RwLock<EngineDriver<E>>>,
-) -> Result<()> {
+) -> StdResult<(), EngineDriverError> {
     let action = {
         let engine_driver = engine_driver.read().await;
         engine_driver.determine_action(&attrs).await?
@@ -73,9 +85,9 @@ pub async fn handle_attributes<E: Engine>(
 pub async fn execute_action<E: Engine>(
     attrs: PayloadAttributes,
     action: Action,
-    target: ChainHeadType,
+    target: &ChainHeadType,
     engine_driver: Arc<RwLock<EngineDriver<E>>>,
-) -> Result<()> {
+) -> StdResult<(), EngineDriverError> {
     match action {
         // Skip processing the attributes (fork-choice update-only).
         Action::Skip(info) => {
@@ -83,7 +95,7 @@ pub async fn execute_action<E: Engine>(
             let epoch = *attrs.epoch.as_ref().unwrap();
             match target {
                 ChainHeadType::Safe => engine_driver.update_safe_head(info, epoch, false),
-                ChainHeadType::Unsafe => engine_driver.update_unsafe_head(info, epoch),
+                ChainHeadType::Unsafe(_) => engine_driver.update_unsafe_head(info, epoch),
             }
         }
         // Process the attributes (build payload + fork-choice update).
@@ -95,7 +107,7 @@ pub async fn execute_action<E: Engine>(
                 engine_driver.update_unsafe_head(safe_head, safe_epoch);
             }
             // Build new payload.
-            let (new_head, new_epoch) = build_payload(engine_driver.clone(), attrs).await?;
+            let (new_head, new_epoch) = build_payload(attrs, target, engine_driver.clone()).await?;
             // Book-keeping: prepare for next fork-choice update by updating the head.
             {
                 let mut engine_driver = engine_driver.write().await;
@@ -103,28 +115,38 @@ pub async fn execute_action<E: Engine>(
                     ChainHeadType::Safe => {
                         engine_driver.update_safe_head(new_head, new_epoch, true)
                     }
-                    ChainHeadType::Unsafe => engine_driver.update_unsafe_head(new_head, new_epoch),
+                    ChainHeadType::Unsafe(_) => {
+                        validate_chain_head_consistency(
+                            &engine_driver,
+                            target,
+                            "pre-update unsafe".to_string(),
+                        )?;
+                        engine_driver.update_unsafe_head(new_head, new_epoch)
+                    }
                 }
             }
-            // Final fork-choice update. TODO: downgrade lock to read.
+            // Final fork-choice update.
             engine_driver.read().await.update_forkchoice().await?;
         }
     }
     Ok(())
 }
 
-/// Builds a payload using the given attributes.
-/// Returns the built head and epoch.
-/// If `no_tx_pool` is false, it will wait for the blocktime to pass before finalizing the payload.
+/// Builds a payload using the given attributes. Returns the built head and epoch.
+/// If `attrs.no_tx_pool` is false, it will wait for the blocktime to pass before finalizing the payload.
 async fn build_payload<E: Engine>(
-    engine_driver: Arc<RwLock<EngineDriver<E>>>,
     attrs: PayloadAttributes,
-) -> Result<(BlockInfo, Epoch)> {
+    target: &ChainHeadType,
+    engine_driver: Arc<RwLock<EngineDriver<E>>>,
+) -> StdResult<(BlockInfo, Epoch), EngineDriverError> {
     let no_tx_pool = attrs.no_tx_pool;
     // Start payload building
     let new_epoch = attrs.epoch.unwrap();
     let (blocktime, id) = {
         let engine_driver = engine_driver.read().await;
+        // Validate that the unsafe head matches the expected target head (if provided).
+        // This ensures that the attributes build on the head expected by the sequencer.
+        validate_chain_head_consistency(&engine_driver, target, "pre-init".to_string())?;
         (
             engine_driver.blocktime,
             engine_driver.start_payload_building(attrs.clone()).await?,
@@ -134,13 +156,29 @@ async fn build_payload<E: Engine>(
     if !no_tx_pool {
         sleep(Duration::from_secs(blocktime)).await;
     }
-    // Finalize payload building
-    let new_head = engine_driver
-        .read()
-        .await
-        .finalize_payload_building(id)
-        .await?;
+    // Finalize payload building.
+    let engine_driver = engine_driver.read().await;
+    validate_chain_head_consistency(&engine_driver, target, "pre-finalization".to_string())?;
+    let new_head = engine_driver.finalize_payload_building(id).await?;
     Ok((new_head, new_epoch))
+}
+
+// Validate that the unsafe head matches the expected target head (if provided).
+fn validate_chain_head_consistency<E: Engine>(
+    engine_driver: &EngineDriver<E>,
+    target: &ChainHeadType,
+    context: String,
+) -> StdResult<(), EngineDriverError> {
+    match target {
+        ChainHeadType::Unsafe(Some(info)) if &engine_driver.unsafe_head != info => {
+            Err(EngineDriverError::UnsafeHeadMismatch(
+                context,
+                info.hash,
+                engine_driver.unsafe_head.hash,
+            ))
+        }
+        _ => Ok(()),
+    }
 }
 
 impl<E: Engine> EngineDriver<E> {
@@ -176,6 +214,7 @@ impl<E: Engine> EngineDriver<E> {
         Ok(())
     }
 
+    /// Starts the payload building process via an Engine API call to `forkchoice_updated`.
     async fn start_payload_building(&self, attributes: PayloadAttributes) -> Result<U64> {
         let forkchoice = self.create_forkchoice_state();
 
@@ -194,13 +233,16 @@ impl<E: Engine> EngineDriver<E> {
             .ok_or(eyre::eyre!("engine did not return payload id"))
     }
 
+    /// Finalizes the payload building process via Engine API calls to
+    /// `get_payload` and `new_payload`. Returns the resulting new head.
     pub async fn finalize_payload_building(&self, id: U64) -> Result<BlockInfo> {
         let payload = self.engine.get_payload(id).await?;
         tracing::info!(
-            "built payload: ts={} block#={} hash={}",
-            payload.timestamp,
+            "built payload: block#={} hash={} ts={} #txs={}",
             payload.block_number,
-            payload.block_hash
+            payload.block_hash,
+            payload.timestamp,
+            payload.transactions.len(),
         );
         let new_head = BlockInfo {
             number: payload.block_number.as_u64(),
