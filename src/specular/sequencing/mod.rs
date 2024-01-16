@@ -86,10 +86,11 @@ impl<M: Middleware + 'static> AttributesBuilder<M> {
     // the next l2 block, which marks the start of an epoch.
     async fn create_l1_oracle_update_transaction(
         &self,
+        parent_l2_block: &BlockInfo,
         parent_l1_epoch: &L1BlockInfo,
         origin: &L1BlockInfo,
     ) -> Result<Vec<RawTransaction>> {
-        if parent_l1_epoch.number == origin.number {
+        if parent_l1_epoch.number == origin.number && parent_l2_block.number != 0 {
             // Do not include the L1 oracle update tx if we are still in the same L1 epoch.
             return Ok(vec![]);
         }
@@ -109,7 +110,7 @@ impl<M: Middleware + 'static> AttributesBuilder<M> {
         // Construct L1 oracle update transaction
         let mut tx = TransactionRequest::new()
             .to(SystemAccounts::default().l1_oracle)
-            .gas(15_000_000) // TODO[zhe]: consider to lower this number or make it configurable
+            .gas(1_000_000) // TODO[zhe]: consider lowering this number or making it configurable
             .value(0)
             .data(input)
             .into();
@@ -149,7 +150,7 @@ impl<M: Middleware + 'static> SequencingPolicy for AttributesBuilder<M> {
         let prev_randao = next_randao(&next_origin);
         let suggested_fee_recipient = self.config.system_config.batch_sender;
         let txs = self
-            .create_l1_oracle_update_transaction(parent_l1_epoch, &next_origin)
+            .create_l1_oracle_update_transaction(parent_l2_block, parent_l1_epoch, &next_origin)
             .await?;
         let no_tx_pool = timestamp > next_origin.timestamp + self.config.max_seq_drift;
         let gas_limit = self.config.system_config.gas_limit;

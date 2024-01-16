@@ -63,23 +63,29 @@ impl HeadInfoQuery {
         p: &P,
         config: &Config,
         block_number: BlockNumber,
+        fallback: Option<HeadInfo>,
     ) -> HeadInfo {
+        let fallback = fallback.unwrap_or(HeadInfo {
+            l2_block_info: config.chain.l2_genesis,
+            l1_epoch: config.chain.l1_start_epoch,
+            sequence_number: 0,
+        });
         if let Some(block) = p
             .get_block_with_txs(BlockId::Number(block_number))
             .await
             .ok()
             .flatten()
         {
-            if let Ok(info) = to_specular_head_info(p, config, block).await {
-                return info;
+            tracing::info!("got head block {}", block.number.unwrap());
+            match to_specular_head_info(p, config, block).await {
+                Ok(info) => return info,
+                Err(err) => {
+                    tracing::warn!("failed to get head info: {}", err);
+                }
             }
         }
-        tracing::warn!("could not get head info. Falling back to the genesis head.");
-        HeadInfo {
-            l2_block_info: config.chain.l2_genesis,
-            l1_epoch: config.chain.l1_start_epoch,
-            sequence_number: 0,
-        }
+        tracing::warn!("using fallback (block#={})", fallback.l2_block_info.number);
+        fallback
     }
 }
 
@@ -277,7 +283,7 @@ mod tests {
         let provider = test_utils::mock_provider(None, None);
         let config = test_utils::optimism_config();
         let head_info =
-            HeadInfoQuery::get_head_info(&provider, &config, BlockNumber::Finalized).await;
+            HeadInfoQuery::get_head_info(&provider, &config, BlockNumber::Finalized, None).await;
         assert_eq!(test_utils::default_head_info(), head_info);
     }
 
@@ -286,7 +292,7 @@ mod tests {
         let provider = test_utils::mock_provider(Some(Block::default()), Some(Epoch::default()));
         let config = test_utils::optimism_config();
         let head_info =
-            HeadInfoQuery::get_head_info(&provider, &config, BlockNumber::Finalized).await;
+            HeadInfoQuery::get_head_info(&provider, &config, BlockNumber::Finalized, None).await;
         assert_eq!(test_utils::default_head_info(), head_info);
     }
 
@@ -298,7 +304,7 @@ mod tests {
         );
         let config = test_utils::optimism_config();
         let head_info =
-            HeadInfoQuery::get_head_info(&provider, &config, BlockNumber::Finalized).await;
+            HeadInfoQuery::get_head_info(&provider, &config, BlockNumber::Finalized, None).await;
         // In Optimism's case their `valid_block` does not contain the AttributeDeposit transaction
         // so their `get_head_info` will fallback to the genesis head.
         // However in our case we get the epoch from the storage, so we can get the correct head info.

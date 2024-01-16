@@ -75,8 +75,9 @@ impl Driver<EngineApi> {
         let http = Http::new_with_client(Url::parse(&config.l2_rpc_url)?, client);
         let provider = Provider::new(http);
 
+        // TODO: cleanup
         macro_rules! get_head_info {
-            ($bn:expr) => {
+            ($bn:expr, $fb:expr) => {
                 if config.chain.meta.enable_deposited_txs {
                     info::HeadInfoQuery::get_head_info(
                         &info::HeadInfoFetcher::from(&provider),
@@ -89,26 +90,27 @@ impl Driver<EngineApi> {
                         &specular::info::HeadInfoFetcher::from(&provider),
                         &config,
                         $bn,
+                        $fb,
                     )
                     .await
                 }
             };
         }
 
-        let finalized_head = get_head_info!(BlockNumber::Finalized);
-        let safe_head = get_head_info!(BlockNumber::Safe);
-        let latest_head = get_head_info!(BlockNumber::Latest);
+        let finalized_head = get_head_info!(BlockNumber::Finalized, None);
+        let safe_head = get_head_info!(BlockNumber::Safe, Some(finalized_head.clone()));
+        let latest_head = get_head_info!(BlockNumber::Latest, Some(safe_head.clone()));
+
+        tracing::info!(
+            "starting from fc: finalized {:?}, safe {:?}, latest {:?}",
+            finalized_head.l2_block_info.hash,
+            safe_head.l2_block_info.hash,
+            latest_head.l2_block_info.hash
+        );
 
         let finalized_l2_block = finalized_head.l2_block_info;
         let finalized_epoch = finalized_head.l1_epoch;
         let finalized_seq = finalized_head.sequence_number;
-
-        tracing::info!(
-            "starting from head: finalized {:?}, safe {:?}, latest {:?}",
-            finalized_l2_block.hash,
-            safe_head.l2_block_info.hash,
-            latest_head.l2_block_info.hash
-        );
 
         let l1_start_block =
             get_l1_start_block(finalized_epoch.number, config.chain.channel_timeout);
@@ -163,6 +165,8 @@ impl<E: Engine> Driver<E> {
         tracing::trace!("starting chain watcher...");
         self.chain_watcher.start()?;
         tracing::trace!("chain watcher started; advancing driver...");
+        self.await_engine_ready().await;
+        self.engine_driver.read().await.update_forkchoice().await?;
         loop {
             self.check_shutdown().await;
 
@@ -225,14 +229,14 @@ impl<E: Engine> Driver<E> {
 
             handle_attributes(
                 next_attributes,
-                ChainHeadType::Safe,
+                &ChainHeadType::Safe,
                 self.engine_driver.clone(),
             )
             .await?;
 
             let engine_driver = self.engine_driver.read().await;
             tracing::info!(
-                "safe head updated: {} {:?}",
+                "safe head updated: {} {}",
                 engine_driver.safe_head.number,
                 engine_driver.safe_head.hash,
             );

@@ -26,6 +26,7 @@ jsonrpsee = {version = "0.17.0", features = ["server", "macros"]}
 futures = "0.3.28"
 futures-timer = "0.3.0"
 again = "0.1"
+thiserror = "1.0.56"
 
 # Logging and Metrics
 chrono = "0.4.22"

@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 
 use async_trait::async_trait;
-use ethers::providers::{Http, JsonRpcClient, Provider};
+use ethers::providers::{JsonRpcClient, Provider};
 use eyre::Result;
 use futures::future::Either;
 use futures::join;
@@ -19,7 +19,7 @@ pub mod driver;
 #[async_trait(?Send)]
 pub trait SequencingSource {
     /// Returns the next payload attributes to be built (if any) on top of
-    /// `unsafe_head`. If no attributes are ready to be built, returns `None`.
+    /// `parent_l2_block`. If no attributes are ready to be built, returns `None`.
     async fn get_next_attributes(
         &self,
         state: &Arc<RwLock<State>>,
@@ -98,7 +98,7 @@ impl<T: SequencingPolicy, U: JsonRpcClient> SequencingSource for Source<T, U> {
 
 #[async_trait]
 pub trait SequencingPolicy {
-    /// Returns true iff the policy is ready to build a payload on top of `parent_l2_block`.
+    /// Returns true only if the policy is ready to build a payload on top of `parent_l2_block`.
     fn is_ready(&self, parent_l2_block: &BlockInfo, safe_l2_head: &BlockInfo) -> bool;
     /// Returns the attributes for a payload to be built on top of `parent_l2_block`.
     /// If `next_l1_epoch` is `None`, `parent_l1_epoch` is attempted to be used as the epoch.
@@ -109,26 +109,4 @@ pub trait SequencingPolicy {
         parent_l1_epoch: &L1BlockInfo,
         next_l1_epoch: Option<&L1BlockInfo>,
     ) -> Result<PayloadAttributes>;
-}
-
-pub struct NoOp;
-#[async_trait]
-impl SequencingPolicy for NoOp {
-    fn is_ready(&self, _: &BlockInfo, _: &BlockInfo) -> bool {
-        false
-    }
-
-    async fn get_attributes(
-        &self,
-        _: &BlockInfo,
-        _: &L1BlockInfo,
-        _: Option<&L1BlockInfo>,
-    ) -> Result<PayloadAttributes> {
-        Ok(Default::default())
-    }
-}
-
-/// Using this just enables avoiding explicit type qualification everywhere.
-pub fn none() -> Option<Source<NoOp, Http>> {
-    None
 }
