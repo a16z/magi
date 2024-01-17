@@ -352,7 +352,7 @@ mod tests {
 
     use rand::Rng;
 
-    use super::{decode_block_msg, encode_block_msg, ExecutionPayloadSSZ};
+    use super::{decode_block_msg, encode_block_msg, ExecutionPayloadV2SSZ};
 
     #[test]
     fn test_prepare_payload() -> Result<()> {
@@ -377,10 +377,11 @@ mod tests {
             base_fee_per_gas: U64::from(rng.gen::<u64>()),
             block_hash: H256::random(),
             transactions: vec![tx],
+            withdrawals: Some(vec![]),
         };
 
         // Start preparing payload for distribution.
-        let payload_ssz: ExecutionPayloadSSZ = payload.clone().try_into()?;
+        let payload_ssz: ExecutionPayloadV2SSZ = payload.clone().try_into()?;
         let payload_bytes = serialize(&payload_ssz)?;
 
         // Sign.
@@ -405,7 +406,8 @@ mod tests {
         assert_eq!(compressed_1, compressed_2);
 
         for tx in [compressed_1, compressed_2] {
-            let (decoded_payload, decoded_signature, _) = decode_block_msg(tx)?;
+            let (decoded_payload, decoded_signature, _) =
+                decode_block_msg::<ExecutionPayloadV2SSZ>(tx)?;
             assert_eq!(payload, decoded_payload, "decoded payload different");
             assert_eq!(
                 &sig,

@@ -103,10 +103,7 @@ impl Pipeline {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        env,
-        sync::{Arc, RwLock},
-    };
+    use std::sync::{Arc, RwLock};
 
     use ethers::{
         providers::{Middleware, Provider},
@@ -133,10 +130,11 @@ mod tests {
             }
         };
 
+        let provider = Provider::try_from(&l2_rpc).unwrap();
         let config = Arc::new(Config {
             chain: Arc::new(ChainConfig::optimism_goerli()),
             l1_rpc_url: rpc,
-            l2_rpc_url: l2_rpc,
+            l2_rpc_url: l2_rpc.clone(),
             rpc_port: 9545,
             ..Config::default()
         });
@@ -150,15 +148,17 @@ mod tests {
 
         chain_watcher.start().unwrap();
 
-        let provider = Provider::try_from(env::var("L2_TEST_RPC_URL").unwrap()).unwrap();
-        let state = Arc::new(RwLock::new(State::new(
-            config.chain.l2_genesis(),
-            config.chain.l1_start_epoch(),
-            config.chain.l2_genesis(),
-            config.chain.l1_start_epoch(),
-            &provider,
-            Arc::clone(&config.chain),
-        )));
+        let state = Arc::new(RwLock::new(
+            State::new(
+                config.chain.l2_genesis(),
+                config.chain.l1_start_epoch(),
+                config.chain.l2_genesis(),
+                config.chain.l1_start_epoch(),
+                &provider,
+                Arc::clone(&config.chain),
+            )
+            .await,
+        ));
 
         let mut pipeline = Pipeline::new(state.clone(), Arc::clone(&config.chain), 0, 0).unwrap();
 
@@ -183,14 +183,15 @@ mod tests {
 
         if let Some(payload) = pipeline.next() {
             let hashes = get_tx_hashes(&payload.transactions.unwrap());
-            let expected_hashes = get_expected_hashes(config.chain.genesis.l2.number + 1).await;
+            let expected_hashes =
+                get_expected_hashes(config.chain.genesis.l2.number + 1, &l2_rpc).await;
 
             assert_eq!(hashes, expected_hashes);
         }
     }
 
-    async fn get_expected_hashes(block_num: u64) -> Vec<H256> {
-        let provider = Provider::try_from(env::var("L2_TEST_RPC_URL").unwrap()).unwrap();
+    async fn get_expected_hashes(block_num: u64, l2_rpc: &str) -> Vec<H256> {
+        let provider = Provider::try_from(l2_rpc).unwrap();
 
         provider
             .get_block(block_num)

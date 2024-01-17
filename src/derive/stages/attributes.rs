@@ -229,13 +229,24 @@ mod tests {
     use crate::l1::{L1BlockInfo, L1Info};
     use crate::types::attributes::{DepositedTransaction, UserDeposited};
     use crate::types::common::{BlockInfo, Epoch};
+    use ethers::prelude::Provider;
     use ethers::types::{Address, H256, U256, U64};
     use ethers::utils::rlp::Rlp;
     use std::sync::{mpsc, Arc, RwLock};
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    #[test]
-    fn test_derive_attributes_for_next_block_same_epoch() {
+    #[tokio::test]
+    async fn test_derive_attributes_for_next_block_same_epoch() {
+        let l2_rpc = match std::env::var("L2_TEST_RPC_URL") {
+            Ok(l2_rpc) => l2_rpc,
+            l2_rpc_res => {
+                eprintln!(
+                    "Test ignored: `test_derive_attributes_for_next_block_same_epoch`, l2_rpc: {l2_rpc_res:?}"
+                );
+                return;
+            }
+        };
+
         // Let's say we just started, the unsafe/safe/finalized heads are same.
         // New block would be generated in the same epoch.
         // Prepare required state.
@@ -272,13 +283,18 @@ mod tests {
             finalized: false,
         };
 
-        let state = Arc::new(RwLock::new(State::new(
-            block_info,
-            epoch,
-            block_info,
-            epoch,
-            Arc::clone(&chain),
-        )));
+        let provider = Provider::try_from(l2_rpc).unwrap();
+        let state = Arc::new(RwLock::new(
+            State::new(
+                block_info,
+                epoch,
+                block_info,
+                epoch,
+                &provider,
+                Arc::clone(&chain),
+            )
+            .await,
+        ));
 
         state.write().unwrap().update_l1_info(l1_info.clone());
 
@@ -340,11 +356,21 @@ mod tests {
         assert_eq!(attrs.seq_number.unwrap(), seq_number);
     }
 
-    #[test]
-    fn test_derive_attributes_for_next_block_new_epoch() {
+    #[tokio::test]
+    async fn test_derive_attributes_for_next_block_new_epoch() {
+        let l2_rpc = match std::env::var("L2_TEST_RPC_URL") {
+            Ok(l2_rpc) => l2_rpc,
+            l2_rpc_res => {
+                eprintln!(
+                    "Test ignored: `test_derive_attributes_for_next_block_new_epoch`, l2_rpc: {l2_rpc_res:?}"
+                );
+                return;
+            }
+        };
+
         // Now let's say we will generate a payload in a new epoch.
         // Must contain deposit transactions.
-        let chain = ChainConfig::optimism_goerli();
+        let chain = Arc::new(ChainConfig::optimism_goerli());
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -399,13 +425,18 @@ mod tests {
             finalized: false,
         };
 
-        let state = Arc::new(RwLock::new(State::new(
-            block_info,
-            epoch,
-            block_info,
-            epoch,
-            chain.seq_window_size,
-        )));
+        let provider = Provider::try_from(l2_rpc).unwrap();
+        let state = Arc::new(RwLock::new(
+            State::new(
+                block_info,
+                epoch,
+                block_info,
+                epoch,
+                &provider,
+                Arc::clone(&chain),
+            )
+            .await,
+        ));
 
         state.write().unwrap().update_l1_info(l1_info.clone());
 
@@ -416,13 +447,7 @@ mod tests {
             chain.max_channel_size,
             chain.channel_timeout,
         );
-        let batches = Batches::new(
-            channels,
-            state.clone(),
-            chain.seq_window_size,
-            chain.max_sequencer_drift,
-            chain.block_time,
-        );
+        let batches = Batches::new(channels, state.clone(), Arc::clone(&chain));
 
         let mut attributes =
             Attributes::new(Box::new(batches), state, chain.regolith_time, 0, 0, 0);

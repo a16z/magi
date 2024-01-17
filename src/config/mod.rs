@@ -857,8 +857,8 @@ mod test {
         assert_eq!(chain.channel_timeout, 120);
         assert_eq!(chain.seq_window_size, 200);
         assert_eq!(chain.max_sequencer_drift, 300);
-        assert_eq!(chain.regolith_time, 0);
-        assert_eq!(chain.canyon_time, 0);
+        assert_eq!(chain.regolith_time, 1);
+        assert_eq!(chain.canyon_time, 2);
         assert_eq!(chain.delta_time, 3);
         assert_eq!(chain.block_time, 2);
         assert_eq!(
@@ -902,6 +902,8 @@ mod test {
           "max_channel_size": 100000000,
           "channel_timeout": 300,
           "regolith_time": 0,
+          "canyon_time": 170499240,
+          "delta_time": 18446744073709551615,
           "batch_inbox_address": "0xff00000000000000000000000000000000000010",
           "deposit_contract_address": "0xbeb5fc579115071764c7423a4f12edde41f106ed",
           "l1_system_config_address": "0x229047fed2591dbec1ef1118d64f7af3db9eb290",
@@ -923,7 +925,7 @@ mod test {
             l1_rpc_url: "http://localhost:8888".to_string(),
             l2_rpc_url: "http://127.0.0.1:9999".to_string(),
             l2_engine_url: "http://localhost:5545".to_string(),
-            chain: ChainConfig::optimism_sepolia(),
+            chain: Arc::new(ChainConfig::optimism_sepolia()),
             jwt_secret: "TestApiKey".to_owned(),
             checkpoint_sync_url: Some("http://10.0.0.1:5432".to_string()),
             rpc_port: 123,
