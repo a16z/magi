@@ -288,80 +288,81 @@ impl<E: Engine> Driver<E> {
     /// Produces a block if the conditions are met.
     /// If successful the block would be signed by sequencer and shared by P2P.
     async fn run_sequencer_step(&mut self) -> Result<()> {
-        if let Some(seq_config) = self.sequencer_config.as_ref() {
-            // Get unsafe head to build a new block on top of it.
-            let unsafe_head = self.engine_driver.unsafe_info.head;
-            let unsafe_epoch = self.engine_driver.unsafe_info.epoch;
+        let max_safe_lag = match self.sequencer_config {
+            None => return Ok(()),
+            Some(ref seq_config) => seq_config.max_safe_lag(),
+        };
 
-            if seq_config.max_safe_lag() > 0 {
-                // Check max safe lag, and in case delay produce blocks.
-                if self.engine_driver.safe_info.head.number + seq_config.max_safe_lag()
-                    <= unsafe_head.number
-                {
-                    tracing::debug!("max safe lag reached, waiting for safe block...");
-                    return Ok(());
-                }
-            }
+        // Get unsafe head to build a new block on top of it.
+        let unsafe_head = self.engine_driver.unsafe_info.head;
+        let unsafe_epoch = self.engine_driver.unsafe_info.epoch;
 
-            // Next block timestamp.
-            let new_blocktime = unsafe_head.timestamp + self.block_time;
-
-            // Check if we can generate block and time passed.
-            let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-            if new_blocktime > now {
+        if max_safe_lag > 0 {
+            // Check max safe lag, and in case delay produce blocks.
+            if self.engine_driver.safe_info.head.number + max_safe_lag <= unsafe_head.number {
+                tracing::debug!("max safe lag reached, waiting for safe block...");
                 return Ok(());
             }
-
-            // Prepare data (origin epoch and l1 information) for next block.
-            let (epoch, l1_info) = match self.prepare_block_data(unsafe_epoch, new_blocktime) {
-                Ok((epoch, l1_info)) => (epoch, l1_info),
-                Err(err) => match err.downcast()? {
-                    SequencerErr::OutOfSyncL1 => {
-                        tracing::debug!("out of sync L1 {:?}", unsafe_epoch);
-                        return Ok(());
-                    }
-                    SequencerErr::Critical(msg) => eyre::bail!(msg),
-                    SequencerErr::PastSeqDrift => eyre::bail!(
-                        "failed to find next L1 origin for new block under past sequencer drifted"
-                    ),
-                },
-            };
-
-            let block_num = unsafe_head.number + 1;
-            tracing::info!(
-                "attempt to build a payload {} {} {:?}",
-                block_num,
-                new_blocktime,
-                epoch,
-            );
-
-            let mut attributes =
-                self.pipeline
-                    .derive_attributes_for_next_block(epoch, &l1_info, new_blocktime);
-
-            tracing::trace!("produced payload attributes {} {:?}", block_num, attributes);
-
-            attributes.no_tx_pool = new_blocktime > epoch.timestamp + self.max_seq_drift;
-
-            if attributes.no_tx_pool {
-                tracing::warn!("tx pool disabled because of max sequencer drift");
-            }
-
-            let payload = self.engine_driver.build_payload(attributes).await?;
-
-            tracing::trace!("produced payload {} {:?}", block_num, payload);
-
-            self.engine_driver.handle_unsafe_payload(&payload).await?;
-            self.p2p_sender.send(payload).await?;
-
-            self.state
-                .write()
-                .expect("lock posioned")
-                .update_unsafe_head(
-                    self.engine_driver.unsafe_info.head,
-                    self.engine_driver.unsafe_info.epoch,
-                );
         }
+
+        // Next block timestamp.
+        let new_blocktime = unsafe_head.timestamp + self.block_time;
+
+        // Check if we can generate block and time passed.
+        let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+        if new_blocktime > now {
+            return Ok(());
+        }
+
+        // Prepare data (origin epoch and l1 information) for next block.
+        let (epoch, l1_info) = match self.prepare_block_data(unsafe_epoch, new_blocktime) {
+            Ok((epoch, l1_info)) => (epoch, l1_info),
+            Err(err) => match err.downcast()? {
+                SequencerErr::OutOfSyncL1 => {
+                    tracing::debug!("out of sync L1 {:?}", unsafe_epoch);
+                    return Ok(());
+                }
+                SequencerErr::Critical(msg) => eyre::bail!(msg),
+                SequencerErr::PastSeqDrift => eyre::bail!(
+                    "failed to find next L1 origin for new block under past sequencer drifted"
+                ),
+            },
+        };
+
+        let block_num = unsafe_head.number + 1;
+        tracing::info!(
+            "attempt to build a payload {} {} {:?}",
+            block_num,
+            new_blocktime,
+            epoch,
+        );
+
+        let mut attributes =
+            self.pipeline
+                .derive_attributes_for_next_block(epoch, &l1_info, new_blocktime);
+
+        tracing::trace!("produced payload attributes {} {:?}", block_num, attributes);
+
+        attributes.no_tx_pool = new_blocktime > epoch.timestamp + self.max_seq_drift;
+
+        if attributes.no_tx_pool {
+            tracing::warn!("tx pool disabled because of max sequencer drift");
+        }
+
+        let payload = self.engine_driver.build_payload(attributes).await?;
+
+        tracing::trace!("produced payload {} {:?}", block_num, payload);
+
+        self.engine_driver.handle_unsafe_payload(&payload).await?;
+        self.p2p_sender.send(payload).await?;
+
+        self.state
+            .write()
+            .expect("lock posioned")
+            .update_unsafe_head(
+                self.engine_driver.unsafe_info.head,
+                self.engine_driver.unsafe_info.epoch,
+            );
 
         Ok(())
     }
