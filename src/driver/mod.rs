@@ -288,18 +288,19 @@ impl<E: Engine> Driver<E> {
     /// Produces a block if the conditions are met.
     /// If successful the block would be signed by sequencer and shared by P2P.
     async fn run_sequencer_step(&mut self) -> Result<()> {
-        let max_safe_lag = match self.sequencer_config {
-            None => return Ok(()),
-            Some(ref seq_config) => seq_config.max_safe_lag(),
+        let Some(ref sequencer_config) = self.sequencer_config else {
+            return Ok(());
         };
 
         // Get unsafe head to build a new block on top of it.
         let unsafe_head = self.engine_driver.unsafe_info.head;
         let unsafe_epoch = self.engine_driver.unsafe_info.epoch;
 
-        if max_safe_lag > 0 {
+        if sequencer_config.max_safe_lag() > 0 {
             // Check max safe lag, and in case delay produce blocks.
-            if self.engine_driver.safe_info.head.number + max_safe_lag <= unsafe_head.number {
+            if self.engine_driver.safe_info.head.number + sequencer_config.max_safe_lag()
+                <= unsafe_head.number
+            {
                 tracing::debug!("max safe lag reached, waiting for safe block...");
                 return Ok(());
             }
