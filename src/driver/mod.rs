@@ -24,7 +24,7 @@ use crate::{
     config::{Config, SequencerConfig},
     derive::{state::State, Pipeline},
     driver::info::HeadInfoQuery,
-    engine::{Engine, EngineApi, ExecutionPayload},
+    engine::{Engine, EngineApi, ExecutionPayload, PayloadId},
     l1::{BlockUpdate, ChainWatcher, L1Info},
     network::{
         handlers::{block_handler::BlockHandler, Handler},
@@ -74,9 +74,9 @@ pub struct Driver<E: Engine> {
     network_service: Option<Service>,
     /// Channel timeout length.
     channel_timeout: u64,
-    // Sender of the P2P broadcast channel.
+    /// Sender of the P2P broadcast channel.
     p2p_sender: tokio::sync::mpsc::Sender<ExecutionPayload>,
-    // Receiver of the P2P broadcast channel.
+    /// Receiver of the P2P broadcast channel.
     p2p_receiver: Option<tokio::sync::mpsc::Receiver<ExecutionPayload>>,
     /// L2 Block time.
     block_time: u64,
@@ -86,6 +86,8 @@ pub struct Driver<E: Engine> {
     sequencer_config: Option<SequencerConfig>,
     /// The Magi sync status.
     sync_status: Arc<ArcSwap<SyncStatus>>,
+    /// Current payload ID, being processed by Sequencer.
+    payload_id: Option<PayloadId>,
 }
 
 impl Driver<EngineApi> {
@@ -173,6 +175,7 @@ impl Driver<EngineApi> {
             max_seq_drift: config.chain.max_sequencer_drift,
             sequencer_config: config.sequencer.clone(),
             sync_status,
+            payload_id: None,
         })
     }
 }
@@ -308,49 +311,76 @@ impl<E: Engine> Driver<E> {
 
         // Next block timestamp.
         let new_blocktime = unsafe_head.timestamp + self.block_time;
+        let block_num = unsafe_head.number + 1;
 
-        // Check if we can generate block and time passed.
-        let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
-        if new_blocktime > now {
-            return Ok(());
-        }
-
-        // Prepare data (origin epoch and l1 information) for next block.
-        let (epoch, l1_info) = match self.prepare_block_data(unsafe_epoch, new_blocktime) {
-            Ok((epoch, l1_info)) => (epoch, l1_info),
-            Err(err) => match err.downcast()? {
-                SequencerErr::OutOfSyncL1 => {
-                    tracing::debug!("out of sync L1 {:?}", unsafe_epoch);
+        let payload_id = match self.payload_id {
+            Some(payload_id) => {
+                // Check if time for processing txpool is passed.
+                let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+                if now < new_blocktime {
                     return Ok(());
                 }
-                SequencerErr::Critical(msg) => eyre::bail!(msg),
-                SequencerErr::PastSeqDrift => eyre::bail!(
-                    "failed to find next L1 origin for new block under past sequencer drifted"
-                ),
-            },
+
+                self.payload_id = None;
+
+                payload_id
+            }
+
+            None => {
+                // Prepare data (origin epoch and l1 information) for next block.
+                let (epoch, l1_info) = match self.prepare_block_data(unsafe_epoch, new_blocktime) {
+                    Ok((epoch, l1_info)) => (epoch, l1_info),
+                    Err(err) => match err.downcast()? {
+                        SequencerErr::OutOfSyncL1 => {
+                            tracing::debug!("out of sync L1 {:?}", unsafe_epoch);
+                            return Ok(());
+                        }
+                        SequencerErr::Critical(msg) => eyre::bail!(msg),
+                        SequencerErr::PastSeqDrift => eyre::bail!(
+                            "failed to find next L1 origin for new block under past sequencer drifted"
+                        ),
+                    },
+                };
+
+                tracing::info!(
+                    "attempt to build a payload {} {} {:?}",
+                    block_num,
+                    new_blocktime,
+                    epoch,
+                );
+
+                let mut attributes =
+                    self.pipeline
+                        .derive_attributes_for_next_block(epoch, &l1_info, new_blocktime);
+
+                tracing::trace!("produced payload attributes {} {:?}", block_num, attributes);
+
+                attributes.no_tx_pool = new_blocktime > epoch.timestamp + self.max_seq_drift;
+
+                if attributes.no_tx_pool {
+                    tracing::warn!("tx pool disabled because of max sequencer drift");
+                }
+
+                let wait_for_tx_pool_processing = !attributes.no_tx_pool;
+
+                let payload_id = self
+                    .engine_driver
+                    .start_payload_building(attributes)
+                    .await?;
+
+                if wait_for_tx_pool_processing {
+                    // If txpool was not disabled, we should wait for execution engine to populate payload
+                    // with transactions from txpool. We store `payload_id` for next call.
+                    self.payload_id = Some(payload_id);
+
+                    return Ok(());
+                }
+
+                payload_id
+            }
         };
 
-        let block_num = unsafe_head.number + 1;
-        tracing::info!(
-            "attempt to build a payload {} {} {:?}",
-            block_num,
-            new_blocktime,
-            epoch,
-        );
-
-        let mut attributes =
-            self.pipeline
-                .derive_attributes_for_next_block(epoch, &l1_info, new_blocktime);
-
-        tracing::trace!("produced payload attributes {} {:?}", block_num, attributes);
-
-        attributes.no_tx_pool = new_blocktime > epoch.timestamp + self.max_seq_drift;
-
-        if attributes.no_tx_pool {
-            tracing::warn!("tx pool disabled because of max sequencer drift");
-        }
-
-        let payload = self.engine_driver.build_payload(attributes).await?;
+        let payload = self.engine_driver.get_payload(payload_id).await?;
 
         tracing::trace!("produced payload {} {:?}", block_num, payload);
 
@@ -359,7 +389,7 @@ impl<E: Engine> Driver<E> {
 
         self.state
             .write()
-            .expect("lock posioned")
+            .expect("lock poisoned")
             .update_unsafe_head(
                 self.engine_driver.unsafe_info.head,
                 self.engine_driver.unsafe_info.epoch,

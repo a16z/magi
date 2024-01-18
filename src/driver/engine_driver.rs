@@ -10,7 +10,9 @@ use eyre::Result;
 
 use crate::{
     config::Config,
-    engine::{Engine, EngineApi, ExecutionPayload, ForkchoiceState, PayloadAttributes, Status},
+    engine::{
+        Engine, EngineApi, ExecutionPayload, ForkchoiceState, PayloadAttributes, PayloadId, Status,
+    },
     types::common::{BlockInfo, Epoch, HeadInfo},
 };
 
@@ -90,7 +92,8 @@ impl<E: Engine> EngineDriver<E> {
         let new_epoch = *attributes.epoch.as_ref().unwrap();
         let seq_number = attributes.seq_number.unwrap();
 
-        let payload = self.build_payload(attributes).await?;
+        let payload_id = self.start_payload_building(attributes).await?;
+        let payload = self.get_payload(payload_id).await?;
 
         let new_head = BlockInfo {
             number: payload.block_number.as_u64(),
@@ -120,7 +123,7 @@ impl<E: Engine> EngineDriver<E> {
         Ok(())
     }
 
-    pub async fn build_payload(&self, attributes: PayloadAttributes) -> Result<ExecutionPayload> {
+    pub async fn start_payload_building(&self, attributes: PayloadAttributes) -> Result<PayloadId> {
         let forkchoice = self.create_forkchoice_state();
 
         let update = self
@@ -132,10 +135,13 @@ impl<E: Engine> EngineDriver<E> {
             eyre::bail!("invalid payload attributes");
         }
 
-        let id = update
+        update
             .payload_id
-            .ok_or(eyre::eyre!("engine did not return payload id"))?;
-        self.engine.get_payload(id).await
+            .ok_or(eyre::eyre!("engine did not return payload id"))
+    }
+
+    pub async fn get_payload(&self, payload_id: PayloadId) -> Result<ExecutionPayload> {
+        self.engine.get_payload(payload_id).await
     }
 
     async fn push_payload(&self, payload: ExecutionPayload) -> Result<()> {

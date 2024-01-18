@@ -147,7 +147,7 @@ impl Attributes {
     fn derive_transactions(
         &self,
         timestamp: u64,
-        batch_txs: Vec<RawTransaction>,
+        mut batch_txs: Vec<RawTransaction>,
         l1_info: &L1Info,
         epoch_hash: H256,
         seq: u64,
@@ -162,8 +162,7 @@ impl Attributes {
             transactions.append(&mut user_deposited_txs);
         }
 
-        let mut rest = batch_txs;
-        transactions.append(&mut rest);
+        transactions.append(&mut batch_txs);
 
         transactions
     }
