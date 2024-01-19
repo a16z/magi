@@ -355,7 +355,8 @@ impl<E: Engine> Driver<E> {
 
                 tracing::trace!("produced payload attributes {} {:?}", block_num, attributes);
 
-                attributes.no_tx_pool = new_blocktime > epoch.timestamp + self.max_seq_drift;
+                attributes.no_tx_pool =
+                    new_blocktime > l1_info.block_info.timestamp + self.max_seq_drift;
 
                 if attributes.no_tx_pool {
                     tracing::warn!("tx pool disabled because of max sequencer drift");
