@@ -264,8 +264,7 @@ impl InnerWatcher {
         }
 
         if self.current_block > self.head_block {
-            let head_block = self.get_head().await?;
-            self.head_block = head_block;
+            self.head_block = self.get_head().await?;
         }
 
         if self.current_block <= self.head_block {
@@ -273,7 +272,7 @@ impl InnerWatcher {
 
             let block = self.get_block(self.current_block).await?;
             let user_deposits = self.get_deposits(self.current_block).await?;
-            let finalized = self.current_block >= self.finalized_block;
+            let finalized = self.current_block <= self.finalized_block;
 
             let l1_info = L1Info::new(
                 &block,
