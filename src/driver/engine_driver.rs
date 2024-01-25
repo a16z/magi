@@ -165,6 +165,12 @@ async fn build_payload<E: Engine>(
             engine_driver.start_payload_building(attrs.clone()).await?,
         )
     };
+    tracing::info!(
+        "building payload: ts={} #txs={} epoch={}",
+        attrs.timestamp,
+        attrs.transactions.unwrap_or_default().len(),
+        new_epoch.number
+    );
     // If we're including transaction from txpool, wait for the blocktime to pass.
     if !no_tx_pool {
         sleep(Duration::from_secs(blocktime)).await;

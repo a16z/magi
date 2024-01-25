@@ -235,7 +235,7 @@ impl<E: Engine> Driver<E> {
             .await?;
 
             let engine_driver = self.engine_driver.read().await;
-            tracing::info!(
+            tracing::trace!(
                 "safe head updated: {} {}",
                 engine_driver.safe_head.number,
                 engine_driver.safe_head.hash,
