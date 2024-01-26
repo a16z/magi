@@ -123,6 +123,7 @@ impl<S: SequencingSource, U: JsonRpcClient> SequencingDriver<EngineApi, S, U> {
             }
             None => {
                 tracing::trace!("no payload to build");
+                sleep(Duration::from_secs(1)).await;
                 Ok(())
             }
         }
