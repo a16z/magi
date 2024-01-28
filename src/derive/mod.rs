@@ -116,6 +116,7 @@ mod tests {
 
             let config = Arc::new(Config {
                 l1_rpc_url: rpc.to_string(),
+                l1_beacon_url: String::new(),
                 l2_rpc_url: l2_rpc.to_string(),
                 chain: ChainConfig::optimism_goerli(),
                 l2_engine_url: String::new(),

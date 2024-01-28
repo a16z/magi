@@ -385,6 +385,7 @@ mod tests {
             let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
             let cli_config = CliConfig {
                 l1_rpc_url: Some(rpc.to_owned()),
+                l1_beacon_url: None,
                 l2_rpc_url: Some(l2_rpc.to_owned()),
                 l2_engine_url: None,
                 jwt_secret: Some(

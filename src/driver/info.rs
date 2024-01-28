@@ -134,6 +134,7 @@ mod test_utils {
     pub fn optimism_config() -> Config {
         Config {
             l1_rpc_url: Default::default(),
+            l1_beacon_url: Default::default(),
             l2_rpc_url: Default::default(),
             l2_engine_url: Default::default(),
             chain: ChainConfig::optimism(),

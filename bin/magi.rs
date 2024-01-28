@@ -44,6 +44,8 @@ pub struct Cli {
     #[clap(long)]
     l1_rpc_url: Option<String>,
     #[clap(long)]
+    l1_beacon_url: Option<String>,
+    #[clap(long)]
     l2_rpc_url: Option<String>,
     #[clap(short = 'm', long, default_value = "full")]
     sync_mode: SyncMode,
@@ -109,6 +111,7 @@ impl From<Cli> for CliConfig {
         let jwt_secret = value.jwt_secret();
         Self {
             l1_rpc_url: value.l1_rpc_url,
+            l1_beacon_url: value.l1_beacon_url,
             l2_rpc_url: value.l2_rpc_url,
             l2_engine_url: value.l2_engine_url,
             jwt_secret,

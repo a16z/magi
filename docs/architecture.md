@@ -93,6 +93,7 @@ The [Config](../src/config/mod.rs) object contains the system configuration for 
 
 **Config**
 - `l1_rpc_url`: The L1 RPC endpoint to use for the L1 chain watcher.
+- `l1_beacon_url`: The L1 beacon chain RPC endpoint.
 - `l2_rpc_url`: The L2 chain RPC endpoint
 - `l2_engine_url`: The L2 chain engine API URL (see [Engine API](#engine-api)).
 - `chain`: A `ChainConfig` object detailed below.
