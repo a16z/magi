@@ -528,6 +528,8 @@ fn start_watcher(
                     err
                 );
             }
+            // TODO make configurable
+            sleep(Duration::from_secs(2)).await;
         }
     });
 
