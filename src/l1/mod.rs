@@ -1,4 +1,9 @@
-use std::{collections::HashMap, sync::Arc, time::{Duration, SystemTime}};
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, SystemTime},
+    cmp::max
+};
 
 use ethers::{
     providers::{Http, HttpRateLimitRetryPolicy, Middleware, Provider, RetryClient},
@@ -531,7 +536,7 @@ fn start_watcher(
             }
             // TODO make configurable
             let elapsed = now.elapsed().unwrap_or_default();
-            let delay = if elapsed.as_secs() > 2 { 0 } else { 2000 - elapsed.as_millis() };
+            let delay = max(0, 2000 - elapsed.as_millis());
             sleep(Duration::from_millis(delay.try_into().unwrap())).await;
         }
     });
