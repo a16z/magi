@@ -1,8 +1,8 @@
 use std::{
+    cmp::max
     collections::HashMap,
     sync::Arc,
     time::{Duration, SystemTime},
-    cmp::max
 };
 
 use ethers::{
