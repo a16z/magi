@@ -1,4 +1,9 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{
+    cmp::max,
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 use ethers::{
     providers::{Http, HttpRateLimitRetryPolicy, Middleware, Provider, RetryClient},
@@ -520,6 +525,7 @@ fn start_watcher(
             InnerWatcher::new(config, block_update_sender, l1_start_block, l2_start_block).await;
 
         loop {
+            let now = SystemTime::now();
             tracing::debug!("fetching L1 data for block {}", watcher.current_block);
             if let Err(err) = watcher.try_ingest_block().await {
                 tracing::warn!(
@@ -528,6 +534,10 @@ fn start_watcher(
                     err
                 );
             }
+            // TODO make configurable
+            let elapsed = now.elapsed().unwrap_or_default();
+            let delay = max(0, 2000 - elapsed.as_millis());
+            sleep(Duration::from_millis(delay.try_into().unwrap())).await;
         }
     });
 
