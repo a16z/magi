@@ -1,5 +1,5 @@
 use std::{
-    cmp::max
+    cmp::max,
     collections::HashMap,
     sync::Arc,
     time::{Duration, SystemTime},
