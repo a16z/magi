@@ -1,6 +1,6 @@
 use std::{
     process,
-    sync::{mpsc::Receiver, Arc, RwLock},
+    sync::{mpsc::Receiver, Arc, RwLock, RwLockReadGuard},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
@@ -22,7 +22,10 @@ use tokio::{
 
 use crate::{
     config::{Config, SequencerConfig},
-    derive::{state::State, Pipeline},
+    derive::{
+        state::{State, StateReader},
+        Pipeline,
+    },
     driver::info::HeadInfoQuery,
     engine::{Engine, EngineApi, ExecutionPayload, PayloadId},
     l1::{BlockUpdate, ChainWatcher, L1Info},
@@ -41,6 +44,7 @@ use self::engine_driver::EngineDriver;
 mod engine_driver;
 mod info;
 mod types;
+use crate::derive::state::{EpochByNumber, L1InfoByHash};
 pub use types::*;
 
 /// Driver is responsible for advancing the execution node by feeding
@@ -180,6 +184,12 @@ impl Driver<EngineApi> {
     }
 }
 
+impl<E: Engine> StateReader<State> for Driver<E> {
+    fn read_state(&self) -> RwLockReadGuard<State> {
+        self.state.read().expect("lock poisoned")
+    }
+}
+
 /// Custom error for sequencer.
 #[derive(Debug, Error)]
 enum SequencerErr {
@@ -245,12 +255,13 @@ impl<E: Engine> Driver<E> {
     }
 
     /// Prepare data for generating next payload.
-    fn prepare_block_data(
-        &self,
+    fn prepare_block_data<R: EpochByNumber + L1InfoByHash>(
+        state: &impl StateReader<R>,
         unsafe_epoch: Epoch,
         new_blocktime: u64,
+        max_seq_drift: u64,
     ) -> Result<(Epoch, L1Info)> {
-        let state = self.state.read().expect("lock poisoned");
+        let state = state.read_state();
 
         // Check we are in sync with L1.
         let current_epoch = state
@@ -258,7 +269,7 @@ impl<E: Engine> Driver<E> {
             .ok_or(SequencerErr::OutOfSyncL1)?;
 
         // Check past sequencer drift.
-        let is_seq_drift = new_blocktime > current_epoch.timestamp + self.max_seq_drift;
+        let is_seq_drift = new_blocktime > current_epoch.timestamp + max_seq_drift;
         let next_epoch = state.epoch_by_number(current_epoch.number + 1);
 
         let origin_epoch = if let Some(next_epoch) = next_epoch {
@@ -328,7 +339,7 @@ impl<E: Engine> Driver<E> {
 
             None => {
                 // Prepare data (origin epoch and l1 information) for next block.
-                let (epoch, l1_info) = match self.prepare_block_data(unsafe_epoch, new_blocktime) {
+                let (epoch, l1_info) = match Self::prepare_block_data(self, unsafe_epoch, new_blocktime, self.max_seq_drift) {
                     Ok((epoch, l1_info)) => (epoch, l1_info),
                     Err(err) => match err.downcast()? {
                         SequencerErr::OutOfSyncL1 => {
@@ -623,15 +634,18 @@ fn get_l1_start_block(epoch_number: u64, channel_timeout: u64) -> u64 {
 
 #[cfg(test)]
 mod tests {
+    use ethers::types::H256;
     use ethers::{
         middleware::Middleware,
         providers::Http,
         types::{BlockId, BlockNumber},
     };
     use eyre::Result;
+    use std::collections::HashMap;
     use tokio::sync::watch::channel;
 
-    use crate::config::ChainConfig;
+    use crate::config::{ChainConfig, SystemConfig};
+    use crate::l1::L1BlockInfo;
 
     use super::*;
 
@@ -684,5 +698,76 @@ mod tests {
         );
 
         Ok(())
+    }
+
+    #[test]
+    fn test_prepare_block_data() {
+        struct StateReaderMock(RwLock<StateMock>);
+
+        impl StateReader<StateMock> for StateReaderMock {
+            fn read_state(&self) -> RwLockReadGuard<StateMock> {
+                self.0.read().unwrap()
+            }
+        }
+
+        #[derive(Default)]
+        struct StateMock {
+            l1_infos: HashMap<H256, L1Info>,
+        }
+
+        impl L1InfoByHash for StateMock {
+            fn l1_info_by_hash(&self, hash: H256) -> Option<&L1Info> {
+                self.l1_infos.get(&hash)
+            }
+        }
+
+        impl EpochByNumber for StateMock {
+            fn epoch_by_number(&self, number: u64) -> Option<Epoch> {
+                Some(Epoch {
+                    number,
+                    hash: H256::from_low_u64_be(number),
+                    timestamp: number * 2,
+                })
+            }
+        }
+
+        let l1_info_expected = L1Info {
+            block_info: L1BlockInfo {
+                number: 0,
+                hash: Default::default(),
+                timestamp: 0,
+                parent_hash: Default::default(),
+                base_fee: Default::default(),
+                mix_hash: Default::default(),
+            },
+            system_config: SystemConfig {
+                batcher_addr: Default::default(),
+                gas_limit: 0,
+                overhead: Default::default(),
+                scalar: Default::default(),
+                unsafe_block_signer: Default::default(),
+            },
+            user_deposits: vec![],
+            batcher_transactions: vec![],
+            finalized: false,
+        };
+
+        let mut state = StateMock::default();
+        state
+            .l1_infos
+            .insert(H256::from_low_u64_be(1), l1_info_expected.clone());
+
+        let state_reader = StateReaderMock(RwLock::new(state));
+
+        let unsafe_epoch = Epoch {
+            number: 0,
+            hash: H256::from_low_u64_be(1),
+            timestamp: 0,
+        };
+        let (epoch, l1_info) =
+            Driver::<EngineApi>::prepare_block_data(&state_reader, unsafe_epoch, 10, 600).unwrap();
+
+        assert_eq!(epoch, state_reader.read_state().epoch_by_number(1).unwrap());
+        assert_eq!(l1_info, l1_info_expected);
     }
 }

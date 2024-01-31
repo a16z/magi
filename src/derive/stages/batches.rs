@@ -9,7 +9,7 @@ use eyre::Result;
 use libflate::zlib::Decoder;
 
 use crate::config::ChainConfig;
-use crate::derive::state::State;
+use crate::derive::state::{EpochByNumber, State};
 use crate::derive::PurgeableIterator;
 
 use super::block_input::BlockInput;

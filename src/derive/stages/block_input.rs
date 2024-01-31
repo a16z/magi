@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 use eyre::Result;
 
 use crate::{
-    derive::state::State,
+    derive::state::{EpochByNumber, State},
     types::{attributes::RawTransaction, common::Epoch},
 };
 

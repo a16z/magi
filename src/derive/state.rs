@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::sync::{Arc, RwLockReadGuard};
 
 use ethers::{
     providers::{Http, Middleware, Provider},
@@ -49,16 +49,6 @@ impl State {
         }
     }
 
-    pub fn l1_info_by_hash(&self, hash: H256) -> Option<&L1Info> {
-        self.l1_info.get(&hash)
-    }
-
-    pub fn l1_info_by_number(&self, num: u64) -> Option<&L1Info> {
-        self.l1_hashes
-            .get(&num)
-            .and_then(|hash| self.l1_info.get(hash))
-    }
-
     pub fn l1_info_current(&self) -> Option<&L1Info> {
         self.l1_hashes
             .get(&self.current_epoch_num)
@@ -74,14 +64,6 @@ impl State {
 
     pub fn epoch_by_hash(&self, hash: H256) -> Option<Epoch> {
         self.l1_info_by_hash(hash).map(|info| Epoch {
-            number: info.block_info.number,
-            hash: info.block_info.hash,
-            timestamp: info.block_info.timestamp,
-        })
-    }
-
-    pub fn epoch_by_number(&self, num: u64) -> Option<Epoch> {
-        self.l1_info_by_number(num).map(|info| Epoch {
             number: info.block_info.number,
             hash: info.block_info.hash,
             timestamp: info.block_info.timestamp,
@@ -148,6 +130,48 @@ impl State {
 
             self.l2_refs.pop_first();
         }
+    }
+}
+
+pub trait StateReader<T> {
+    fn read_state(&self) -> RwLockReadGuard<T> {
+        unimplemented!()
+    }
+}
+
+pub trait L1InfoByHash {
+    fn l1_info_by_hash(&self, hash: H256) -> Option<&L1Info>;
+}
+
+impl L1InfoByHash for State {
+    fn l1_info_by_hash(&self, hash: H256) -> Option<&L1Info> {
+        self.l1_info.get(&hash)
+    }
+}
+
+pub trait L1InfoByNumber {
+    fn l1_info_by_number(&self, num: u64) -> Option<&L1Info>;
+}
+
+impl L1InfoByNumber for State {
+    fn l1_info_by_number(&self, num: u64) -> Option<&L1Info> {
+        self.l1_hashes
+            .get(&num)
+            .and_then(|hash| self.l1_info.get(hash))
+    }
+}
+
+pub trait EpochByNumber {
+    fn epoch_by_number(&self, num: u64) -> Option<Epoch>;
+}
+
+impl<T: L1InfoByNumber> EpochByNumber for T {
+    fn epoch_by_number(&self, num: u64) -> Option<Epoch> {
+        self.l1_info_by_number(num).map(|info| Epoch {
+            number: info.block_info.number,
+            hash: info.block_info.hash,
+            timestamp: info.block_info.timestamp,
+        })
     }
 }
 

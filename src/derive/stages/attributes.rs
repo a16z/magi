@@ -4,7 +4,7 @@ use ethers::types::{H256, U64};
 use ethers::utils::rlp::Encodable;
 
 use crate::config::{ChainConfig, SystemAccounts};
-use crate::derive::state::State;
+use crate::derive::state::{L1InfoByHash, State, StateReader};
 use crate::derive::PurgeableIterator;
 use crate::engine::PayloadAttributes;
 use crate::l1::L1Info;
@@ -20,12 +20,6 @@ pub struct Attributes {
     seq_num: u64,
     epoch_hash: H256,
     unsafe_seq_num: u64,
-}
-
-trait StateRead {
-    fn read(&self) -> RwLockReadGuard<State> {
-        unimplemented!()
-    }
 }
 
 impl Iterator for Attributes {
@@ -114,8 +108,8 @@ impl Attributes {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn derive_attributes_internal(
-        state: &impl StateRead,
+    fn derive_attributes_internal<R: L1InfoByHash>(
+        state: &impl StateReader<R>,
         epoch: Epoch,
         l1_info: &L1Info,
         chain: &ChainConfig,
@@ -155,8 +149,8 @@ impl Attributes {
         }
     }
 
-    fn derive_transactions(
-        state: &impl StateRead,
+    fn derive_transactions<R: L1InfoByHash>(
+        state: &impl StateReader<R>,
         timestamp: u64,
         mut batch_txs: Vec<RawTransaction>,
         l1_info: &L1Info,
@@ -192,9 +186,12 @@ impl Attributes {
         RawTransaction(attributes_tx.rlp_bytes().to_vec())
     }
 
-    fn derive_user_deposited(state: &impl StateRead, epoch_hash: H256) -> Vec<RawTransaction> {
+    fn derive_user_deposited<R: L1InfoByHash>(
+        state: &impl StateReader<R>,
+        epoch_hash: H256,
+    ) -> Vec<RawTransaction> {
         state
-            .read()
+            .read_state()
             .l1_info_by_hash(epoch_hash)
             .map(|info| {
                 info.user_deposits
@@ -229,8 +226,8 @@ impl Attributes {
     }
 }
 
-impl StateRead for Attributes {
-    fn read(&self) -> RwLockReadGuard<State> {
+impl StateReader<State> for Attributes {
+    fn read_state(&self) -> RwLockReadGuard<State> {
         self.state.read().expect("lock poisoned")
     }
 }
@@ -238,7 +235,7 @@ impl StateRead for Attributes {
 #[cfg(test)]
 mod tests {
     use crate::config::{ChainConfig, SystemAccounts};
-    use crate::derive::stages::attributes::{Attributes, StateRead};
+    use crate::derive::stages::attributes::{Attributes, StateReader};
     use crate::derive::stages::batcher_transactions::BatcherTransactions;
     use crate::derive::stages::batches::Batches;
     use crate::derive::stages::channels::Channels;
@@ -252,8 +249,8 @@ mod tests {
     use std::sync::{mpsc, Arc, RwLock};
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    struct DummyStateRead;
-    impl StateRead for DummyStateRead {}
+    struct DummyStateReader;
+    impl StateReader<State> for DummyStateReader {}
 
     #[tokio::test]
     async fn test_derive_attributes_internal() {
@@ -285,7 +282,7 @@ mod tests {
         };
 
         let attrs = Attributes::derive_attributes_internal(
-            &DummyStateRead,
+            &DummyStateReader,
             epoch,
             &l1_info,
             &chain,

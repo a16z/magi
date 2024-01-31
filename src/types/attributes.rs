@@ -312,7 +312,7 @@ impl From<&AttributesDepositedCall> for Epoch {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UserDeposited {
     pub from: Address,
     pub to: Address,

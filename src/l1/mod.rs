@@ -61,7 +61,7 @@ pub enum BlockUpdate {
 }
 
 /// Data tied to a specific L1 block
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct L1Info {
     /// L1 block data
     pub block_info: L1BlockInfo,
@@ -76,7 +76,7 @@ pub struct L1Info {
 }
 
 /// L1 block info
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct L1BlockInfo {
     /// L1 block number
     pub number: u64,
