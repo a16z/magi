@@ -1,4 +1,4 @@
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, RwLockReadGuard};
 
 use ethers::types::{H256, U64};
 use ethers::utils::rlp::Encodable;
@@ -20,6 +20,12 @@ pub struct Attributes {
     seq_num: u64,
     epoch_hash: H256,
     unsafe_seq_num: u64,
+}
+
+trait StateRead {
+    fn read(&self) -> RwLockReadGuard<State> {
+        unimplemented!()
+    }
 }
 
 impl Iterator for Attributes {
@@ -71,6 +77,7 @@ impl Attributes {
         block_timestamp: u64,
     ) -> PayloadAttributes {
         Self::derive_attributes_internal(
+            self,
             epoch,
             l1_info,
             &self.chain,
@@ -95,6 +102,7 @@ impl Attributes {
         };
 
         Self::derive_attributes_internal(
+            self,
             epoch,
             l1_info,
             &self.chain,
@@ -105,7 +113,9 @@ impl Attributes {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn derive_attributes_internal(
+        state: &impl StateRead,
         epoch: Epoch,
         l1_info: &L1Info,
         chain: &ChainConfig,
@@ -115,9 +125,11 @@ impl Attributes {
         l1_inclusion_block: Option<u64>,
     ) -> PayloadAttributes {
         let transactions = Some(Self::derive_transactions(
+            state,
             timestamp,
             transactions,
             l1_info,
+            epoch.hash,
             seq_number,
             chain.regolith_time,
         ));
@@ -144,9 +156,11 @@ impl Attributes {
     }
 
     fn derive_transactions(
+        state: &impl StateRead,
         timestamp: u64,
         mut batch_txs: Vec<RawTransaction>,
         l1_info: &L1Info,
+        epoch_hash: H256,
         seq: u64,
         regolith_time: u64,
     ) -> Vec<RawTransaction> {
@@ -157,7 +171,7 @@ impl Attributes {
         transactions.push(attributes_tx);
 
         if seq == 0 {
-            let mut user_deposited_txs = Self::derive_user_deposited(l1_info);
+            let mut user_deposited_txs = Self::derive_user_deposited(state, epoch_hash);
             transactions.append(&mut user_deposited_txs);
         }
 
@@ -178,15 +192,20 @@ impl Attributes {
         RawTransaction(attributes_tx.rlp_bytes().to_vec())
     }
 
-    fn derive_user_deposited(l1_info: &L1Info) -> Vec<RawTransaction> {
-        l1_info
-            .user_deposits
-            .iter()
-            .map(|deposit| {
-                let tx = DepositedTransaction::from(deposit.clone());
-                RawTransaction(tx.rlp_bytes().to_vec())
+    fn derive_user_deposited(state: &impl StateRead, epoch_hash: H256) -> Vec<RawTransaction> {
+        state
+            .read()
+            .l1_info_by_hash(epoch_hash)
+            .map(|info| {
+                info.user_deposits
+                    .iter()
+                    .map(|deposit| {
+                        let tx = DepositedTransaction::from(deposit.clone());
+                        RawTransaction(tx.rlp_bytes().to_vec())
+                    })
+                    .collect()
             })
-            .collect()
+            .unwrap_or_default()
     }
 
     fn update_sequence_number(&mut self, batch_epoch_hash: H256) {
@@ -210,10 +229,16 @@ impl Attributes {
     }
 }
 
+impl StateRead for Attributes {
+    fn read(&self) -> RwLockReadGuard<State> {
+        self.state.read().expect("lock poisoned")
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::config::{ChainConfig, SystemAccounts};
-    use crate::derive::stages::attributes::Attributes;
+    use crate::derive::stages::attributes::{Attributes, StateRead};
     use crate::derive::stages::batcher_transactions::BatcherTransactions;
     use crate::derive::stages::batches::Batches;
     use crate::derive::stages::channels::Channels;
@@ -226,6 +251,9 @@ mod tests {
     use ethers::utils::rlp::Rlp;
     use std::sync::{mpsc, Arc, RwLock};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    struct DummyStateRead;
+    impl StateRead for DummyStateRead {}
 
     #[tokio::test]
     async fn test_derive_attributes_internal() {
@@ -257,6 +285,7 @@ mod tests {
         };
 
         let attrs = Attributes::derive_attributes_internal(
+            &DummyStateRead,
             epoch,
             &l1_info,
             &chain,
