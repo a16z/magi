@@ -1,9 +1,8 @@
+use crate::types::attributes::RawTransaction;
 use ethers::{
     types::H256,
     utils::rlp::{DecoderError, Rlp},
 };
-
-use crate::common::RawTransaction;
 
 use super::block_input::BlockInput;
 

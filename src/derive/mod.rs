@@ -2,7 +2,7 @@ use std::sync::{mpsc, Arc, RwLock};
 
 use eyre::Result;
 
-use crate::{config::Config, engine::PayloadAttributes};
+use crate::{config::ChainConfig, engine::PayloadAttributes, l1::L1Info, types::common::Epoch};
 
 use self::{
     stages::{
@@ -39,12 +39,21 @@ impl Iterator for Pipeline {
 }
 
 impl Pipeline {
-    pub fn new(state: Arc<RwLock<State>>, config: Arc<Config>, seq: u64) -> Result<Self> {
+    pub fn new(
+        state: Arc<RwLock<State>>,
+        chain: Arc<ChainConfig>,
+        seq: u64,
+        unsafe_seq: u64,
+    ) -> Result<Self> {
         let (tx, rx) = mpsc::channel();
         let batcher_transactions = BatcherTransactions::new(rx);
-        let channels = Channels::new(batcher_transactions, config.clone());
-        let batches = Batches::new(channels, state.clone(), config.clone());
-        let attributes = Attributes::new(Box::new(batches), state, config, seq);
+        let channels = Channels::new(
+            batcher_transactions,
+            chain.max_channel_size,
+            chain.channel_timeout,
+        );
+        let batches = Batches::new(channels, state.clone(), Arc::clone(&chain));
+        let attributes = Attributes::new(Box::new(batches), state, chain, seq, unsafe_seq);
 
         Ok(Self {
             batcher_transaction_sender: tx,
@@ -57,6 +66,17 @@ impl Pipeline {
         self.batcher_transaction_sender
             .send(BatcherTransactionMessage { txs, l1_origin })?;
         Ok(())
+    }
+
+    pub fn derive_attributes_for_next_block(
+        &mut self,
+        epoch: Epoch,
+        l1_info: &L1Info,
+        block_timestamp: u64,
+    ) -> PayloadAttributes {
+        self.attributes.update_unsafe_seq_num(&epoch);
+        self.attributes
+            .derive_attributes_for_next_block(epoch, l1_info, block_timestamp)
     }
 
     pub fn peek(&mut self) -> Option<&PayloadAttributes> {
@@ -76,10 +96,7 @@ impl Pipeline {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        env,
-        sync::{Arc, RwLock},
-    };
+    use std::sync::{Arc, RwLock};
 
     use ethers::{
         providers::{Middleware, Provider},
@@ -88,79 +105,86 @@ mod tests {
     };
 
     use crate::{
-        common::RawTransaction,
         config::{ChainConfig, Config},
         derive::*,
         l1::{BlockUpdate, ChainWatcher},
+        types::attributes::RawTransaction,
     };
 
     #[tokio::test(flavor = "multi_thread")]
     async fn test_attributes_match() {
-        if std::env::var("L1_TEST_RPC_URL").is_ok() && std::env::var("L2_TEST_RPC_URL").is_ok() {
-            let rpc = env::var("L1_TEST_RPC_URL").unwrap();
-            let l2_rpc = env::var("L2_TEST_RPC_URL").unwrap();
+        let rpc_env = std::env::var("L1_TEST_RPC_URL");
+        let l2_rpc_env = std::env::var("L2_TEST_RPC_URL");
+        let (rpc, l2_rpc) = match (rpc_env, l2_rpc_env) {
+            (Ok(rpc), Ok(l2_rpc)) => (rpc, l2_rpc),
+            (rpc_env, l2_rpc_env) => {
+                eprintln!("Test ignored: `test_attributes_match`, rpc: {rpc_env:?}, l2_rpc: {l2_rpc_env:?}");
+                return;
+            }
+        };
 
-            let config = Arc::new(Config {
-                l1_rpc_url: rpc.to_string(),
-                l2_rpc_url: l2_rpc.to_string(),
-                chain: ChainConfig::optimism_goerli(),
-                l2_engine_url: String::new(),
-                jwt_secret: String::new(),
-                checkpoint_sync_url: None,
-                rpc_port: 9545,
-                devnet: false,
-            });
+        let provider = Provider::try_from(&l2_rpc).unwrap();
+        let config = Arc::new(Config {
+            chain: Arc::new(ChainConfig::optimism_goerli()),
+            l1_rpc_url: rpc,
+            l2_rpc_url: l2_rpc.clone(),
+            rpc_port: 9545,
+            ..Config::default()
+        });
 
-            let mut chain_watcher = ChainWatcher::new(
-                config.chain.l1_start_epoch.number,
-                config.chain.l2_genesis.number,
-                config.clone(),
+        let mut chain_watcher = ChainWatcher::new(
+            config.chain.genesis.l1.number,
+            config.chain.genesis.l2.number,
+            config.clone(),
+        )
+        .unwrap();
+
+        chain_watcher.start().unwrap();
+
+        let state = Arc::new(RwLock::new(
+            State::new(
+                config.chain.l2_genesis(),
+                config.chain.l1_start_epoch(),
+                config.chain.l2_genesis(),
+                config.chain.l1_start_epoch(),
+                &provider,
+                Arc::clone(&config.chain),
+            )
+            .await,
+        ));
+
+        let mut pipeline = Pipeline::new(state.clone(), Arc::clone(&config.chain), 0, 0).unwrap();
+
+        chain_watcher.recv_from_channel().await.unwrap();
+        chain_watcher.recv_from_channel().await.unwrap();
+        chain_watcher.recv_from_channel().await.unwrap();
+        let update = chain_watcher.recv_from_channel().await.unwrap();
+
+        let l1_info = match update {
+            BlockUpdate::NewBlock(block) => *block,
+            _ => panic!("wrong update type"),
+        };
+
+        pipeline
+            .push_batcher_transactions(
+                l1_info.batcher_transactions.clone(),
+                l1_info.block_info.number,
             )
             .unwrap();
 
-            chain_watcher.start().unwrap();
+        state.write().unwrap().update_l1_info(l1_info);
 
-            let provider = Provider::try_from(env::var("L2_TEST_RPC_URL").unwrap()).unwrap();
-            let state = Arc::new(RwLock::new(
-                State::new(
-                    config.chain.l2_genesis,
-                    config.chain.l1_start_epoch,
-                    &provider,
-                    config.clone(),
-                )
-                .await,
-            ));
+        if let Some(payload) = pipeline.next() {
+            let hashes = get_tx_hashes(&payload.transactions.unwrap());
+            let expected_hashes =
+                get_expected_hashes(config.chain.genesis.l2.number + 1, &l2_rpc).await;
 
-            let mut pipeline = Pipeline::new(state.clone(), config.clone(), 0).unwrap();
-
-            chain_watcher.recv_from_channel().await.unwrap();
-            let update = chain_watcher.recv_from_channel().await.unwrap();
-
-            let l1_info = match update {
-                BlockUpdate::NewBlock(block) => *block,
-                _ => panic!("wrong update type"),
-            };
-
-            pipeline
-                .push_batcher_transactions(
-                    l1_info.batcher_transactions.clone(),
-                    l1_info.block_info.number,
-                )
-                .unwrap();
-
-            state.write().unwrap().update_l1_info(l1_info);
-
-            if let Some(payload) = pipeline.next() {
-                let hashes = get_tx_hashes(&payload.transactions.unwrap());
-                let expected_hashes = get_expected_hashes(config.chain.l2_genesis.number + 1).await;
-
-                assert_eq!(hashes, expected_hashes);
-            }
+            assert_eq!(hashes, expected_hashes);
         }
     }
 
-    async fn get_expected_hashes(block_num: u64) -> Vec<H256> {
-        let provider = Provider::try_from(env::var("L2_TEST_RPC_URL").unwrap()).unwrap();
+    async fn get_expected_hashes(block_num: u64, l2_rpc: &str) -> Vec<H256> {
+        let provider = Provider::try_from(l2_rpc).unwrap();
 
         provider
             .get_block(block_num)

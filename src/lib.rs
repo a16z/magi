@@ -2,7 +2,7 @@
 pub mod l1;
 
 /// Common types and functions
-pub mod common;
+pub mod types;
 
 /// Configuration management
 pub mod config;
@@ -28,5 +28,5 @@ pub mod rpc;
 /// A module to handle running Magi in different sync modes
 pub mod runner;
 
-/// A module to get current Magi version.
+/// A module which derives a version of Magi node.
 pub mod version;

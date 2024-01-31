@@ -130,21 +130,18 @@ impl EngineApi {
             .as_ref()
             .ok_or(eyre::eyre!("Driver missing http client"))?;
 
-        // Clone the secret so we can use it in the retry policy.
-        let secret_clone = self.secret.clone();
+        // Construct the JWT Authorization Token
+        let claims = self.secret.generate_claims(Some(SystemTime::now()));
+        let jwt = self
+            .secret
+            .encode(&claims)
+            .map_err(|_| eyre::eyre!("EngineApi failed to encode jwt with claims!"))?;
 
         let policy = RetryPolicy::fixed(Duration::ZERO).with_max_retries(5);
 
         // Send the request
         let res = policy
             .retry(|| async {
-                // Construct the JWT Authorization Token
-                let claims = secret_clone.generate_claims(Some(SystemTime::now()));
-                let jwt = secret_clone
-                    .encode(&claims)
-                    .map_err(|_| eyre::eyre!("EngineApi failed to encode jwt with claims!"))?;
-
-                // Send the request
                 client
                     .post(&self.base_url)
                     .header(header::AUTHORIZATION, format!("Bearer {}", jwt))
@@ -298,5 +295,50 @@ mod tests {
         // Stop the server
         // server.stop().unwrap();
         // server.stopped().await;
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn test_compare_payloads() {
+        let engine_api = EngineApi::new(
+            "http://127.0.0.1:5551",
+            "4700296286165daa27e9404669073a6b098e064d0f89d189033653157a277154",
+        );
+
+        let json_str = r#"[
+            {
+                "finalizedBlockHash":"0xa3ab140f15ea7f7443a4702da64c10314eb04d488e72974e02e2d728096b4f76",
+                "headBlockHash":"0xa3ab140f15ea7f7443a4702da64c10314eb04d488e72974e02e2d728096b4f76",
+                "safeBlockHash":"0xa3ab140f15ea7f7443a4702da64c10314eb04d488e72974e02e2d728096b4f76"
+            },
+            {
+                "gasLimit":"0x17d7840",
+                "noTxPool":true,
+                "prevRandao":"0xf003ba1768550abf36f554c23d6b3a120b6d3a4c454b981bf8cd5465fd2630c7",
+                "suggestedFeeRecipient":"0x4200000000000000000000000000000000000011",
+                "timestamp":"0x63d96d12",
+                "transactions":[
+                    "0x7ef9015aa044bae9d41b8380d781187b426c6fe43df5fb2fb57bd4466ef6a701e1f01e015694deaddeaddeaddeaddeaddeaddeaddeaddead000194420000000000000000000000000000000000001580808408f0d18001b90104015d8eb900000000000000000000000000000000000000000000000000000000008057650000000000000000000000000000000000000000000000000000000063d96d10000000000000000000000000000000000000000000000000000000000009f35273d89754a1e0387b89520d989d3be9c37c1f32495a88faf1ea05c61121ab0d1900000000000000000000000000000000000000000000000000000000000000010000000000000000000000002d679b567db6187c0c8323fa982cfb88b74dbcc7000000000000000000000000000000000000000000000000000000000000083400000000000000000000000000000000000000000000000000000000000f4240"
+                ]
+            }]"#;
+        let params: Vec<Value> = serde_json::from_str(json_str).unwrap();
+        println!("{:?}", params);
+        let res: ForkChoiceUpdate = engine_api
+            .post("engine_forkchoiceUpdatedV1", params)
+            .await
+            .unwrap();
+        println!("{:?}", res);
+
+        let payload_id = res.payload_id.unwrap();
+        println!("payload id: {:?}", payload_id);
+
+        let encoded = format!("{:x}", payload_id);
+        let padded = format!("0x{:0>16}", encoded);
+        let params = vec![Value::String(padded)];
+        let res: ExecutionPayload = engine_api
+            .post("engine_getPayloadV1", params)
+            .await
+            .unwrap();
+        println!("{:?}", res);
     }
 }

@@ -2,7 +2,10 @@ use ethers::types::{Block, Transaction};
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::common::{AttributesDepositedCall, BlockInfo, Epoch};
+use crate::types::{
+    attributes::AttributesDepositedCall,
+    common::{BlockInfo, Epoch},
+};
 
 /// Block info for the current head of the chain
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -184,42 +187,48 @@ mod tests {
 
         #[tokio::test]
         async fn test_head_info_from_l2_block_hash() -> Result<()> {
-            if std::env::var("L1_TEST_RPC_URL").is_ok() && std::env::var("L2_TEST_RPC_URL").is_ok()
-            {
-                let l2_block_hash = H256::from_str(
-                    "0x75d4a658d7b6430c874c5518752a8d90fb1503eccd6ae4cfc97fd4aedeebb939",
-                )?;
+            let l2_rpc = match std::env::var("L2_TEST_RPC_URL") {
+                Ok(l2_rpc) => l2_rpc,
+                l2_rpc_res => {
+                    eprintln!(
+                        "Test ignored: `test_head_info_from_l2_block_hash`, l2_rpc: {l2_rpc_res:?}"
+                    );
+                    return Ok(());
+                }
+            };
 
-                let expected_l2_block_number = 8428108;
-                let expected_l2_block_timestamp = 1682284284;
+            let l2_block_hash = H256::from_str(
+                "0x75d4a658d7b6430c874c5518752a8d90fb1503eccd6ae4cfc97fd4aedeebb939",
+            )?;
 
-                let expected_l1_epoch_hash = H256::from_str(
-                    "0x76ab90dc2afea158bbe14a99f22d5f867b51719378aa37d1a3aa3833ace67cad",
-                )?;
-                let expected_l1_epoch_block_number = 8879997;
-                let expected_l1_epoch_timestamp = 1682284164;
+            let expected_l2_block_number = 8428108;
+            let expected_l2_block_timestamp = 1682284284;
 
-                let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
-                let provider = Provider::try_from(l2_rpc)?;
+            let expected_l1_epoch_hash = H256::from_str(
+                "0x76ab90dc2afea158bbe14a99f22d5f867b51719378aa37d1a3aa3833ace67cad",
+            )?;
+            let expected_l1_epoch_block_number = 8879997;
+            let expected_l1_epoch_timestamp = 1682284164;
 
-                let l2_block = provider.get_block_with_txs(l2_block_hash).await?.unwrap();
-                let head = HeadInfo::try_from(l2_block)?;
+            let provider = Provider::try_from(l2_rpc)?;
 
-                let HeadInfo {
-                    l2_block_info,
-                    l1_epoch,
-                    sequence_number,
-                } = head;
+            let l2_block = provider.get_block_with_txs(l2_block_hash).await?.unwrap();
+            let head = HeadInfo::try_from(l2_block)?;
 
-                assert_eq!(l2_block_info.number, expected_l2_block_number);
-                assert_eq!(l2_block_info.timestamp, expected_l2_block_timestamp);
+            let HeadInfo {
+                l2_block_info,
+                l1_epoch,
+                sequence_number,
+            } = head;
 
-                assert_eq!(l1_epoch.hash, expected_l1_epoch_hash);
-                assert_eq!(l1_epoch.number, expected_l1_epoch_block_number);
-                assert_eq!(l1_epoch.timestamp, expected_l1_epoch_timestamp);
+            assert_eq!(l2_block_info.number, expected_l2_block_number);
+            assert_eq!(l2_block_info.timestamp, expected_l2_block_timestamp);
 
-                assert_eq!(sequence_number, 4);
-            }
+            assert_eq!(l1_epoch.hash, expected_l1_epoch_hash);
+            assert_eq!(l1_epoch.number, expected_l1_epoch_block_number);
+            assert_eq!(l1_epoch.timestamp, expected_l1_epoch_timestamp);
+
+            assert_eq!(sequence_number, 4);
 
             Ok(())
         }
