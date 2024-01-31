@@ -3,7 +3,7 @@ use std::sync::{Arc, RwLock};
 use ethers::types::{H256, U64};
 use ethers::utils::rlp::Encodable;
 
-use crate::config::SystemAccounts;
+use crate::config::{ChainConfig, SystemAccounts};
 use crate::derive::state::State;
 use crate::derive::PurgeableIterator;
 use crate::engine::PayloadAttributes;
@@ -16,11 +16,10 @@ use super::block_input::BlockInput;
 pub struct Attributes {
     block_input_iter: Box<dyn PurgeableIterator<Item = BlockInput<u64>>>,
     state: Arc<RwLock<State>>,
+    chain: Arc<ChainConfig>,
     seq_num: u64,
     epoch_hash: H256,
-    regolith_time: u64,
     unsafe_seq_num: u64,
-    canyon_time: u64,
 }
 
 impl Iterator for Attributes {
@@ -49,33 +48,32 @@ impl Attributes {
     pub fn new(
         block_input_iter: Box<dyn PurgeableIterator<Item = BlockInput<u64>>>,
         state: Arc<RwLock<State>>,
-        regolith_time: u64,
+        chain: Arc<ChainConfig>,
         seq_num: u64,
         unsafe_seq_num: u64,
-        canyon_time: u64,
     ) -> Self {
         let epoch_hash = state.read().expect("lock poisoned").safe_epoch.hash;
 
         Self {
             block_input_iter,
             state,
+            chain,
             seq_num,
             epoch_hash,
-            regolith_time,
             unsafe_seq_num,
-            canyon_time,
         }
     }
 
     pub fn derive_attributes_for_next_block(
-        &mut self,
+        &self,
         epoch: Epoch,
         l1_info: &L1Info,
         block_timestamp: u64,
     ) -> PayloadAttributes {
-        self.derive_attributes_internal(
+        Self::derive_attributes_internal(
             epoch,
             l1_info,
+            &self.chain,
             block_timestamp,
             vec![],
             self.unsafe_seq_num,
@@ -96,9 +94,10 @@ impl Attributes {
             timestamp: l1_info.block_info.timestamp,
         };
 
-        self.derive_attributes_internal(
+        Self::derive_attributes_internal(
             epoch,
             l1_info,
+            &self.chain,
             input.timestamp,
             input.transactions,
             self.seq_num,
@@ -107,24 +106,24 @@ impl Attributes {
     }
 
     fn derive_attributes_internal(
-        &self,
         epoch: Epoch,
         l1_info: &L1Info,
+        chain: &ChainConfig,
         timestamp: u64,
         transactions: Vec<RawTransaction>,
         seq_number: u64,
         l1_inclusion_block: Option<u64>,
     ) -> PayloadAttributes {
-        let transactions = Some(self.derive_transactions(
+        let transactions = Some(Self::derive_transactions(
             timestamp,
             transactions,
             l1_info,
-            epoch.hash,
             seq_number,
+            chain.regolith_time,
         ));
         let suggested_fee_recipient = SystemAccounts::default().fee_vault;
 
-        let withdrawals = if timestamp >= self.canyon_time {
+        let withdrawals = if timestamp >= chain.canyon_time {
             Some(Vec::new())
         } else {
             None
@@ -145,20 +144,20 @@ impl Attributes {
     }
 
     fn derive_transactions(
-        &self,
         timestamp: u64,
         mut batch_txs: Vec<RawTransaction>,
         l1_info: &L1Info,
-        epoch_hash: H256,
         seq: u64,
+        regolith_time: u64,
     ) -> Vec<RawTransaction> {
         let mut transactions = Vec::new();
 
-        let attributes_tx = self.derive_attributes_deposited(l1_info, timestamp, seq);
+        let attributes_tx =
+            Self::derive_attributes_deposited(l1_info, regolith_time, timestamp, seq);
         transactions.push(attributes_tx);
 
         if seq == 0 {
-            let mut user_deposited_txs = self.derive_user_deposited(epoch_hash);
+            let mut user_deposited_txs = Self::derive_user_deposited(l1_info);
             transactions.append(&mut user_deposited_txs);
         }
 
@@ -168,32 +167,26 @@ impl Attributes {
     }
 
     fn derive_attributes_deposited(
-        &self,
         l1_info: &L1Info,
+        regolith_time: u64,
         batch_timestamp: u64,
         seq: u64,
     ) -> RawTransaction {
         let attributes_deposited =
-            AttributesDeposited::from_block_info(l1_info, seq, batch_timestamp, self.regolith_time);
+            AttributesDeposited::from_block_info(l1_info, seq, batch_timestamp, regolith_time);
         let attributes_tx = DepositedTransaction::from(attributes_deposited);
         RawTransaction(attributes_tx.rlp_bytes().to_vec())
     }
 
-    fn derive_user_deposited(&self, epoch_hash: H256) -> Vec<RawTransaction> {
-        let state = self.state.read().expect("lock poisoned");
-        state
-            .l1_info_by_hash(epoch_hash)
-            .map(|info| &info.user_deposits)
-            .map(|deposits| {
-                deposits
-                    .iter()
-                    .map(|deposit| {
-                        let tx = DepositedTransaction::from(deposit.clone());
-                        RawTransaction(tx.rlp_bytes().to_vec())
-                    })
-                    .collect()
+    fn derive_user_deposited(l1_info: &L1Info) -> Vec<RawTransaction> {
+        l1_info
+            .user_deposits
+            .iter()
+            .map(|deposit| {
+                let tx = DepositedTransaction::from(deposit.clone());
+                RawTransaction(tx.rlp_bytes().to_vec())
             })
-            .unwrap_or_default()
+            .collect()
     }
 
     fn update_sequence_number(&mut self, batch_epoch_hash: H256) {
@@ -226,13 +219,97 @@ mod tests {
     use crate::derive::stages::channels::Channels;
     use crate::derive::state::State;
     use crate::l1::{L1BlockInfo, L1Info};
-    use crate::types::attributes::{DepositedTransaction, UserDeposited};
+    use crate::types::attributes::{DepositedTransaction, RawTransaction, UserDeposited};
     use crate::types::common::{BlockInfo, Epoch};
     use ethers::prelude::Provider;
     use ethers::types::{Address, H256, U256, U64};
     use ethers::utils::rlp::Rlp;
     use std::sync::{mpsc, Arc, RwLock};
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[tokio::test]
+    async fn test_derive_attributes_internal() {
+        let chain = Arc::new(ChainConfig::optimism_goerli());
+
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let epoch = Epoch {
+            number: 0,
+            hash: H256::random(),
+            timestamp: now,
+        };
+
+        let l1_info = L1Info {
+            block_info: L1BlockInfo {
+                number: epoch.number,
+                hash: epoch.hash,
+                timestamp: epoch.timestamp,
+                parent_hash: H256::zero(),
+                base_fee: U256::zero(),
+                mix_hash: H256::zero(),
+            },
+            system_config: chain.genesis.system_config,
+            user_deposits: vec![],
+            batcher_transactions: vec![],
+            finalized: false,
+        };
+
+        let attrs = Attributes::derive_attributes_internal(
+            epoch,
+            &l1_info,
+            &chain,
+            now + 2,
+            vec![RawTransaction(vec![1, 2, 3])],
+            1,
+            Some(epoch.number),
+        );
+
+        // Check fields.
+        assert_eq!(attrs.timestamp, (now + 2).into(), "timestamp doesn't match");
+        assert_eq!(
+            attrs.prev_randao, l1_info.block_info.mix_hash,
+            "prev rando doesn't match"
+        );
+        assert_eq!(
+            attrs.suggested_fee_recipient,
+            SystemAccounts::default().fee_vault,
+            "fee recipient doesn't match"
+        );
+        assert!(!attrs.no_tx_pool, "no tx pool doesn't match");
+        assert_eq!(
+            attrs.gas_limit,
+            U64([l1_info.system_config.gas_limit]),
+            "gas limit doesn't match"
+        );
+        assert!(attrs.epoch.is_some(), "epoch missed");
+        assert_eq!(attrs.epoch.unwrap(), epoch, "epoch doesn't match");
+        assert!(
+            attrs.l1_inclusion_block.is_some(),
+            "l1 inclusion block missed"
+        );
+        assert_eq!(
+            attrs.l1_inclusion_block.unwrap(),
+            0,
+            "wrong l1 inclusion block"
+        );
+        assert!(attrs.seq_number.is_some(), "seq number missed");
+        assert_eq!(attrs.seq_number.unwrap(), 1, "wrong sequence number");
+
+        // Check transactions.
+        assert!(attrs.transactions.is_some(), "missed transactions");
+        let transactions = attrs.transactions.unwrap();
+        assert_eq!(transactions.len(), 2, "wrong transactions length");
+
+        let (deposited_epoch, seq_number) =
+            transactions.first().unwrap().derive_unsafe_epoch().unwrap();
+        assert_eq!(
+            deposited_epoch, epoch,
+            "wrong epoch in deposited transaction"
+        );
+        assert_eq!(attrs.seq_number.unwrap(), seq_number);
+    }
 
     #[tokio::test]
     async fn test_derive_attributes_for_next_block_same_epoch() {
@@ -306,8 +383,7 @@ mod tests {
         );
         let batches = Batches::new(channels, state.clone(), Arc::clone(&chain));
 
-        let mut attributes =
-            Attributes::new(Box::new(batches), state, chain.regolith_time, 0, 0, 0);
+        let attributes = Attributes::new(Box::new(batches), state, Arc::clone(&chain), 0, 0);
         let attrs = attributes.derive_attributes_for_next_block(epoch, &l1_info, now + 2);
 
         // Check fields.
@@ -448,8 +524,7 @@ mod tests {
         );
         let batches = Batches::new(channels, state.clone(), Arc::clone(&chain));
 
-        let mut attributes =
-            Attributes::new(Box::new(batches), state, chain.regolith_time, 0, 0, 0);
+        let attributes = Attributes::new(Box::new(batches), state, Arc::clone(&chain), 0, 0);
         let attrs = attributes.derive_attributes_for_next_block(new_epoch, &l1_info, now + 2);
 
         // Check fields.

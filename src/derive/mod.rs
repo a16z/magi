@@ -53,14 +53,7 @@ impl Pipeline {
             chain.channel_timeout,
         );
         let batches = Batches::new(channels, state.clone(), Arc::clone(&chain));
-        let attributes = Attributes::new(
-            Box::new(batches),
-            state,
-            chain.regolith_time,
-            seq,
-            unsafe_seq,
-            chain.canyon_time,
-        );
+        let attributes = Attributes::new(Box::new(batches), state, chain, seq, unsafe_seq);
 
         Ok(Self {
             batcher_transaction_sender: tx,
