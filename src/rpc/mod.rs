@@ -109,8 +109,10 @@ fn compute_l2_output_root(block: Block<H256>, storage_root: H256) -> H256 {
 
 pub async fn run_server(config: Arc<Config>) -> Result<SocketAddr> {
     let port = config.rpc_port;
+    let addr = config.rpc_addr.clone();
+
     let server = ServerBuilder::default()
-        .build(format!("127.0.0.1:{}", port))
+        .build(format!("{}:{}", addr, port))
         .await?;
     let addr = server.local_addr()?;
     let rpc_impl = RpcServerImpl {
@@ -134,4 +136,83 @@ pub struct OutputRootResponse {
     pub version: H256,
     pub state_root: H256,
     pub withdrawal_storage_root: H256,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{ChainConfig, CliConfig, ExternalChainConfig};
+    use reqwest;
+    use serde_json::json;
+    use std::{path::PathBuf, str::FromStr};
+    use tokio::time::{sleep, Duration};
+    use tracing_subscriber;
+
+    #[derive(Serialize, Deserialize, Debug)]
+    struct RpcResponse {
+        jsonrpc: String,
+        result: ExternalChainConfig,
+        id: u64,
+    }
+
+    #[tokio::test]
+    async fn test_run_server() -> Result<()> {
+        std::env::set_var("RUST_LOG", "trace");
+        let cli_config = CliConfig {
+            l1_rpc_url: Some("".to_string()),
+            l2_rpc_url: None,
+            l2_engine_url: None,
+            jwt_secret: Some("".to_string()),
+            checkpoint_sync_url: None,
+            rpc_port: Some(8080),
+            rpc_addr: Some("127.0.0.1".to_string()),
+            devnet: false,
+        };
+
+        tracing_subscriber::fmt().init();
+
+        let config_path = PathBuf::from_str("config.toml")?;
+        let config = Arc::new(Config::new(
+            &config_path,
+            cli_config,
+            ChainConfig::optimism_sepolia(),
+        ));
+
+        let addr = run_server(config.clone())
+            .await
+            .expect("Failed to start server");
+
+        sleep(Duration::from_millis(100)).await;
+
+        let client = reqwest::Client::new();
+
+        let request_body = json!({
+            "jsonrpc": "2.0",
+            "method": "optimism_rollupConfig",
+            "params": [],
+            "id": 1,
+        });
+
+        let response = client
+            .post(format!("http://{}", addr))
+            .json(&request_body)
+            .send()
+            .await
+            .expect("Failed to send request");
+
+        assert!(response.status().is_success());
+
+        let rpc_response: RpcResponse = response.json().await.expect("Failed to parse response");
+
+        let rpc_chain_config: ChainConfig = rpc_response.result.into();
+
+        assert_eq!(config.chain.l2_genesis, rpc_chain_config.l2_genesis);
+        assert_eq!(
+            config.chain.l2_to_l1_message_passer,
+            rpc_chain_config.l2_to_l1_message_passer
+        );
+
+        println!("{:#?}", rpc_chain_config);
+        Ok(())
+    }
 }

@@ -99,6 +99,7 @@ The [Config](../src/config/mod.rs) object contains the system configuration for 
 - `jwt_secret`: A hex-encoded secret string used to authenticate requests to the engine API.
 - `checkpoint_sync_url`: The URL of the trusted L2 RPC endpoint to use for checkpoint syncing.
 - `rpc_port`: The port to use for the Magi RPC server.
+- `rpc_addr`: The socket address to use for the Magi RPC server.
 
 **ChainConfig**
 - `network`: The network name.

@@ -59,6 +59,8 @@ pub struct Cli {
     #[clap(short = 'p', long)]
     rpc_port: Option<u16>,
     #[clap(long)]
+    rpc_addr: Option<String>,
+    #[clap(long)]
     logs_dir: Option<String>,
     #[clap(long)]
     logs_rotation: Option<String>,
@@ -126,6 +128,7 @@ impl From<Cli> for CliConfig {
             jwt_secret,
             checkpoint_sync_url: value.checkpoint_sync_url,
             rpc_port: value.rpc_port,
+            rpc_addr: value.rpc_addr,
             devnet: value.devnet,
         }
     }

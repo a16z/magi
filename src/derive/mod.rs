@@ -108,6 +108,7 @@ mod tests {
                 jwt_secret: String::new(),
                 checkpoint_sync_url: None,
                 rpc_port: 9545,
+                rpc_addr: "127.0.0.1".to_string(),
                 devnet: false,
             });
 

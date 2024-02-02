@@ -394,6 +394,7 @@ mod tests {
             l2_engine_url: String::new(),
             jwt_secret: String::new(),
             rpc_port: 9545,
+            rpc_addr: "127.0.0.1".to_string(),
             chain: ChainConfig::optimism_goerli(),
             checkpoint_sync_url: None,
             devnet: false,

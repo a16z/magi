@@ -54,6 +54,8 @@ pub struct Config {
     pub checkpoint_sync_url: Option<String>,
     /// The port of RPC server
     pub rpc_port: u16,
+    /// The socket address of RPC server
+    pub rpc_addr: String,
     /// The devnet mode.
     pub devnet: bool,
 }
@@ -106,6 +108,8 @@ pub struct CliConfig {
     pub checkpoint_sync_url: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc_port: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rpc_addr: Option<String>,
     #[serde(default)]
     pub devnet: bool,
 }
@@ -207,6 +211,7 @@ struct DefaultsProvider {
     l2_rpc_url: String,
     l2_engine_url: String,
     rpc_port: u16,
+    rpc_addr: String,
 }
 
 impl Default for DefaultsProvider {
@@ -215,6 +220,7 @@ impl Default for DefaultsProvider {
             l2_rpc_url: "http://127.0.0.1:8545".to_string(),
             l2_engine_url: "http://127.0.0.1:8551".to_string(),
             rpc_port: 9545,
+            rpc_addr: "127.0.0.1".to_string(),
         }
     }
 }
