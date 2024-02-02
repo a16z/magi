@@ -273,8 +273,11 @@ impl<E: Engine> Driver<E> {
                     self.unsafe_block_signer_sender
                         .send(l1_info.system_config.unsafe_block_signer)?;
 
-                    self.pipeline
-                        .push_batcher_transactions(l1_info.batcher_transactions.clone(), num)?;
+                    // let calldata = l1_info.batcher_transactions.into();
+                    // TODO: decode valid data from blob
+                    let calldata = vec![];
+
+                    self.pipeline.push_batcher_transactions(calldata, num)?;
 
                     self.state
                         .write()

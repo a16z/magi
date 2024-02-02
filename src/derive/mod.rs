@@ -157,11 +157,12 @@ mod tests {
                 _ => panic!("wrong update type"),
             };
 
+            // let calldata = l1_info.batcher_transactions.into();
+            // TODO: get calldata from blob
+            let calldata = vec![];
+
             pipeline
-                .push_batcher_transactions(
-                    l1_info.batcher_transactions.clone(),
-                    l1_info.block_info.number,
-                )
+                .push_batcher_transactions(calldata, l1_info.block_info.number)
                 .unwrap();
 
             state.write().unwrap().update_l1_info(l1_info);

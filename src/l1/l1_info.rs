@@ -1,9 +1,7 @@
-use ethers::types::{Address, Block, Transaction, H256, U256};
-use eyre::Result;
+use ethers::types::{Block, Transaction, H256, U256};
 
+use super::BatcherTransactionData;
 use crate::{config::SystemConfig, derive::stages::attributes::UserDeposited};
-
-type BatcherTransactionData = Vec<u8>;
 
 /// Data tied to a specific L1 block
 #[derive(Debug)]
@@ -35,53 +33,31 @@ pub struct L1BlockInfo {
     pub mix_hash: H256,
 }
 
-impl L1Info {
-    pub fn new(
-        block: &Block<Transaction>,
-        user_deposits: Vec<UserDeposited>,
-        batch_inbox: Address,
-        finalized: bool,
-        system_config: SystemConfig,
-    ) -> Result<Self> {
-        let block_number = block
+impl TryFrom<&Block<Transaction>> for L1BlockInfo {
+    type Error = eyre::Error;
+
+    fn try_from(value: &Block<Transaction>) -> std::result::Result<Self, Self::Error> {
+        let number = value
             .number
             .ok_or(eyre::eyre!("block not included"))?
             .as_u64();
 
-        let block_hash = block.hash.ok_or(eyre::eyre!("block not included"))?;
+        let hash = value.hash.ok_or(eyre::eyre!("block not included"))?;
 
-        let block_info = L1BlockInfo {
-            number: block_number,
-            hash: block_hash,
-            timestamp: block.timestamp.as_u64(),
-            base_fee: block
-                .base_fee_per_gas
-                .ok_or(eyre::eyre!("block is pre london"))?,
-            mix_hash: block.mix_hash.ok_or(eyre::eyre!("block not included"))?,
-        };
+        let timestamp = value.timestamp.as_u64();
 
-        let batcher_transactions =
-            create_batcher_transactions(block, system_config.batch_sender, batch_inbox);
+        let base_fee = value
+            .base_fee_per_gas
+            .ok_or(eyre::eyre!("block is pre london"))?;
 
-        Ok(L1Info {
-            block_info,
-            system_config,
-            user_deposits,
-            batcher_transactions,
-            finalized,
+        let mix_hash = value.mix_hash.ok_or(eyre::eyre!("block not included"))?;
+
+        Ok(L1BlockInfo {
+            number,
+            hash,
+            timestamp,
+            base_fee,
+            mix_hash,
         })
     }
-}
-
-fn create_batcher_transactions(
-    block: &Block<Transaction>,
-    batch_sender: Address,
-    batch_inbox: Address,
-) -> Vec<BatcherTransactionData> {
-    block
-        .transactions
-        .iter()
-        .filter(|tx| tx.from == batch_sender && tx.to.map(|to| to == batch_inbox).unwrap_or(false))
-        .map(|tx| tx.input.to_vec())
-        .collect()
 }
