@@ -1,5 +1,6 @@
 use std::sync::{mpsc, Arc, RwLock};
 
+use bytes::Bytes;
 use eyre::Result;
 
 use crate::{config::Config, engine::PayloadAttributes};
@@ -64,7 +65,7 @@ impl Pipeline {
     }
 
     /// Sends [BatcherTransactions] & the L1 block they were received in to the [BatcherTransactions] receiver.
-    pub fn push_batcher_transactions(&self, txs: Vec<Vec<u8>>, l1_origin: u64) -> Result<()> {
+    pub fn push_batcher_transactions(&self, txs: Vec<Bytes>, l1_origin: u64) -> Result<()> {
         self.batcher_transaction_sender
             .send(BatcherTransactionMessage { txs, l1_origin })?;
         Ok(())
@@ -157,12 +158,11 @@ mod tests {
                 _ => panic!("wrong update type"),
             };
 
-            // let calldata = l1_info.batcher_transactions.into();
-            // TODO: get calldata from blob
-            let calldata = vec![];
-
             pipeline
-                .push_batcher_transactions(calldata, l1_info.block_info.number)
+                .push_batcher_transactions(
+                    l1_info.batcher_transactions.clone(),
+                    l1_info.block_info.number,
+                )
                 .unwrap();
 
             state.write().unwrap().update_l1_info(l1_info);

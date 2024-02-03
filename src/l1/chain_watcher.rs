@@ -166,12 +166,7 @@ impl InnerWatcher {
         l2_start_block: u64,
     ) -> Self {
         let provider = generate_http_provider(&config.l1_rpc_url);
-
-        let blob_fetcher = Arc::new(BlobFetcher::new(
-            config.l1_beacon_url.clone(),
-            config.chain.batch_inbox,
-            config.chain.system_config.batch_sender,
-        ));
+        let blob_fetcher = Arc::new(BlobFetcher::new(Arc::clone(&config)));
 
         let system_config = if l2_start_block == config.chain.l2_genesis.number {
             config.chain.system_config

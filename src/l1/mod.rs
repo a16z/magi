@@ -9,3 +9,6 @@ pub use l1_info::L1Info;
 
 pub mod blob_fetcher;
 pub use blob_fetcher::{BatcherTransactionData, BlobFetcher, BlobSidecar};
+
+pub mod blob_encoding;
+pub use blob_encoding::decode_blob_data;
