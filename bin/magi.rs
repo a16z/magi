@@ -72,21 +72,7 @@ pub struct Cli {
 
 impl Cli {
     pub fn to_config(self) -> Config {
-        let chain = match self.network.as_str() {
-            "optimism" => ChainConfig::optimism(),
-            "optimism-goerli" => ChainConfig::optimism_goerli(),
-            "optimism-sepolia" => ChainConfig::optimism_sepolia(),
-            "base" => ChainConfig::base(),
-            "base-goerli" => ChainConfig::base_goerli(),
-            "base-sepolia" => ChainConfig::base_sepolia(),
-            file if file.ends_with(".json") => ChainConfig::from_json(file),
-            _ => panic!(
-                "Invalid network name. \\
-                Please use one of the following: 'optimism', 'optimism-goerli', 'base-goerli'. \\
-                You can also use a JSON file path for custom configuration."
-            ),
-        };
-
+        let chain = ChainConfig::from_network_name(&self.network);
         let config_path = home_dir().unwrap().join(".magi/magi.toml");
         let cli_config = CliConfig::from(self);
         Config::new(&config_path, cli_config, chain)
