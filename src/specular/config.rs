@@ -14,6 +14,7 @@ struct ExternalChainConfig {
     block_time: u64,
     max_sequencer_drift: u64,
     seq_window_size: u64,
+    watcher_delay: u64,
     l1_chain_id: u64,
     l2_chain_id: u64,
     batch_inbox_address: Address,
@@ -89,6 +90,7 @@ impl From<ExternalChainConfig> for ChainConfig {
             channel_timeout: 0,                        // not used
             seq_window_size: external.seq_window_size, // NOTE: not used in derivation, but used in `State`
             max_seq_drift: external.max_sequencer_drift,
+            watcher_delay: external.watcher_delay,
             regolith_time: 0, // not used
             blocktime: external.block_time,
             l2_to_l1_message_passer: Address::zero(), // not used?

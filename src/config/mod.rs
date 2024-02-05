@@ -151,6 +151,8 @@ pub struct ChainConfig {
     pub seq_window_size: u64,
     /// Maximum timestamp drift
     pub max_seq_drift: u64,
+    /// Watcher query delay
+    pub watcher_delay: u64,
     /// Timestamp of the regolith hardfork
     pub regolith_time: u64,
     /// Network blocktime
@@ -282,6 +284,7 @@ impl ChainConfig {
             seq_window_size: 3600,
             max_seq_drift: 600,
             blocktime: 2,
+            watcher_delay: 4000,
             regolith_time: 0,
             meta: ProtocolMetaConfig::optimism(),
         }
@@ -320,6 +323,7 @@ impl ChainConfig {
             channel_timeout: 300,
             seq_window_size: 3600,
             max_seq_drift: 600,
+            watcher_delay: 4000,
             regolith_time: 1679079600,
             blocktime: 2,
             meta: ProtocolMetaConfig::optimism(),
@@ -358,6 +362,7 @@ impl ChainConfig {
             channel_timeout: 300,
             seq_window_size: 3600,
             max_seq_drift: 600,
+            watcher_delay: 4000,
             regolith_time: 0,
             blocktime: 2,
             meta: ProtocolMetaConfig::optimism(),
@@ -396,6 +401,7 @@ impl ChainConfig {
             seq_window_size: 3600,
             max_seq_drift: 600,
             blocktime: 2,
+            watcher_delay: 4000,
             regolith_time: 0,
             meta: ProtocolMetaConfig::optimism(),
         }
@@ -432,6 +438,7 @@ impl ChainConfig {
             channel_timeout: 100,
             seq_window_size: 3600,
             max_seq_drift: 600,
+            watcher_delay: 4000,
             regolith_time: 1683219600,
             blocktime: 2,
             meta: ProtocolMetaConfig::optimism(),
@@ -476,6 +483,7 @@ struct ExternalChainConfig {
     l1_chain_id: u64,
     l2_chain_id: u64,
     regolith_time: u64,
+    watcher_delay: u64,
     batch_inbox_address: Address,
     deposit_contract_address: Address,
     l1_system_config_address: Address,
@@ -536,6 +544,7 @@ impl From<ExternalChainConfig> for ChainConfig {
             channel_timeout: external.channel_timeout,
             seq_window_size: external.seq_window_size,
             max_seq_drift: external.max_sequencer_drift,
+            watcher_delay: external.watcher_delay,
             regolith_time: external.regolith_time,
             blocktime: external.block_time,
             l2_to_l1_message_passer: addr("0x4200000000000000000000000000000000000016"),

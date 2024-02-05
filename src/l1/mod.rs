@@ -521,6 +521,7 @@ fn start_watcher(
     let (block_update_sender, block_update_receiver) = mpsc::channel(1000);
 
     let handle = spawn(async move {
+        let watcher_delay = config.chain.watcher_delay.clone();
         let mut watcher =
             InnerWatcher::new(config, block_update_sender, l1_start_block, l2_start_block).await;
 
@@ -534,10 +535,9 @@ fn start_watcher(
                     err
                 );
             }
-            // TODO make configurable
-            let elapsed = now.elapsed().unwrap_or_default();
-            let delay = max(0, 2000 - elapsed.as_millis());
-            sleep(Duration::from_millis(delay.try_into().unwrap())).await;
+            let elapsed = now.elapsed().unwrap_or_default().as_millis() as u64;
+            let delay = max(0, watcher_delay.saturating_sub(elapsed));
+            sleep(Duration::from_millis(delay)).await;
         }
     });
 
