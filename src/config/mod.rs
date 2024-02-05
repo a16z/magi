@@ -227,6 +227,24 @@ impl ChainConfig {
         external.into()
     }
 
+    /// Generates a ChainConfig object from a given network name.
+    pub fn from_network_name(network: &str) -> Self {
+        match network.to_lowercase().as_str() {
+            "optimism" => Self::optimism(),
+            "optimism-goerli" => Self::optimism_goerli(),
+            "optimism-sepolia" => Self::optimism_sepolia(),
+            "base" => Self::base(),
+            "base-goerli" => Self::base_goerli(),
+            "base-sepolia" => Self::base_sepolia(),
+            file if file.ends_with(".json") => Self::from_json(file),
+            _ => panic!(
+                "Invalid network name. \\
+            Please use one of the following: 'optimism', 'optimism-goerli', 'optimism-sepolia', 'base-goerli', 'base-sepolia', 'base'. \\
+            You can also use a JSON file path for custom configuration."
+            ),
+        }
+    }
+
     pub fn optimism() -> Self {
         Self {
             network: "optimism".to_string(),
@@ -791,5 +809,90 @@ mod test {
             chain.l2_to_l1_message_passer,
             addr("0x4200000000000000000000000000000000000016")
         );
+    }
+
+    #[test]
+    fn test_chain_config_from_name() {
+        let optimism_config = ChainConfig::optimism();
+        let desired_config = ChainConfig::from_network_name("opTimIsm");
+
+        assert_eq!(optimism_config.max_seq_drift, desired_config.max_seq_drift);
+
+        assert_eq!(
+            optimism_config.seq_window_size,
+            desired_config.seq_window_size
+        );
+        assert_eq!(
+            optimism_config.channel_timeout,
+            desired_config.channel_timeout
+        );
+        assert_eq!(optimism_config.l1_chain_id, desired_config.l1_chain_id);
+        assert_eq!(optimism_config.l2_chain_id, desired_config.l2_chain_id);
+        assert_eq!(optimism_config.blocktime, desired_config.blocktime);
+        assert_eq!(optimism_config.regolith_time, desired_config.regolith_time);
+        assert_eq!(optimism_config.batch_inbox, desired_config.batch_inbox);
+        assert_eq!(
+            optimism_config.deposit_contract,
+            desired_config.deposit_contract
+        );
+        assert_eq!(
+            optimism_config.system_config_contract,
+            desired_config.system_config_contract
+        );
+
+        assert_eq!(
+            optimism_config.l1_start_epoch.hash,
+            desired_config.l1_start_epoch.hash
+        );
+        assert_eq!(
+            optimism_config.l1_start_epoch.number,
+            desired_config.l1_start_epoch.number
+        );
+        assert_eq!(
+            optimism_config.l2_genesis.hash,
+            desired_config.l2_genesis.hash
+        );
+        assert_eq!(
+            optimism_config.l2_genesis.number,
+            desired_config.l2_genesis.number
+        );
+        assert_eq!(
+            optimism_config.l2_genesis.timestamp,
+            desired_config.l2_genesis.timestamp
+        );
+
+        assert_eq!(
+            optimism_config.system_config.batch_sender,
+            desired_config.system_config.batch_sender
+        );
+
+        assert_eq!(
+            optimism_config.system_config.l1_fee_overhead,
+            desired_config.system_config.l1_fee_overhead
+        );
+        assert_eq!(
+            optimism_config.system_config.l1_fee_scalar,
+            desired_config.system_config.l1_fee_scalar
+        );
+
+        assert_eq!(
+            optimism_config.system_config.gas_limit,
+            desired_config.system_config.gas_limit
+        );
+
+        // Generate Base config and compare with optimism config
+        let desired_config = ChainConfig::from_network_name("base");
+        assert_ne!(optimism_config.l2_chain_id, desired_config.l2_chain_id);
+        assert_ne!(
+            optimism_config.deposit_contract,
+            desired_config.deposit_contract
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Invalid network name")]
+    fn test_chain_config_unknown_chain() {
+        // Should panic if chain isn't recognized
+        _ = ChainConfig::from_network_name("magichain");
     }
 }
