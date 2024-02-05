@@ -584,6 +584,7 @@ mod test {
             "channel_timeout": 120,
             "l1_chain_id": 900,
             "l2_chain_id": 901,
+            "watcher_delay" : 4000,
             "regolith_time": 0,
             "batch_inbox_address": "0xff00000000000000000000000000000000000000",
             "deposit_contract_address": "0x6900000000000000000000000000000000000001",
