@@ -521,7 +521,7 @@ fn start_watcher(
     let (block_update_sender, block_update_receiver) = mpsc::channel(1000);
 
     let handle = spawn(async move {
-        let watcher_delay = config.chain.watcher_delay;
+        let watcher_delay = config.watcher_delay;
         let mut watcher =
             InnerWatcher::new(config, block_update_sender, l1_start_block, l2_start_block).await;
 

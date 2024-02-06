@@ -71,6 +71,8 @@ pub struct Cli {
     devnet: bool,
     #[clap(flatten)]
     local_sequencer: LocalSequencerCli,
+    #[clap(long)]
+    watcher_delay: Option<u64>,
 }
 
 #[derive(Parser, Serialize)]
@@ -141,6 +143,7 @@ impl From<Cli> for CliConfig {
             rpc_port: value.rpc_port,
             devnet: value.devnet,
             local_sequencer: Some(value.local_sequencer.into()),
+            watcher_delay: value.watcher_delay,
         }
     }
 }
