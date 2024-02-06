@@ -122,6 +122,7 @@ mod tests {
                 rpc_port: 9545,
                 devnet: false,
                 local_sequencer: Default::default(),
+                watcher_delay: Default::default(),
             });
 
             let mut chain_watcher = ChainWatcher::new(

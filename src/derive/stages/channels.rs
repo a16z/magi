@@ -398,6 +398,7 @@ mod tests {
             checkpoint_sync_url: None,
             devnet: false,
             local_sequencer: Default::default(),
+            watcher_delay: Default::default(),
         };
 
         let (tx, rx) = mpsc::channel();

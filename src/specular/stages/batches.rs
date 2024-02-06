@@ -446,6 +446,7 @@ mod tests {
                 rpc_port: Default::default(),
                 devnet: false,
                 local_sequencer: Default::default(),
+                watcher_delay: Default::default(),
             });
             let state = RwLock::new(State::new(
                 Default::default(),

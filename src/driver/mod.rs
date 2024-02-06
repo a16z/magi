@@ -438,6 +438,7 @@ mod tests {
                 rpc_port: None,
                 devnet: false,
                 local_sequencer: None,
+                watcher_delay: 2000,
             };
             let config = Config::new(&config_path, cli_config, ChainConfig::optimism_goerli());
             let (_shutdown_sender, shutdown_recv) = channel(false);

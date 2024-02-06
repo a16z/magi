@@ -237,6 +237,7 @@ mod test_utils {
             rpc_port: Default::default(),
             devnet: false,
             local_sequencer: Default::default(),
+            watcher_delay: Default::default(),
         }
     }
 
