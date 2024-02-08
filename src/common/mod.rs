@@ -50,6 +50,7 @@ impl From<BlockInfo> for Value {
 impl TryFrom<Block<Transaction>> for BlockInfo {
     type Error = eyre::Report;
 
+    /// Converts a [Block] to [BlockInfo]
     fn try_from(block: Block<Transaction>) -> Result<Self> {
         let number = block
             .number
@@ -78,6 +79,7 @@ impl From<Epoch> for Value {
 }
 
 impl From<&ExecutionPayload> for BlockInfo {
+    /// Converts an [ExecutionPayload] to [BlockInfo]
     fn from(value: &ExecutionPayload) -> Self {
         Self {
             number: value.block_number.as_u64(),
@@ -88,14 +90,23 @@ impl From<&ExecutionPayload> for BlockInfo {
     }
 }
 
+/// Represents the `setL1BlockValues` transaction inputs included in the first transaction of every L2 block.
 pub struct AttributesDepositedCall {
+    /// The L1 block number of the corresponding epoch this belongs to.
     pub number: u64,
+    /// The L1 block timestamp of the corresponding epoch this belongs to.
     pub timestamp: u64,
+    /// The L1 block basefee of the corresponding epoch this belongs to.
     pub basefee: U256,
+    /// The L1 block hash of the corresponding epoch this belongs to.
     pub hash: H256,
+    /// The L2 block's position within the epoch.
     pub sequence_number: u64,
+    /// A versioned hash of the current authorized batcher sender.
     pub batcher_hash: H256,
+    /// The current L1 fee overhead to apply to L2 transactions cost computation. Unused after Ecotone hard fork.
     pub fee_overhead: U256,
+    /// The current L1 fee scalar to apply to L2 transactions cost computation. Unused after Ecotone hard fork.
     pub fee_scalar: U256,
 }
 
@@ -107,6 +118,7 @@ const L1_BLOCK_CONTRACT_ABI: &str = r#"[
 impl TryFrom<Bytes> for AttributesDepositedCall {
     type Error = eyre::Report;
 
+    /// Decodes and converts the given bytes (calldata) into [AttributesDepositedCall].
     fn try_from(value: Bytes) -> Result<Self> {
         let abi = BaseContract::from(parse_abi_str(L1_BLOCK_CONTRACT_ABI)?);
 
@@ -135,6 +147,7 @@ impl TryFrom<Bytes> for AttributesDepositedCall {
 }
 
 impl From<&AttributesDepositedCall> for Epoch {
+    /// Converts [AttributesDepositedCall] to an [Epoch] consisting of the number, hash & timestamp of the corresponding L1 epoch block.
     fn from(call: &AttributesDepositedCall) -> Self {
         Self {
             number: call.number,
@@ -145,6 +158,7 @@ impl From<&AttributesDepositedCall> for Epoch {
 }
 
 impl Decodable for RawTransaction {
+    /// Decodes RLP encoded bytes into [RawTransaction] bytes
     fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
         let tx_bytes: Vec<u8> = rlp.as_val()?;
         Ok(Self(tx_bytes))

@@ -5,19 +5,26 @@ use std::collections::VecDeque;
 
 use crate::derive::PurgeableIterator;
 
+/// Represents a transaction sent to the `Batch Inbox` on L1.
 pub struct BatcherTransactionMessage {
+    /// The L2 transactions included in this batch
     pub txs: Vec<Vec<u8>>,
+    /// The L1 block number this transaction was included in
     pub l1_origin: u64,
 }
 
+/// Receives [BatcherTransactionMessage] messages from a channel and stores these in a [VecDeque].
 pub struct BatcherTransactions {
+    /// [VecDeque] containing [BatcherTransaction]
     txs: VecDeque<BatcherTransaction>,
+    /// [BatcherTransactionMessage] channel [receiver](mpsc::Receiver)
     transaction_rx: mpsc::Receiver<BatcherTransactionMessage>,
 }
 
 impl Iterator for BatcherTransactions {
     type Item = BatcherTransaction;
 
+    /// Receives new [BatcherTransactionMessage] messages from the channel and adds these to the deque. Pops and returns the first deque element.
     fn next(&mut self) -> Option<Self::Item> {
         self.process_incoming();
         self.txs.pop_front()
@@ -25,6 +32,7 @@ impl Iterator for BatcherTransactions {
 }
 
 impl PurgeableIterator for BatcherTransactions {
+    /// Resets itself by clearing the channel and deque
     fn purge(&mut self) {
         // drain the channel first
         while self.transaction_rx.try_recv().is_ok() {}
@@ -33,6 +41,7 @@ impl PurgeableIterator for BatcherTransactions {
 }
 
 impl BatcherTransactions {
+    /// Creates a new [BatcherTransactions]
     pub fn new(transaction_rx: mpsc::Receiver<BatcherTransactionMessage>) -> Self {
         Self {
             transaction_rx,
@@ -40,6 +49,7 @@ impl BatcherTransactions {
         }
     }
 
+    ///  Receives new [BatcherTransactionMessage] messages from the channel and adds these to the end of the deque.
     pub fn process_incoming(&mut self) {
         while let Ok(BatcherTransactionMessage { txs, l1_origin }) = self.transaction_rx.try_recv()
         {
@@ -56,13 +66,17 @@ impl BatcherTransactions {
     }
 }
 
+/// A single batcher transaction
 #[derive(Debug, Clone)]
 pub struct BatcherTransaction {
+    /// The version byte.
     pub version: u8,
+    /// The rollup payload consisting of 1 or more frames.
     pub frames: Vec<Frame>,
 }
 
 impl BatcherTransaction {
+    /// Creates a new [BatcherTransaction]
     pub fn new(data: &[u8], l1_origin: u64) -> Result<Self> {
         let version = data[0];
         let frame_data = data.get(1..).ok_or(eyre::eyre!("No frame data"))?;
@@ -79,17 +93,25 @@ impl BatcherTransaction {
     }
 }
 
+/// A channel frame.
 #[derive(Debug, Default, Clone)]
 pub struct Frame {
+    // A unique identifier for the channel containing the frame.
     pub channel_id: u128,
+    /// The index of the frame within the channel
     pub frame_number: u16,
+    /// The byte length of frame_data. Capped to 1,000,000 bytes.
     pub frame_data_len: u32,
+    /// A sequence of bytes belonging to the channel, logically after the previous frames
     pub frame_data: Vec<u8>,
+    /// If the frame is the last in the channel
     pub is_last: bool,
+    /// The L1 block number this frame was submitted in.
     pub l1_inclusion_block: u64,
 }
 
 impl Frame {
+    /// Converts a sequence of bytes into a [Frame]
     fn from_data(data: &[u8], offset: usize, l1_inclusion_block: u64) -> Result<(Self, usize)> {
         let data = &data[offset..];
 

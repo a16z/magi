@@ -17,13 +17,17 @@ use super::channels::Channel;
 use super::single_batch::SingleBatch;
 use super::span_batch::SpanBatch;
 
+/// Tracks and processes batches
 pub struct Batches<I> {
     /// Mapping of timestamps to batches
     batches: BTreeMap<u64, Batch>,
-    /// Pending block inputs to be outputed
+    /// Pending block inputs to be outputted
     pending_inputs: Vec<BlockInput<u64>>,
+    /// A [Channels](super::channels::Channels) iterator, which iterates over [BatcherTransaction](super::batcher_transactions::BatcherTransaction) and processes channel frames.
     channel_iter: I,
+    /// The current derivation [State]. Contains cached L1 & L2 blocks and details of the current safe head & safe epoch.
     state: Arc<RwLock<State>>,
+    /// The global Magi [Config]
     config: Arc<Config>,
 }
 
@@ -33,6 +37,7 @@ where
 {
     type Item = BlockInput<u64>;
 
+    /// Attempts to decode batches in the next channel and returns a [BlockInput](struct@BlockInput)
     fn next(&mut self) -> Option<Self::Item> {
         self.try_next().unwrap_or_else(|_| {
             tracing::debug!("Failed to decode batch");
@@ -45,6 +50,7 @@ impl<I> PurgeableIterator for Batches<I>
 where
     I: PurgeableIterator<Item = Channel>,
 {
+    /// Clears the channels iterator, batches mapping & pending block inputs
     fn purge(&mut self) {
         self.channel_iter.purge();
         self.batches.clear();
@@ -53,6 +59,7 @@ where
 }
 
 impl<I> Batches<I> {
+    /// Creates a new [Batches] instance
     pub fn new(channel_iter: I, state: Arc<RwLock<State>>, config: Arc<Config>) -> Self {
         Self {
             batches: BTreeMap::new(),
@@ -68,6 +75,15 @@ impl<I> Batches<I>
 where
     I: Iterator<Item = Channel>,
 {
+    /// Initiates the process of building a channel from channel frames.
+    ///
+    /// Decodes batches from the built channel and inserts them into the batches mapping.
+    ///
+    /// Checks validity of batches in batches mapping, removing any that are invalid.
+    ///
+    /// Attempts to derive the first valid batch and returns the first [BlockInput] in the batch. Remaining [BlockInput]s are inserted into `pending_inputs`,
+    ///
+    /// If there are already pending inputs, it will skip the above and simply return the first pending [BlockInput]
     fn try_next(&mut self) -> Result<Option<BlockInput<u64>>> {
         if !self.pending_inputs.is_empty() {
             return Ok(Some(self.pending_inputs.remove(0)));
@@ -115,6 +131,7 @@ where
                 None
             }
         } else {
+            // No valid batches were found. If we are past the epoch number + sequencer window size, and aware of the next epoch -> return a new BlockInput with no transactions.
             let state = self.state.read().unwrap();
 
             let current_l1_block = state.current_epoch_num;
@@ -147,6 +164,7 @@ where
         })
     }
 
+    /// Returns [BlockInput] elements that are newer than the current `safe_head`.
     fn filter_inputs(&self, inputs: Vec<BlockInput<u64>>) -> Vec<BlockInput<u64>> {
         inputs
             .into_iter()
@@ -154,6 +172,7 @@ where
             .collect()
     }
 
+    /// Returns the validity of a [Batch]
     fn batch_status(&self, batch: &Batch) -> BatchStatus {
         match batch {
             Batch::Single(batch) => self.single_batch_status(batch),
@@ -161,6 +180,7 @@ where
         }
     }
 
+    /// Returns the validity of a [SingleBatch]
     fn single_batch_status(&self, batch: &SingleBatch) -> BatchStatus {
         let state = self.state.read().unwrap();
         let epoch = state.safe_epoch;
@@ -243,6 +263,7 @@ where
         BatchStatus::Accept
     }
 
+    /// Returns the validity of a [SpanBatch]
     fn span_batch_status(&self, batch: &SpanBatch) -> BatchStatus {
         let state = self.state.read().unwrap();
         let epoch = state.safe_epoch;
@@ -378,6 +399,7 @@ where
     }
 }
 
+/// Attempts to decode channel data into a [Batch] vector
 fn decode_batches(channel: &Channel, chain_id: u64) -> Result<Vec<Batch>> {
     let mut channel_data = Vec::new();
     let d = Decoder::new(channel.data.as_slice())?;
@@ -425,11 +447,14 @@ fn decode_batches(channel: &Channel, chain_id: u64) -> Result<Vec<Batch>> {
 
 #[derive(Debug, Clone)]
 pub enum Batch {
+    /// A [SingleBatch]
     Single(SingleBatch),
+    /// A [SpanBatch]
     Span(SpanBatch),
 }
 
 impl Batch {
+    /// Returns the batch timestamp
     pub fn timestamp(&self, config: &Config) -> u64 {
         match self {
             Batch::Single(batch) => batch.timestamp,
@@ -437,6 +462,7 @@ impl Batch {
         }
     }
 
+    /// Returns a [BlockInput] vector of the blocks in a batch.
     pub fn as_inputs(&self, config: &Config) -> Vec<BlockInput<u64>> {
         match self {
             Batch::Single(batch) => vec![batch.block_input()],
@@ -447,8 +473,12 @@ impl Batch {
 
 #[derive(Debug, Clone, PartialEq)]
 enum BatchStatus {
+    /// The batch is invalid
     Drop,
+    /// The batch is valid
     Accept,
+    /// Not enough data to decide
     Undecided,
+    /// Batch is for a future block
     Future,
 }

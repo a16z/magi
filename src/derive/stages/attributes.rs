@@ -15,17 +15,24 @@ use crate::l1::L1Info;
 
 use super::block_input::BlockInput;
 
+/// Represents the `Payload Attributes Derivation` stage.
 pub struct Attributes {
+    /// An iterator over [BlockInput]: used to derive [PayloadAttributes]
     block_input_iter: Box<dyn PurgeableIterator<Item = BlockInput<u64>>>,
+    /// The current derivation [State]. Contains cached L1 & L2 blocks and details of the current safe head & safe epoch.
     state: Arc<RwLock<State>>,
+    /// The sequence number of the block being processed
     sequence_number: u64,
+    /// The block hash of the corresponding L1 epoch block.
     epoch_hash: H256,
+    /// The global Magi [Config]
     config: Arc<Config>,
 }
 
 impl Iterator for Attributes {
     type Item = PayloadAttributes;
 
+    /// Iterates over the next [BlockInput] and returns the [PayLoadAttributes](struct@PayloadAttributes) from this block.
     fn next(&mut self) -> Option<Self::Item> {
         self.block_input_iter
             .next()
@@ -35,6 +42,7 @@ impl Iterator for Attributes {
 }
 
 impl PurgeableIterator for Attributes {
+    /// Purges the [BlockInput] iterator, and sets the [epoch_hash](Attributes::epoch_hash) to the [safe_epoch](State::safe_epoch) hash.
     fn purge(&mut self) {
         self.block_input_iter.purge();
         self.sequence_number = 0;
@@ -43,6 +51,7 @@ impl PurgeableIterator for Attributes {
 }
 
 impl Attributes {
+    /// Creates new [Attributes] and sets [epoch_hash](Attributes::epoch_hash) to the current L1 safe epoch block hash.
     pub fn new(
         block_input_iter: Box<dyn PurgeableIterator<Item = BlockInput<u64>>>,
         state: Arc<RwLock<State>>,
@@ -60,6 +69,9 @@ impl Attributes {
         }
     }
 
+    /// Processes a given [BlockInput] and returns [PayloadAttributes] for the block.
+    ///
+    /// Calls `derive_transactions` to generate the raw transactions
     fn derive_attributes(&mut self, input: BlockInput<Epoch>) -> PayloadAttributes {
         tracing::debug!("attributes derived from block {}", input.epoch.number);
         tracing::debug!("batch epoch hash {:?}", input.epoch.hash);
@@ -97,6 +109,11 @@ impl Attributes {
         }
     }
 
+    /// Derives the deposited transactions and all other L2 user transactions from a given block. Deposited txs include:
+    /// - L1 Attributes Deposited (exists as the first tx in every block)
+    /// - User deposits sent to the L1 deposit contract (0 or more and will only exist in the first block of the epoch)
+    ///
+    /// Returns a [RawTransaction] vector containing all of the transactions for the L2 block.
     fn derive_transactions(
         &self,
         input: BlockInput<Epoch>,
@@ -118,6 +135,7 @@ impl Attributes {
         transactions
     }
 
+    /// Derives the attributes deposited transaction for a given block and converts this to a [RawTransaction].
     fn derive_attributes_deposited(
         &self,
         l1_info: &L1Info,
@@ -130,6 +148,7 @@ impl Attributes {
         RawTransaction(attributes_tx.rlp_bytes().to_vec())
     }
 
+    /// Derives the user deposited txs for the current epoch, and returns a [RawTransaction] vector
     fn derive_user_deposited(&self) -> Vec<RawTransaction> {
         let state = self.state.read().unwrap();
         state
@@ -147,6 +166,9 @@ impl Attributes {
             .unwrap_or_default()
     }
 
+    /// Sets the current sequence number. If `self.epoch_hash` != `batch_epoch_hash` this is set to 0; otherwise it increments by 1.
+    ///
+    /// Also sets `self.epoch_hash` to `batch_epoch_hash`
     fn update_sequence_number(&mut self, batch_epoch_hash: H256) {
         if self.epoch_hash != batch_epoch_hash {
             self.sequence_number = 0;
@@ -158,19 +180,29 @@ impl Attributes {
     }
 }
 
+/// Represents a deposited transaction
 #[derive(Debug)]
 struct DepositedTransaction {
+    /// Unique identifier to identify the origin of the deposit
     source_hash: H256,
+    /// Address of the sender
     from: Address,
+    /// Address of the recipient, or None if the transaction is a contract creation
     to: Option<Address>,
+    /// ETH value to mint on L2
     mint: U256,
+    /// ETH value to send to the recipient
     value: U256,
+    /// Gas limit for the L2 transaction
     gas: u64,
+    /// If true, does not use L2 gas. Always False post-Regolith.
     is_system_tx: bool,
+    /// Any additional calldata or contract creation code.
     data: Vec<u8>,
 }
 
 impl From<AttributesDeposited> for DepositedTransaction {
+    /// Converts [AttributesDeposited] to a [DepositedTransaction]
     fn from(attributes_deposited: AttributesDeposited) -> Self {
         let hash = attributes_deposited.hash.to_fixed_bytes();
         let seq = H256::from_low_u64_be(attributes_deposited.sequence_number).to_fixed_bytes();
@@ -199,6 +231,7 @@ impl From<AttributesDeposited> for DepositedTransaction {
 }
 
 impl From<UserDeposited> for DepositedTransaction {
+    /// Converts [UserDeposited] to a [DepositedTransaction]
     fn from(user_deposited: UserDeposited) -> Self {
         let hash = user_deposited.l1_block_hash.to_fixed_bytes();
         let log_index = user_deposited.log_index.into();
@@ -227,6 +260,7 @@ impl From<UserDeposited> for DepositedTransaction {
 }
 
 impl Encodable for DepositedTransaction {
+    /// Converts a [DepositedTransaction] to RLP bytes and appends to the stream.
     fn rlp_append(&self, s: &mut RlpStream) {
         s.append_raw(&[0x7E], 1);
         s.begin_list(8);
@@ -247,6 +281,7 @@ impl Encodable for DepositedTransaction {
     }
 }
 
+/// Represents the attributes provided as calldata in an attributes deposited transaction.
 #[derive(Debug)]
 struct AttributesDeposited {
     number: u64,
@@ -262,6 +297,7 @@ struct AttributesDeposited {
 }
 
 impl AttributesDeposited {
+    /// Creates [AttributesDeposited] from the given data.
     fn from_block_info(l1_info: &L1Info, seq: u64, batch_timestamp: u64, config: &Config) -> Self {
         let is_regolith = batch_timestamp >= config.chain.regolith_time;
         let is_system_tx = !is_regolith;
@@ -282,6 +318,7 @@ impl AttributesDeposited {
         }
     }
 
+    /// Encodes [AttributesDeposited] into `setL1BlockValues` transaction calldata, including the selector.
     fn encode(&self) -> Vec<u8> {
         let tokens = vec![
             Token::Uint(self.number.into()),
@@ -301,23 +338,35 @@ impl AttributesDeposited {
     }
 }
 
+/// Represents a user deposited transaction.
 #[derive(Debug, Clone)]
 pub struct UserDeposited {
+    /// Address of the sender
     pub from: Address,
+    /// Address of the recipient, or None if the transaction is a contract creation
     pub to: Address,
+    /// ETH value to mint on L2
     pub mint: U256,
+    /// ETH value to send to the recipient
     pub value: U256,
+    /// Gas limit for the L2 transaction
     pub gas: u64,
+    /// If this is a contract creation
     pub is_creation: bool,
+    /// Calldata or contract creation code if `is_creation` is true.
     pub data: Vec<u8>,
+    /// The L1 block number this was submitted in.
     pub l1_block_num: u64,
+    /// The L1 block hash this was submitted in.
     pub l1_block_hash: H256,
+    /// The index of the emitted deposit event log in the L1 block.
     pub log_index: U256,
 }
 
 impl TryFrom<Log> for UserDeposited {
     type Error = eyre::Report;
 
+    /// Converts the emitted L1 deposit event log into [UserDeposited]
     fn try_from(log: Log) -> Result<Self, Self::Error> {
         let opaque_data = decode(&[ParamType::Bytes], &log.data)?[0]
             .clone()
