@@ -12,11 +12,13 @@ pub trait InnerProvider {
     ) -> Result<Option<Block<Transaction>>, ProviderError>;
 }
 
+/// Wrapper around a [Provider]
 pub struct HeadInfoFetcher<'a, P: JsonRpcClient> {
     inner: &'a Provider<P>,
 }
 
 impl<'a, P: JsonRpcClient> From<&'a Provider<P>> for HeadInfoFetcher<'a, P> {
+    /// Converts a [Provider] to a [HeadInfoFetcher]
     fn from(inner: &'a Provider<P>) -> Self {
         Self { inner }
     }
@@ -24,6 +26,7 @@ impl<'a, P: JsonRpcClient> From<&'a Provider<P>> for HeadInfoFetcher<'a, P> {
 
 #[async_trait::async_trait]
 impl<'a, P: JsonRpcClient> InnerProvider for HeadInfoFetcher<'a, P> {
+    /// Fetches a block with transactions
     async fn get_block_with_txs(
         &self,
         block_id: BlockId,
@@ -35,6 +38,7 @@ impl<'a, P: JsonRpcClient> InnerProvider for HeadInfoFetcher<'a, P> {
 pub struct HeadInfoQuery {}
 
 impl HeadInfoQuery {
+    /// Fetches the latest finalized L2 block
     pub async fn get_head_info<P: InnerProvider>(p: &P, config: &Config) -> HeadInfo {
         p.get_block_with_txs(BlockId::Number(BlockNumber::Finalized))
             .await

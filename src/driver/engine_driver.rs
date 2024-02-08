@@ -14,6 +14,7 @@ use crate::{
     engine::{Engine, EngineApi, ExecutionPayload, ForkchoiceState, PayloadAttributes, Status},
 };
 
+/// The EngineDriver is responsible for initiating block production & validation via the [EngineApi]
 pub struct EngineDriver<E: Engine> {
     /// The L2 execution engine
     engine: Arc<E>,
@@ -34,6 +35,7 @@ pub struct EngineDriver<E: Engine> {
 }
 
 impl<E: Engine> EngineDriver<E> {
+    /// Initiates validation & production of a new L2 block from the given [PayloadAttributes] and updates the forkchoice
     pub async fn handle_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
         let block: Option<Block<Transaction>> = self.block_at(attributes.timestamp.as_u64()).await;
 
@@ -49,6 +51,7 @@ impl<E: Engine> EngineDriver<E> {
         }
     }
 
+    /// Instructs the engine to create a block and updates the forkchoice, based on a payload received via p2p gossip.
     pub async fn handle_unsafe_payload(&mut self, payload: &ExecutionPayload) -> Result<()> {
         self.push_payload(payload.clone()).await?;
         self.unsafe_head = payload.into();
@@ -63,17 +66,20 @@ impl<E: Engine> EngineDriver<E> {
         Ok(())
     }
 
+    /// Updates the [EngineDriver] finalized head & epoch
     pub fn update_finalized(&mut self, head: BlockInfo, epoch: Epoch) {
         self.finalized_head = head;
         self.finalized_epoch = epoch;
     }
 
+    /// Sets the [EngineDriver] unsafe & safe heads, and safe epoch to the current finalized head & epoch.
     pub fn reorg(&mut self) {
         self.unsafe_head = self.finalized_head;
         self.safe_head = self.finalized_head;
         self.safe_epoch = self.finalized_epoch;
     }
 
+    /// Sends a `ForkchoiceUpdated` message to check if the [Engine] is ready.
     pub async fn engine_ready(&self) -> bool {
         let forkchoice = self.create_forkchoice_state();
         self.engine
@@ -82,6 +88,11 @@ impl<E: Engine> EngineDriver<E> {
             .is_ok()
     }
 
+    /// Initiates validation & production of a new block:
+    /// - Sends the [PayloadAttributes] to the engine via `engine_forkchoiceUpdatedV2` (V3 post Ecotone) and retrieves the [ExecutionPayload]
+    /// - Executes the [ExecutionPayload] to create a block via `engine_newPayloadV2` (V3 post Ecotone)
+    /// - Updates the [EngineDriver] `safe_head`, `safe_epoch`, and `unsafe_head`
+    /// - Updates the forkchoice and sends this to the engine via `engine_forkchoiceUpdatedV2` (v3 post Ecotone)
     async fn process_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
         let new_epoch = *attributes.epoch.as_ref().unwrap();
 
@@ -101,6 +112,7 @@ impl<E: Engine> EngineDriver<E> {
         Ok(())
     }
 
+    /// Updates the forkchoice by sending `engine_forkchoiceUpdatedV2` (v3 post Ecotone) to the engine with no payload.
     async fn skip_attributes(
         &mut self,
         attributes: PayloadAttributes,
@@ -114,6 +126,7 @@ impl<E: Engine> EngineDriver<E> {
         Ok(())
     }
 
+    /// Sends [PayloadAttributes] via a `ForkChoiceUpdated` message to the [Engine] and returns the [ExecutionPayload] sent by the Execution Client.
     async fn build_payload(&self, attributes: PayloadAttributes) -> Result<ExecutionPayload> {
         let forkchoice = self.create_forkchoice_state();
 
@@ -133,6 +146,7 @@ impl<E: Engine> EngineDriver<E> {
         self.engine.get_payload(id).await
     }
 
+    /// Sends the given [ExecutionPayload] to the [Engine] via `NewPayload`
     async fn push_payload(&self, payload: ExecutionPayload) -> Result<()> {
         let status = self.engine.new_payload(payload).await?;
         if status.status != Status::Valid && status.status != Status::Accepted {
@@ -142,6 +156,7 @@ impl<E: Engine> EngineDriver<E> {
         Ok(())
     }
 
+    /// Sends a `ForkChoiceUpdated` message to the [Engine] with the current `Forkchoice State` and no payload.
     async fn update_forkchoice(&self) -> Result<()> {
         let forkchoice = self.create_forkchoice_state();
 
@@ -156,6 +171,9 @@ impl<E: Engine> EngineDriver<E> {
         Ok(())
     }
 
+    /// Updates the current `safe_head` & `safe_epoch`.
+    ///
+    /// Also updates the current `unsafe_head` to the given `new_head` if `reorg_unsafe` is `true`, or if the updated `safe_head` is newer than the current `unsafe_head`
     fn update_safe_head(
         &mut self,
         new_head: BlockInfo,
@@ -174,6 +192,10 @@ impl<E: Engine> EngineDriver<E> {
         Ok(())
     }
 
+    /// Creates a [ForkchoiceState]:
+    /// - `head_block` = `unsafe_head`
+    /// - `safe_block` = `safe_head`
+    /// - `finalized_block` = `finalized_head`
     fn create_forkchoice_state(&self) -> ForkchoiceState {
         ForkchoiceState {
             head_block_hash: self.unsafe_head.hash,
@@ -182,6 +204,7 @@ impl<E: Engine> EngineDriver<E> {
         }
     }
 
+    /// Fetches the L2 block for a given timestamp from the L2 Execution Client
     async fn block_at(&self, timestamp: u64) -> Option<Block<Transaction>> {
         let time_diff = timestamp as i64 - self.finalized_head.timestamp as i64;
         let blocks = time_diff / self.blocktime as i64;
@@ -193,6 +216,7 @@ impl<E: Engine> EngineDriver<E> {
     }
 }
 
+/// True if transactions in [PayloadAttributes] are not the same as those in a fetched L2 [Block]
 fn should_skip(block: &Block<Transaction>, attributes: &PayloadAttributes) -> Result<bool> {
     tracing::debug!(
         "comparing block at {} with attributes at {}",
@@ -229,6 +253,7 @@ fn should_skip(block: &Block<Transaction>, attributes: &PayloadAttributes) -> Re
 }
 
 impl EngineDriver<EngineApi> {
+    /// Creates a new [EngineDriver] and builds the [EngineApi] client
     pub fn new(
         finalized_head: BlockInfo,
         finalized_epoch: Epoch,
