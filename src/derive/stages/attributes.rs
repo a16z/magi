@@ -51,7 +51,7 @@ impl PurgeableIterator for Attributes {
 }
 
 impl Attributes {
-    /// Creates new [Attributes] and sets [epoch_hash](Attributes::epoch_hash) to the current L1 safe epoch block hash.
+    /// Creates new [Attributes] and sets the `epoch_hash` to the current L1 safe epoch block hash.
     pub fn new(
         block_input_iter: Box<dyn PurgeableIterator<Item = BlockInput<u64>>>,
         state: Arc<RwLock<State>>,
@@ -284,15 +284,25 @@ impl Encodable for DepositedTransaction {
 /// Represents the attributes provided as calldata in an attributes deposited transaction.
 #[derive(Debug)]
 struct AttributesDeposited {
+    /// The L1 epoch block number
     number: u64,
+    /// The L1 epoch block timestamp
     timestamp: u64,
+    /// The L1 epoch base fee
     base_fee: U256,
+    /// The L1 epoch block hash
     hash: H256,
+    /// The L2 block's position in the epoch
     sequence_number: u64,
+    /// A versioned hash of the current authorized batcher sender.
     batcher_hash: H256,
+    /// The current L1 fee overhead to apply to L2 transactions cost computation. Unused after Ecotone hard fork.
     fee_overhead: U256,
+    /// The current L1 fee scalar to apply to L2 transactions cost computation. Unused after Ecotone hard fork.
     fee_scalar: U256,
+    /// Gas limit: 1_000_000 if post-Regolith, otherwise 150_000_000
     gas: u64,
+    /// False if post-Regolith, otherwise true
     is_system_tx: bool,
 }
 

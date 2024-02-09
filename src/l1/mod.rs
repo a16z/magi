@@ -114,6 +114,7 @@ struct InnerWatcher {
     system_config_update: (u64, Option<SystemConfig>),
 }
 
+/// A type alias for a vector of bytes. Represents the calldata in a batcher transaction
 type BatcherTransactionData = Vec<u8>;
 
 impl Drop for ChainWatcher {

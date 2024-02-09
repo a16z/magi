@@ -28,8 +28,13 @@ use crate::{
 
 use self::engine_driver::EngineDriver;
 
+/// A module to handle block production & validation
 mod engine_driver;
+
+/// A module to handle fetching blocks
 mod info;
+
+/// A module to handle conversions to a [HeadInfo] struct
 mod types;
 pub use types::*;
 

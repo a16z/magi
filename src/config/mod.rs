@@ -97,18 +97,25 @@ impl Config {
 /// Magi config items derived from the CLI
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CliConfig {
+    /// The L1 RPC
     #[serde(skip_serializing_if = "Option::is_none")]
     pub l1_rpc_url: Option<String>,
+    /// The L2 execution client RPC
     #[serde(skip_serializing_if = "Option::is_none")]
     pub l2_rpc_url: Option<String>,
+    /// The L2 engine RPC
     #[serde(skip_serializing_if = "Option::is_none")]
     pub l2_engine_url: Option<String>,
+    /// The JWT secret used to authenticate with the engine
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jwt_secret: Option<String>,
+    /// A trusted L2 RPC used to obtain data from when using checkpoint sync mode.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint_sync_url: Option<String>,
+    /// The port to serve the Magi RPC on.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc_port: Option<u16>,
+    /// If Magi is running in devnet mode.
     #[serde(default)]
     pub devnet: bool,
 }
@@ -190,14 +197,18 @@ impl SystemConfig {
 /// System accounts
 #[derive(Debug, Clone)]
 pub struct SystemAccounts {
+    /// The address that submits attributes deposited transactions in every L2 block
     pub attributes_depositor: Address,
+    /// The contract address that attributes deposited transactions are submitted to
     pub attributes_predeploy: Address,
+    /// The contract address that holds fees paid to the sequencer during transaction execution & block production
     pub fee_vault: Address,
 }
 
 /// Wrapper around a [ChainConfig]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ChainProvider {
+    /// The [ChainConfig] which is unique for each blockchain
     chain: ChainConfig,
 }
 
@@ -210,8 +221,11 @@ impl From<ChainConfig> for Serialized<ChainProvider> {
 /// Provides default values for the L2 RPC & engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct DefaultsProvider {
+    /// The L2 execution node RPC
     l2_rpc_url: String,
+    /// The L2 engine RPC
     l2_engine_url: String,
+    /// The port to serve the Magi RPC server on
     rpc_port: u16,
 }
 
@@ -570,10 +584,14 @@ struct ExternalGenesisInfo {
 /// System config settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct SystemConfigInfo {
+    /// The authorized batch sender that sends batcher transactions to the batch inbox on L1
     #[serde(rename = "batcherAddr")]
     batcher_addr: Address,
+    /// The current L1 fee overhead to apply to L2 transactions cost computation. Unused after Ecotone hard fork.
     overhead: H256,
+    /// The current L1 fee scalar to apply to L2 transactions cost computation. Unused after Ecotone hard fork.
     scalar: H256,
+    /// The gas limit for L2 blocks
     #[serde(rename = "gasLimit")]
     gas_limit: u64,
 }

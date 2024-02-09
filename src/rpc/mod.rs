@@ -21,14 +21,20 @@ use jsonrpsee::{
 
 use serde::{Deserialize, Serialize};
 
+/// This trait defines a set of RPC methods that can be
+/// queried by clients under the `optimism` namespace
 #[rpc(server, namespace = "optimism")]
 pub trait Rpc {
+    /// Returns the L2 output information for a given block.
+    /// See the [Optimism spec](https://specs.optimism.io/protocol/rollup-node.html?highlight=rpc#l2-output-rpc-method) for more details
     #[method(name = "outputAtBlock")]
     async fn output_at_block(&self, block_number: u64) -> Result<OutputRootResponse, Error>;
 
+    /// Returns the rollup configuration options.
     #[method(name = "rollupConfig")]
     async fn rollup_config(&self) -> Result<ExternalChainConfig, Error>;
 
+    /// Returns details about the Magi version of the node.
     #[method(name = "version")]
     async fn version(&self) -> Result<String, Error>;
 }
@@ -36,7 +42,9 @@ pub trait Rpc {
 /// The Magi RPC server which implements the same `optimism` namespace methods as `op-node`
 #[derive(Debug)]
 pub struct RpcServerImpl {
+    /// The Magi version of the node
     version: Version,
+    /// The Magi [Config]
     config: Arc<Config>,
 }
 
@@ -87,6 +95,7 @@ impl RpcServer for RpcServerImpl {
         Ok(ExternalChainConfig::from(config.chain))
     }
 
+    /// Returns details about the Magi version of the node.
     async fn version(&self) -> Result<String, Error> {
         Ok(self.version.to_string())
     }
@@ -139,8 +148,12 @@ pub async fn run_server(config: Arc<Config>) -> Result<SocketAddr> {
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct OutputRootResponse {
+    /// The output root which serves as a commitment to the current state of the chain
     pub output_root: H256,
+    /// The output root version number, beginning with 0
     pub version: H256,
+    /// The state root
     pub state_root: H256,
+    /// The 32 byte storage root of the `L2toL1MessagePasser` contract address
     pub withdrawal_storage_root: H256,
 }

@@ -14,14 +14,20 @@ use openssl::sha::sha256;
 
 use super::{handlers::Handler, service::types::NetworkAddress};
 
+/// A module to handle peer discovery
 mod discovery;
+/// A module to handle commonly used types in the p2p system.
 mod types;
 
-/// Responsible for management of the `Discv5` P2P service.
+/// Responsible for management of the `Discv5` & `libp2p` services.
 pub struct Service {
+    /// Handles validation & processing of inbound messages
     handlers: Vec<Box<dyn Handler>>,
+    /// The socket address that the service is listening on.
     addr: SocketAddr,
+    /// The chain ID of the network
     chain_id: u64,
+    /// A unique keypair to validate the node's identity
     keypair: Option<Keypair>,
 }
 
@@ -187,8 +193,10 @@ impl Behaviour {
 
 /// The type of message received
 enum Event {
+    /// Represents a [ping::Event]
     #[allow(dead_code)]
     Ping(ping::Event),
+    /// Represents a [gossipsub::Event]
     Gossipsub(gossipsub::Event),
 }
 

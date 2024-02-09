@@ -445,6 +445,7 @@ fn decode_batches(channel: &Channel, chain_id: u64) -> Result<Vec<Batch>> {
     Ok(batches)
 }
 
+/// The type of batch - either a [SingleBatch] or [SpanBatch]
 #[derive(Debug, Clone)]
 pub enum Batch {
     /// A [SingleBatch]
@@ -471,6 +472,7 @@ impl Batch {
     }
 }
 
+/// The status of a batch.
 #[derive(Debug, Clone, PartialEq)]
 enum BatchStatus {
     /// The batch is invalid

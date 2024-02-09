@@ -96,7 +96,7 @@ impl BatcherTransaction {
 /// A channel frame.
 #[derive(Debug, Default, Clone)]
 pub struct Frame {
-    // A unique identifier for the channel containing the frame.
+    /// A unique identifier for the channel containing the frame.
     pub channel_id: u128,
     /// The index of the frame within the channel
     pub frame_number: u16,

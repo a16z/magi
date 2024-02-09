@@ -370,27 +370,40 @@ fn decode_tx_data(data: &[u8], tx_count: u64) -> (Vec<TxData>, &[u8]) {
     (tx_datas, data_ref)
 }
 
+/// The transaction type - Legacy, EIP-2930, or EIP-1559
 #[derive(Debug)]
 enum TxData {
     /// A legacy transaction type
     Legacy {
+        /// Transaction value
         value: U256,
+        /// Transaction gas price
         gas_price: U256,
+        /// Transaction calldata
         data: Bytes,
     },
     /// An EIP-2930 transaction type
     Type1 {
+        /// Transaction value
         value: U256,
+        /// Transaction gas price
         gas_price: U256,
+        /// Transaction calldata
         data: Bytes,
+        /// Access list as specified in EIP-2930
         access_list: AccessList,
     },
     /// An EIP-1559 transaction type
     Type2 {
+        /// Transaction value
         value: U256,
+        /// Max fee per gas as specified in EIP-1559
         max_fee: U256,
+        /// Max priority fee as specified in EIP-1559
         max_priority_fee: U256,
+        /// Transaction calldata
         data: Bytes,
+        /// Access list as specified in EIP-2930
         access_list: AccessList,
     },
 }

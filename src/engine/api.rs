@@ -245,6 +245,7 @@ impl Engine for EngineApi {
 #[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 struct GetPayloadResponse {
+    /// The execution payload returned by the engine via `engine_getPayloadV2` (`engine_getPayloadV3` post Ecotone)
     execution_payload: ExecutionPayload,
 }
 

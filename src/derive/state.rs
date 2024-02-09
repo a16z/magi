@@ -31,6 +31,7 @@ pub struct State {
 }
 
 impl State {
+    /// Creates a new [State] and fetches and caches a range of L2 blocks.
     pub async fn new(
         finalized_head: BlockInfo,
         finalized_epoch: Epoch,
@@ -63,8 +64,8 @@ impl State {
     }
 
     /// Returns a cached L2 block by block timestamp
-    pub fn l2_info_by_timestamp(&self, timestmap: u64) -> Option<&(BlockInfo, Epoch)> {
-        let block_num = (timestmap - self.config.chain.l2_genesis.timestamp)
+    pub fn l2_info_by_timestamp(&self, timestamp: u64) -> Option<&(BlockInfo, Epoch)> {
+        let block_num = (timestamp - self.config.chain.l2_genesis.timestamp)
             / self.config.chain.blocktime
             + self.config.chain.l2_genesis.number;
 
@@ -80,7 +81,7 @@ impl State {
         })
     }
 
-    /// Returns an epoch by number. Same as the first L1 block number in the epoch's seqencing window.
+    /// Returns an epoch by number. Same as the first L1 block number in the epoch's sequencing window.
     pub fn epoch_by_number(&self, num: u64) -> Option<Epoch> {
         self.l1_info_by_number(num).map(|info| Epoch {
             number: info.block_info.number,

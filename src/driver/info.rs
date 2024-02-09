@@ -4,8 +4,10 @@ use ethers::middleware::Middleware;
 use ethers::providers::{JsonRpcClient, Provider, ProviderError};
 use ethers::types::{Block, BlockId, BlockNumber, Transaction};
 
+/// An asynchronous trait for fetching blocks along with their transactions.
 #[async_trait::async_trait]
 pub trait InnerProvider {
+    /// Retrieves a block and its transactions
     async fn get_block_with_txs(
         &self,
         block_id: BlockId,
@@ -14,6 +16,7 @@ pub trait InnerProvider {
 
 /// Wrapper around a [Provider]
 pub struct HeadInfoFetcher<'a, P: JsonRpcClient> {
+    /// An ethers [Provider] implementing the [JsonRpcClient] trait
     inner: &'a Provider<P>,
 }
 
@@ -35,6 +38,7 @@ impl<'a, P: JsonRpcClient> InnerProvider for HeadInfoFetcher<'a, P> {
     }
 }
 
+/// Provides a method to fetch the latest finalized block
 pub struct HeadInfoQuery {}
 
 impl HeadInfoQuery {

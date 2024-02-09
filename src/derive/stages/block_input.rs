@@ -7,6 +7,7 @@ use crate::{
     derive::state::State,
 };
 
+/// A marker trait to allow representing an epoch as either a block number or an [Epoch]
 pub trait EpochType {}
 impl EpochType for u64 {}
 impl EpochType for Epoch {}

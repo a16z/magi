@@ -15,9 +15,13 @@ use crate::engine::ExecutionPayload;
 /// Selected block header info
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct BlockInfo {
+    /// The block hash
     pub hash: H256,
+    /// The block number
     pub number: u64,
+    /// The parent block hash
     pub parent_hash: H256,
+    /// The block timestamp
     pub timestamp: u64,
 }
 
@@ -28,8 +32,11 @@ pub struct RawTransaction(pub Vec<u8>);
 /// L1 epoch block
 #[derive(Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Epoch {
+    /// The block number
     pub number: u64,
+    /// The block hash
     pub hash: H256,
+    /// The block timestamp
     pub timestamp: u64,
 }
 
@@ -110,7 +117,9 @@ pub struct AttributesDepositedCall {
     pub fee_scalar: U256,
 }
 
+/// A type alias for the `setL1BlockValues` function parameter types
 type SetL1BlockValueInput = (u64, u64, U256, H256, u64, H256, U256, U256);
+/// The `setL1BlockValues` human-readable ABI
 const L1_BLOCK_CONTRACT_ABI: &str = r#"[
     function setL1BlockValues(uint64 _number,uint64 _timestamp, uint256 _basefee, bytes32 _hash,uint64 _sequenceNumber,bytes32 _batcherHash,uint256 _l1FeeOverhead,uint256 _l1FeeScalar) external
 ]"#;

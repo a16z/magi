@@ -14,9 +14,12 @@ use self::{
     state::State,
 };
 
+/// A module that handles the block derivation stages
 pub mod stages;
+/// A module that keeps track of the current derivation state, caching previous L1 and L2 blocks
 pub mod state;
 
+/// A module that extends the [Iterator] trait with a `purge` method
 mod purgeable;
 pub use purgeable::PurgeableIterator;
 

@@ -72,7 +72,7 @@ pub trait Engine: Send + Sync + 'static {
     /// ## get_payload
     ///
     /// No modifications to [`engine_getPayloadV2`](https://github.com/ethereum/execution-apis/blob/main/src/engine/shanghai.md#engine_getpayloadv2)
-    /// were made for L2. Retrieves a payload by ID, prepared by [engine_forkchoiceUpdatedV1](EngineApi::engine_forkchoiceUpdatedV1)
+    /// were made for L2. Retrieves a payload by ID, prepared by [engine_forkchoiceUpdatedV2](super::EngineApi)
     /// when called with [PayloadAttributes].
     ///
     /// ### Specification

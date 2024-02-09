@@ -156,8 +156,11 @@ impl PayloadHash {
     }
 }
 
+/// A type alias for a vector of 32 bytes, representing a Bytes32 hash
 type Bytes32 = Vector<u8, 32>;
+/// A type alias for a vector of 20 bytes, representing an address
 type VecAddress = Vector<u8, 20>;
+/// A type alias for a byte list, representing a transaction
 type Transaction = List<u8, 1073741824>;
 
 /// The pre Canyon/Shanghai [ExecutionPayload] - the withdrawals field should not exist
@@ -250,13 +253,17 @@ struct ExecutionPayloadV2SSZ {
     pub withdrawals: List<Withdrawal, 16>,
 }
 
-/// This represents an L1 Withdrawal, and is unused in OP stack rollups.
+/// This represents an L1 validator Withdrawal, and is unused in OP stack rollups.
 /// Exists only for L1 compatibility
 #[derive(SimpleSerialize, Default)]
 struct Withdrawal {
+    /// Index of the withdrawal
     index: u64,
+    /// Index of the validator
     validator_index: u64,
+    /// Account address that has withdrawn
     address: VecAddress,
+    /// The amount withdrawn
     amount: u64,
 }
 
