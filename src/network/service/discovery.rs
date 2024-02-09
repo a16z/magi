@@ -14,6 +14,8 @@ use unsigned_varint::{decode, encode};
 
 use super::types::{NetworkAddress, Peer};
 
+/// Starts the [Discv5] discovery service and continually tries to find new peers.
+/// Returns a [Receiver] to receive [Peer] structs
 pub fn start(addr: NetworkAddress, chain_id: u64) -> Result<Receiver<Peer>> {
     let bootnodes = bootnodes();
     let mut disc = create_disc(chain_id)?;
@@ -51,6 +53,7 @@ pub fn start(addr: NetworkAddress, chain_id: u64) -> Result<Receiver<Peer>> {
     Ok(recv)
 }
 
+/// Returns `true` if a node [Enr] contains an `opstack` key and is on the same network.
 fn is_valid_node(node: &Enr<CombinedKey>, chain_id: u64) -> bool {
     node.get_raw_rlp("opstack")
         .map(|opstack| {
@@ -61,6 +64,7 @@ fn is_valid_node(node: &Enr<CombinedKey>, chain_id: u64) -> bool {
         .unwrap_or_default()
 }
 
+/// Generates an [Enr] and creates a [Discv5] service struct
 fn create_disc(chain_id: u64) -> Result<Discv5> {
     let opstack = OpStackEnrData {
         chain_id,
@@ -77,15 +81,19 @@ fn create_disc(chain_id: u64) -> Result<Discv5> {
     Discv5::new(enr, key, config).map_err(|_| eyre::eyre!("could not create disc service"))
 }
 
+/// The unique L2 network identifier
 #[derive(Debug)]
 struct OpStackEnrData {
+    /// Chain ID
     chain_id: u64,
+    /// The version. Always set to 0.
     version: u64,
 }
 
 impl TryFrom<&[u8]> for OpStackEnrData {
     type Error = eyre::Report;
 
+    /// Converts a slice of RLP encoded bytes to [OpStackEnrData]
     fn try_from(value: &[u8]) -> Result<Self> {
         let bytes: Vec<u8> = rlp::decode(value)?;
         let (chain_id, rest) = decode::u64(&bytes)?;
@@ -96,6 +104,7 @@ impl TryFrom<&[u8]> for OpStackEnrData {
 }
 
 impl From<OpStackEnrData> for Vec<u8> {
+    /// Converts [OpStackEnrData] to a vector of bytes.
     fn from(value: OpStackEnrData) -> Vec<u8> {
         let mut chain_id_buf = encode::u128_buffer();
         let chain_id_slice = encode::u128(value.chain_id as u128, &mut chain_id_buf);
@@ -109,6 +118,7 @@ impl From<OpStackEnrData> for Vec<u8> {
     }
 }
 
+/// Default bootnodes to use. Currently consists of 2 Base bootnodes & 1 Optimism bootnode.
 fn bootnodes() -> Vec<Enr<CombinedKey>> {
     let bootnodes = [
         "enr:-J64QBbwPjPLZ6IOOToOLsSjtFUjjzN66qmBZdUexpO32Klrc458Q24kbty2PdRaLacHM5z-cZQr8mjeQu3pik6jPSOGAYYFIqBfgmlkgnY0gmlwhDaRWFWHb3BzdGFja4SzlAUAiXNlY3AyNTZrMaECmeSnJh7zjKrDSPoNMGXoopeDF4hhpj5I0OsQUUt4u8uDdGNwgiQGg3VkcIIkBg",
