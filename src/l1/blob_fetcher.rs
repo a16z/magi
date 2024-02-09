@@ -61,6 +61,9 @@ impl BlobFetcher {
         let mut blob_index = 0;
 
         for tx in block.transactions.iter() {
+            let tx_blob_hashes = tx.other.get("blob_versioned_hashes");
+            dbg!(tx_blob_hashes);
+
             if !self.is_valid_batcher_transaction(tx) {
                 blob_index += 1; // TODO: += number of actual tx.blob_hashes
                 continue;
@@ -210,18 +213,17 @@ mod tests {
     #[tokio::test]
     // TODO: update with a test from mainnet after dencun is active
     async fn test_get_blobs() {
-        // TODO: use env vars in tests
-        // let Ok(l1_beacon_url) = std::env::var("L1_BEACON_TEST_RPC_URL") else {
-        //     return;
-        // };
+        let Ok(l1_beacon_url) = std::env::var("L1_GOERLI_BEACON_RPC_URL") else {
+            return;
+        };
 
         let config = Arc::new(Config {
-            l1_beacon_url: "https://remotelab.taila355b.ts.net".to_string(),
+            l1_beacon_url,
             ..Default::default()
         });
 
         let retriever = BlobFetcher::new(config);
-        let blobs = retriever.fetch_blob_sidecars(4248703).await.unwrap();
+        let blobs = retriever.fetch_blob_sidecars(7576509).await.unwrap();
 
         assert_eq!(blobs.len(), 3);
     }
