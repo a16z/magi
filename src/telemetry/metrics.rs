@@ -13,6 +13,7 @@ lazy_static! {
     pub static ref SYNCED: IntGauge = register_int_gauge!("synced", "synced flag").unwrap();
 }
 
+/// Starts the metrics server on port 9200
 pub fn init() -> Result<()> {
     start("0.0.0.0:9200".parse().wrap_err("Could not parse address")?)?;
     Ok(())
