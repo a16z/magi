@@ -38,7 +38,7 @@ NETWORK=devnet
 
 # To avoid potential conflicts with the default ports in the OP devnet, it's recommended to modify the RPC ports.
 
-# The exeuction client Auth RPC port.
+# The execution client Auth RPC port.
 EXECUTION_CLIENT_AUTH_RPC_PORT=5551
 
 # The execution client RPC port.

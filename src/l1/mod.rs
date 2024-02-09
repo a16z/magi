@@ -32,7 +32,7 @@ static TRANSACTION_DEPOSITED_TOPIC: Lazy<H256> = Lazy::new(|| {
 });
 
 /// Handles watching the L1 chain and monitoring for new blocks, deposits,
-/// and batcher transactions. The monitoring loop is spawned in a seperate
+/// and batcher transactions. The monitoring loop is spawned in a separate
 /// task and communication happens via the internal channels. When ChainWatcher
 /// is dropped, the monitoring task is automatically aborted.
 pub struct ChainWatcher {
