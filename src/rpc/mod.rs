@@ -33,6 +33,7 @@ pub trait Rpc {
     async fn version(&self) -> Result<String, Error>;
 }
 
+/// The Magi RPC server which implements the same `optimism` namespace methods as `op-node`
 #[derive(Debug)]
 pub struct RpcServerImpl {
     version: Version,
@@ -41,6 +42,8 @@ pub struct RpcServerImpl {
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
+    /// Returns the L2 output information for a given block.
+    /// See the [Optimism spec](https://specs.optimism.io/protocol/rollup-node.html?highlight=rpc#l2-output-rpc-method) for more details
     async fn output_at_block(&self, block_number: u64) -> Result<OutputRootResponse, Error> {
         let l2_provider = convert_err(Provider::try_from(self.config.l2_rpc_url.clone()))?;
 
@@ -77,6 +80,7 @@ impl RpcServer for RpcServerImpl {
         })
     }
 
+    /// Returns the rollup configuration options.
     async fn rollup_config(&self) -> Result<ExternalChainConfig, Error> {
         let config = (*self.config).clone();
 
@@ -88,10 +92,13 @@ impl RpcServer for RpcServerImpl {
     }
 }
 
+/// Converts a generic error to a [jsonrpsee::core::error] if one exists
 fn convert_err<T, E: Display>(res: Result<T, E>) -> Result<T, Error> {
     res.map_err(|err| Error::Custom(err.to_string()))
 }
 
+/// Computes the L2 output root.
+/// Refer to the [Optimism Spec](https://specs.optimism.io/protocol/proposals.html#l2-output-commitment-construction) for details
 fn compute_l2_output_root(block: Block<H256>, storage_root: H256) -> H256 {
     let version: H256 = Default::default();
     let digest = keccak256(
@@ -107,6 +114,7 @@ fn compute_l2_output_root(block: Block<H256>, storage_root: H256) -> H256 {
     H256::from_slice(&digest)
 }
 
+/// Starts the Magi RPC server
 pub async fn run_server(config: Arc<Config>) -> Result<SocketAddr> {
     let port = config.rpc_port;
     let server = ServerBuilder::default()
@@ -127,6 +135,7 @@ pub async fn run_server(config: Arc<Config>) -> Result<SocketAddr> {
     Ok(addr)
 }
 
+/// The response for the `optimism_outputAtBlock` RPC method.
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct OutputRootResponse {
