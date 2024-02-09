@@ -61,20 +61,20 @@ impl BlobFetcher {
         let mut blob_index = 0;
 
         for tx in block.transactions.iter() {
-            let tx_blob_hashes = tx.other.get("blob_versioned_hashes");
+            // Versioned Hash is just 32 bytes
+            let tx_blob_hashes: Vec<String> = tx
+                .other
+                .get_deserialized("BlobVersionedHashes")
+                .unwrap_or_default();
+
             dbg!(tx_blob_hashes);
 
             if !self.is_valid_batcher_transaction(tx) {
-                blob_index += 1; // TODO: += number of actual tx.blob_hashes
+                blob_index += tx_blob_hashes.len();
                 continue;
             }
 
-            // sanity check: transactions here should always have a transaction type
-            let Some(tx_type) = tx.transaction_type.map(|t| t.as_u64()) else {
-                tracing::error!("found batcher tx without tx_type. This shouldn't happen.");
-                continue;
-            };
-
+            let tx_type = tx.transaction_type.map(|t| t.as_u64()).unwrap_or(0);
             if tx_type != BLOB_CARRYING_TRANSACTION_TYPE {
                 // this is necessary because ethers-rs wraps `bytes::Bytes` into its own type
                 // that doesn't come with free conversion back to `bytes::Bytes`.
@@ -83,10 +83,7 @@ impl BlobFetcher {
                 continue;
             }
 
-            // TODO: retrieve tx.blob_hashes. might need to update/fork ethers-rs.
-            // are there other ways to see how many blobs are in a tx?
-            let blob_hashes = vec![H256::zero()];
-            for blob_hash in blob_hashes {
+            for blob_hash in tx_blob_hashes {
                 indexed_blobs.push((blob_index, blob_hash));
                 blob_index += 1;
             }
