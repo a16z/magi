@@ -82,7 +82,7 @@ impl TryFrom<Block<Transaction>> for ExecutionPayload {
 /// ## PayloadAttributes
 ///
 /// L2 extended payload attributes for Optimism.
-/// For more details, visit the [Optimism specs](https://github.com/ethereum-optimism/optimism/blob/develop/specs/exec-engine.md#extended-payloadattributesv1).
+/// For more details, visit the [Optimism specs](https://github.com/ethereum-optimism/specs/blob/main/specs/protocol/exec-engine.md#extended-payloadattributesv1).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PayloadAttributes {

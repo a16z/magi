@@ -10,7 +10,7 @@ use super::{
 ///
 /// A set of methods that allow a consensus client to interact with an execution engine.
 /// This is a modified version of the [Ethereum Execution API Specs](https://github.com/ethereum/execution-apis),
-/// as defined in the [Optimism Exec Engine Specs](https://github.com/ethereum-optimism/optimism/blob/develop/specs/exec-engine.md).
+/// as defined in the [Optimism Exec Engine Specs](https://github.com/ethereum-optimism/specs/blob/main/specs/protocol/exec-engine.md).
 #[async_trait]
 pub trait Engine: Send + Sync + 'static {
     /// ## forkchoice_updated
@@ -33,7 +33,7 @@ pub trait Engine: Send + Sync + 'static {
     ///
     /// ### Reference
     ///
-    /// See more details in the [Optimism Specs](https://github.com/ethereum-optimism/optimism/blob/develop/specs/exec-engine.md#engine_forkchoiceupdatedv1).
+    /// See more details in the [Optimism Specs](https://github.com/ethereum-optimism/specs/blob/main/specs/protocol/exec-engine.md#engine_forkchoiceupdatedv1).
     async fn forkchoice_updated(
         &self,
         forkchoice_state: ForkchoiceState,
@@ -58,7 +58,7 @@ pub trait Engine: Send + Sync + 'static {
     ///
     /// ### Reference
     ///
-    /// See more details in the [Optimism Specs](https://github.com/ethereum-optimism/optimism/blob/develop/specs/exec-engine.md#engine_newPayloadv1).
+    /// See more details in the [Optimism Specs](https://github.com/ethereum-optimism/specs/blob/main/specs/protocol/exec-engine.md#engine_newPayloadv1).
     async fn new_payload(&self, execution_payload: ExecutionPayload) -> Result<PayloadStatus>;
 
     /// ## get_payload
@@ -80,6 +80,6 @@ pub trait Engine: Send + Sync + 'static {
     ///
     /// ### Reference
     ///
-    /// See more details in the [Optimism Specs](https://github.com/ethereum-optimism/optimism/blob/develop/specs/exec-engine.md#engine_getPayloadv1).
+    /// See more details in the [Optimism Specs](https://github.com/ethereum-optimism/specs/blob/main/specs/protocol/exec-engine.md#engine_getPayloadv1).
     async fn get_payload(&self, payload_id: PayloadId) -> Result<ExecutionPayload>;
 }
