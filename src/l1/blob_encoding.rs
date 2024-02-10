@@ -3,20 +3,28 @@ use eyre::Result;
 
 const MAX_BLOB_DATA_SIZE: usize = (4 * 31 + 3) * 1024 - 4;
 const ENCODING_VERSION: u8 = 0;
-const VERSION_OFFSET: usize = 0;
+const VERSION_OFFSET: usize = 1;
 const ROUNDS: usize = 1024;
 
-pub fn decode_blob_data(blob: &Bytes) -> Result<Bytes> {
+pub fn decode_blob_data(blob: &[u8]) -> Result<Bytes> {
     let mut output = vec![0; MAX_BLOB_DATA_SIZE];
 
     if blob[VERSION_OFFSET] != ENCODING_VERSION {
-        eyre::bail!("Invalid encoding version");
+        eyre::bail!(
+            "Blob decoding: Invalid encoding version: want {}, got {}",
+            ENCODING_VERSION,
+            blob[VERSION_OFFSET]
+        );
     }
 
     // decode the 3-byte big-endian length value into a 4-byte integer
     let output_len = u32::from_be_bytes([0, blob[2], blob[3], blob[4]]) as usize;
     if output_len > MAX_BLOB_DATA_SIZE {
-        eyre::bail!("Invalid length");
+        eyre::bail!(
+            "Blob decoding: Invalid length: {} exceeds maximum {}",
+            output_len,
+            MAX_BLOB_DATA_SIZE
+        );
     }
 
     output[0..27].copy_from_slice(&blob[5..32]);
@@ -46,7 +54,10 @@ pub fn decode_blob_data(blob: &Bytes) -> Result<Bytes> {
 
     for output_byte in output.iter().take(MAX_BLOB_DATA_SIZE).skip(output_len) {
         if output_byte != &0 {
-            eyre::bail!("Extraneous data in field element {}", output_pos / 32);
+            eyre::bail!(
+                "Blob decoding: Extraneous data in field element {}",
+                output_pos / 32
+            );
         }
     }
 
@@ -54,7 +65,10 @@ pub fn decode_blob_data(blob: &Bytes) -> Result<Bytes> {
 
     for byte in blob.iter().skip(input_pos) {
         if byte != &0 {
-            eyre::bail!("Extraneous data in input position {}", input_pos);
+            eyre::bail!(
+                "Blob decoding: Extraneous data in input position {}",
+                input_pos
+            );
         }
     }
 
@@ -64,14 +78,14 @@ pub fn decode_blob_data(blob: &Bytes) -> Result<Bytes> {
 fn decode_field_element(
     output_pos: &mut usize,
     input_pos: &mut usize,
-    blob: &Bytes,
+    blob: &[u8],
     output: &mut [u8],
 ) -> Result<u8> {
     let result = blob[*input_pos];
 
     // two highest order bits of the first byte of each field element should always be 0
     if result & 0b1100_0000 != 0 {
-        eyre::bail!("Invalid field element");
+        eyre::bail!("Blob decoding: Invalid field element");
     }
 
     output[*output_pos..*output_pos + 31].copy_from_slice(&blob[*input_pos + 1..*input_pos + 32]);

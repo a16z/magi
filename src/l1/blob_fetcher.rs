@@ -4,7 +4,7 @@ use std::sync::{
 };
 
 use bytes::Bytes;
-use ethers::types::{Block, Transaction, H256};
+use ethers::types::{Block, Transaction};
 use eyre::Result;
 use serde::Deserialize;
 use serde_json::Value;
@@ -33,7 +33,8 @@ pub struct BlobFetcher {
 pub struct BlobSidecar {
     #[serde(deserialize_with = "deserialize_string_to_u64")]
     pub index: u64,
-    pub blob: Bytes,
+    #[serde(deserialize_with = "deserialize_blob_bytes")]
+    pub blob: Vec<u8>,
     // kzg_commitment: String,
     // kzg_proof: String,
     // signed_block_header: Value,
@@ -61,13 +62,11 @@ impl BlobFetcher {
         let mut blob_index = 0;
 
         for tx in block.transactions.iter() {
-            // Versioned Hash is just 32 bytes
             let tx_blob_hashes: Vec<String> = tx
                 .other
-                .get_deserialized("BlobVersionedHashes")
+                .get_deserialized("blobVersionedHashes")
+                .unwrap_or(Ok(Vec::new()))
                 .unwrap_or_default();
-
-            dbg!(tx_blob_hashes);
 
             if !self.is_valid_batcher_transaction(tx) {
                 blob_index += tx_blob_hashes.len();
@@ -99,7 +98,7 @@ impl BlobFetcher {
         let blobs = self.fetch_blob_sidecars(slot).await?;
 
         for (blob_index, blob_hash) in indexed_blobs {
-            let Some(blob_sidecar) = blobs.iter().find(|b| b.index == blob_index) else {
+            let Some(blob_sidecar) = blobs.iter().find(|b| b.index == blob_index as u64) else {
                 // This can happen in the case the blob retention window has expired
                 // and the data is no longer available. This case is not handled yet.
                 eyre::bail!("blob index {} not found in fetched sidecars", blob_index);
@@ -179,7 +178,8 @@ impl BlobFetcher {
         let res = res.get("data").ok_or(eyre::eyre!("No data in response"))?;
         let res = res.get("genesis_time").ok_or(eyre::eyre!("No time"))?;
 
-        let genesis_time = serde_json::from_value::<u64>(res.clone())?;
+        let genesis_time = res.as_str().ok_or(eyre::eyre!("Expected string"))?;
+        let genesis_time = genesis_time.parse::<u64>()?;
 
         Ok(genesis_time)
     }
@@ -203,14 +203,28 @@ where
     s.parse::<u64>().map_err(serde::de::Error::custom)
 }
 
+fn deserialize_blob_bytes<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s: String = Deserialize::deserialize(deserializer)?;
+    let s = s.trim_start_matches("0x");
+    let bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
+    Ok(bytes)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use ethers::providers::{Http, Middleware, Provider};
 
-    #[tokio::test]
+    use super::*;
+    use crate::config::ChainConfig;
+
     // TODO: update with a test from mainnet after dencun is active
+    #[tokio::test]
     async fn test_get_blobs() {
         let Ok(l1_beacon_url) = std::env::var("L1_GOERLI_BEACON_RPC_URL") else {
+            println!("L1_GOERLI_BEACON_RPC_URL not set; skipping test");
             return;
         };
 
@@ -219,9 +233,43 @@ mod tests {
             ..Default::default()
         });
 
-        let retriever = BlobFetcher::new(config);
-        let blobs = retriever.fetch_blob_sidecars(7576509).await.unwrap();
+        let slot_number = 7576509;
+        let fetcher = BlobFetcher::new(config);
+        let blobs = fetcher.fetch_blob_sidecars(slot_number).await.unwrap();
 
-        assert_eq!(blobs.len(), 3);
+        assert_eq!(blobs.len(), 6);
+    }
+
+    // TODO: update with a test from mainnet after dencun is active
+    // also, this test will be flaky as nodes start to purge old blobs
+    #[tokio::test]
+    async fn test_get_batcher_transactions() {
+        let Ok(l1_beacon_url) = std::env::var("L1_GOERLI_BEACON_RPC_URL") else {
+            println!("L1_GOERLI_BEACON_RPC_URL not set; skipping test");
+            return;
+        };
+        let Ok(l1_rpc_url) = std::env::var("L1_TEST_RPC_URL") else {
+            println!("L1_TEST_RPC_URL not set; skipping test");
+            return;
+        };
+
+        let config = Arc::new(Config {
+            l1_beacon_url,
+            chain: ChainConfig::optimism_goerli(),
+            ..Default::default()
+        });
+
+        let l1_block_number = 10515928;
+        let l1_provider = Provider::<Http>::try_from(l1_rpc_url).unwrap();
+        let l1_block = l1_provider
+            .get_block_with_txs(l1_block_number)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let fetcher = BlobFetcher::new(config);
+        let batcher_transactions = fetcher.get_batcher_transactions(&l1_block).await.unwrap();
+
+        assert_eq!(batcher_transactions.len(), 1);
     }
 }

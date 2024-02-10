@@ -105,9 +105,10 @@ pub struct CliConfig {
     /// The L1 RPC
     #[serde(skip_serializing_if = "Option::is_none")]
     pub l1_rpc_url: Option<String>,
-    /// The L2 execution client RPC
+    /// The L1 beacon client RPC
     #[serde(skip_serializing_if = "Option::is_none")]
     pub l1_beacon_url: Option<String>,
+    /// The L2 execution client RPC
     #[serde(skip_serializing_if = "Option::is_none")]
     pub l2_rpc_url: Option<String>,
     /// The L2 engine RPC
@@ -164,6 +165,8 @@ pub struct ChainConfig {
     pub canyon_time: u64,
     /// Timestamp of the delta hardfork
     pub delta_time: u64,
+    /// Timestamp of the ecotone hardfork
+    pub ecotone_time: u64,
     /// Network blocktime
     #[serde(default = "default_blocktime")]
     pub blocktime: u64,
@@ -315,6 +318,7 @@ impl ChainConfig {
             regolith_time: 0,
             canyon_time: 170499240,
             delta_time: 1708560000,
+            ecotone_time: 1710781201,
         }
     }
 
@@ -355,6 +359,7 @@ impl ChainConfig {
             regolith_time: 1679079600,
             canyon_time: 1699981200,
             delta_time: 1703116800,
+            ecotone_time: 1707238800,
             blocktime: 2,
         }
     }
@@ -396,6 +401,7 @@ impl ChainConfig {
             regolith_time: 0,
             canyon_time: 1699981200,
             delta_time: 1703203200,
+            ecotone_time: 1708534800,
             blocktime: 2,
         }
     }
@@ -436,6 +442,7 @@ impl ChainConfig {
             regolith_time: 0,
             canyon_time: 1704992401,
             delta_time: 1708560000,
+            ecotone_time: 1710781201,
         }
     }
 
@@ -474,6 +481,7 @@ impl ChainConfig {
             regolith_time: 1683219600,
             canyon_time: 1699981200,
             delta_time: 1703116800,
+            ecotone_time: 1707238800,
             blocktime: 2,
         }
     }
@@ -513,6 +521,7 @@ impl ChainConfig {
             regolith_time: 0,
             canyon_time: 1699981200,
             delta_time: 1703203200,
+            ecotone_time: 1708534800,
             blocktime: 2,
         }
     }
@@ -571,6 +580,8 @@ pub struct ExternalChainConfig {
     canyon_time: u64,
     /// Timestamp of the delta hardfork
     delta_time: u64,
+    /// Timestamp of the ecotone hardfork
+    ecotone_time: u64,
     /// The batch inbox address
     batch_inbox_address: Address,
     /// The deposit contract address
@@ -651,6 +662,7 @@ impl From<ExternalChainConfig> for ChainConfig {
             regolith_time: external.regolith_time,
             canyon_time: external.canyon_time,
             delta_time: external.delta_time,
+            ecotone_time: external.ecotone_time,
             blocktime: external.block_time,
             l2_to_l1_message_passer: addr("0x4200000000000000000000000000000000000016"),
         }
@@ -700,6 +712,7 @@ impl From<ChainConfig> for ExternalChainConfig {
             regolith_time: chain_config.regolith_time,
             canyon_time: chain_config.canyon_time,
             delta_time: chain_config.delta_time,
+            ecotone_time: chain_config.ecotone_time,
             batch_inbox_address: chain_config.batch_inbox,
             deposit_contract_address: chain_config.deposit_contract,
             l1_system_config_address: chain_config.system_config_contract,

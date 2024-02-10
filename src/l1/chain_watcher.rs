@@ -453,36 +453,3 @@ fn start_watcher(
 
     Ok((handle, block_update_receiver))
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn test_batcher_transactions() {
-        let Ok(l1_rpc_url) = std::env::var("L1_TEST_RPC_URL") else {
-            return;
-        };
-
-        // TODO: find goerli block with batcher txs
-        let block_number = 19245284;
-
-        let config = Arc::new(Config {
-            l1_rpc_url,
-            ..Default::default()
-        });
-        let (block_update_tx, block_update_rx) = mpsc::channel(1000);
-        let watcher = InnerWatcher::new(config, block_update_tx, block_number, 0).await;
-
-        let block = watcher.get_block(block_number).await.unwrap();
-        assert_eq!(block.number.unwrap().as_u64(), block_number);
-
-        let batcher_transactions = watcher
-            .blob_fetcher
-            .get_batcher_transactions(&block)
-            .await
-            .unwrap();
-
-        assert_eq!(batcher_transactions.len(), 1);
-    }
-}
