@@ -2,7 +2,10 @@ use ethers::types::{Block, Transaction};
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::common::{AttributesDepositedCall, BlockInfo, Epoch};
+use crate::{
+    common::{AttributesDepositedCall, BlockInfo, Epoch},
+    config::Config,
+};
 
 /// Block info for the current head of the chain
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -15,33 +18,75 @@ pub struct HeadInfo {
     pub sequence_number: u64,
 }
 
-impl TryFrom<Block<Transaction>> for HeadInfo {
-    type Error = eyre::Report;
+impl HeadInfo {
+    /// Returns the head info from the given L2 block and the system config.
+    /// The config is used to check whether the block is subject to the Ecotone hardfork
+    /// (which changes the way the head info is constructed from the block).
+    pub fn try_from_l2_block(config: &Config, l2_block: Block<Transaction>) -> Result<Self> {
+        if is_ecotone_but_not_first_block(config, l2_block.timestamp.as_u64()) {
+            HeadInfo::try_from_ecotone(l2_block)
+        } else {
+            HeadInfo::try_from_bedrock(l2_block)
+        }
+    }
 
     /// Returns `HeadInfo` consisting of the L2 block, the L1 epoch block it belongs to, and the L2 block's position in the epoch.
-    fn try_from(value: Block<Transaction>) -> Result<Self> {
-        let tx_calldata = value
-            .transactions
-            .first()
-            .ok_or(eyre::eyre!(
+    /// This function is used when the L2 block is from the Bedrock hardfork or earlier.
+    fn try_from_bedrock(block: Block<Transaction>) -> Result<Self> {
+        let Some(first_tx) = block.transactions.first() else {
+            return Err(eyre::eyre!(
                 "Could not find the L1 attributes deposited transaction"
-            ))?
-            .input
-            .clone();
+            ));
+        };
 
-        let call = AttributesDepositedCall::try_from(tx_calldata)?;
+        let tx_calldata = first_tx.input.clone();
+        let call = AttributesDepositedCall::try_from_bedrock(tx_calldata)?;
 
         Ok(Self {
-            l2_block_info: value.try_into()?,
+            l2_block_info: block.try_into()?,
+            l1_epoch: Epoch::from(&call),
+            sequence_number: call.sequence_number,
+        })
+    }
+
+    /// Returns `HeadInfo` consisting of the L2 block, the L1 epoch block it belongs to, and the L2 block's position in the epoch.
+    /// This function is used when the L2 block is from the Ecotone hardfork or later.
+    fn try_from_ecotone(block: Block<Transaction>) -> Result<Self> {
+        let Some(first_tx) = block.transactions.first() else {
+            return Err(eyre::eyre!(
+                "Could not find the L1 attributes deposited transaction"
+            ));
+        };
+
+        let tx_calldata = first_tx.input.clone();
+        let call = AttributesDepositedCall::try_from_ecotone(tx_calldata)?;
+
+        Ok(Self {
+            l2_block_info: block.try_into()?,
             l1_epoch: Epoch::from(&call),
             sequence_number: call.sequence_number,
         })
     }
 }
 
+/// Returns true if Ecotone hardfork is active but the block is not the
+/// first block subject to the hardfork. Ecotone activation at genesis does not count.
+fn is_ecotone_but_not_first_block(config: &Config, block_time: u64) -> bool {
+    let is_ecotone = block_time >= config.chain.ecotone_time;
+
+    if block_time < config.chain.blocktime {
+        return is_ecotone;
+    }
+
+    let is_ecotone_activation_block =
+        block_time - config.chain.blocktime < config.chain.ecotone_time;
+
+    is_ecotone && !is_ecotone_activation_block
+}
+
 #[cfg(test)]
 mod tests {
-    mod head_info {
+    mod head_info_bedrock {
         use crate::driver::HeadInfo;
         use std::str::FromStr;
 
@@ -84,7 +129,7 @@ mod tests {
             let block: Block<Transaction> = serde_json::from_str(raw_block)?;
 
             // Act
-            let head = HeadInfo::try_from(block);
+            let head = HeadInfo::try_from_bedrock(block);
 
             // Assert
             assert!(head.is_err());
@@ -160,7 +205,7 @@ mod tests {
             let expected_l1_epoch_timestamp = 1682191440;
 
             // Act
-            let head = HeadInfo::try_from(block);
+            let head = HeadInfo::try_from_bedrock(block);
 
             // Assert
             assert!(head.is_ok());
@@ -204,7 +249,7 @@ mod tests {
                 let provider = Provider::try_from(l2_rpc)?;
 
                 let l2_block = provider.get_block_with_txs(l2_block_hash).await?.unwrap();
-                let head = HeadInfo::try_from(l2_block)?;
+                let head = HeadInfo::try_from_bedrock(l2_block)?;
 
                 let HeadInfo {
                     l2_block_info,

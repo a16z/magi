@@ -1,9 +1,7 @@
 use std::fmt::Debug;
 
 use ethers::{
-    abi::parse_abi_str,
-    prelude::BaseContract,
-    types::{Block, Bytes, Transaction, H256, U256},
+    types::{Block, Transaction, H256},
     utils::rlp::{Decodable, DecoderError, Rlp},
 };
 use eyre::Result;
@@ -11,6 +9,8 @@ use figment::value::{Dict, Tag, Value};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::engine::ExecutionPayload;
+pub mod attributes_deposited;
+pub use attributes_deposited::AttributesDepositedCall;
 
 /// Selected block header info
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Default, Serialize, Deserialize)]
@@ -97,64 +97,6 @@ impl From<&ExecutionPayload> for BlockInfo {
     }
 }
 
-/// Represents the `setL1BlockValues` transaction inputs included in the first transaction of every L2 block.
-pub struct AttributesDepositedCall {
-    /// The L1 block number of the corresponding epoch this belongs to.
-    pub number: u64,
-    /// The L1 block timestamp of the corresponding epoch this belongs to.
-    pub timestamp: u64,
-    /// The L1 block basefee of the corresponding epoch this belongs to.
-    pub basefee: U256,
-    /// The L1 block hash of the corresponding epoch this belongs to.
-    pub hash: H256,
-    /// The L2 block's position within the epoch.
-    pub sequence_number: u64,
-    /// A versioned hash of the current authorized batcher sender.
-    pub batcher_hash: H256,
-    /// The current L1 fee overhead to apply to L2 transactions cost computation. Unused after Ecotone hard fork.
-    pub fee_overhead: U256,
-    /// The current L1 fee scalar to apply to L2 transactions cost computation. Unused after Ecotone hard fork.
-    pub fee_scalar: U256,
-}
-
-/// A type alias for the `setL1BlockValues` function parameter types
-type SetL1BlockValueInput = (u64, u64, U256, H256, u64, H256, U256, U256);
-/// The `setL1BlockValues` human-readable ABI
-const L1_BLOCK_CONTRACT_ABI: &str = r#"[
-    function setL1BlockValues(uint64 _number,uint64 _timestamp, uint256 _basefee, bytes32 _hash,uint64 _sequenceNumber,bytes32 _batcherHash,uint256 _l1FeeOverhead,uint256 _l1FeeScalar) external
-]"#;
-
-impl TryFrom<Bytes> for AttributesDepositedCall {
-    type Error = eyre::Report;
-
-    /// Decodes and converts the given bytes (calldata) into [AttributesDepositedCall].
-    fn try_from(value: Bytes) -> Result<Self> {
-        let abi = BaseContract::from(parse_abi_str(L1_BLOCK_CONTRACT_ABI)?);
-
-        let (
-            number,
-            timestamp,
-            basefee,
-            hash,
-            sequence_number,
-            batcher_hash,
-            fee_overhead,
-            fee_scalar,
-        ): SetL1BlockValueInput = abi.decode("setL1BlockValues", value)?;
-
-        Ok(Self {
-            number,
-            timestamp,
-            basefee,
-            hash,
-            sequence_number,
-            batcher_hash,
-            fee_overhead,
-            fee_scalar,
-        })
-    }
-}
-
 impl From<&AttributesDepositedCall> for Epoch {
     /// Converts [AttributesDepositedCall] to an [Epoch] consisting of the number, hash & timestamp of the corresponding L1 epoch block.
     fn from(call: &AttributesDepositedCall) -> Self {
@@ -191,40 +133,5 @@ impl<'de> Deserialize<'de> for RawTransaction {
         let tx: String = serde::Deserialize::deserialize(deserializer)?;
         let tx = tx.strip_prefix("0x").unwrap_or(&tx);
         Ok(RawTransaction(hex::decode(tx).map_err(D::Error::custom)?))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    mod attributed_deposited_call {
-        use std::str::FromStr;
-
-        use ethers::types::{Bytes, H256};
-
-        use crate::common::AttributesDepositedCall;
-
-        #[test]
-        fn decode_from_bytes() -> eyre::Result<()> {
-            // Arrange
-            let calldata = "0x015d8eb900000000000000000000000000000000000000000000000000000000008768240000000000000000000000000000000000000000000000000000000064443450000000000000000000000000000000000000000000000000000000000000000e0444c991c5fe1d7291ff34b3f5c3b44ee861f021396d33ba3255b83df30e357d00000000000000000000000000000000000000000000000000000000000000050000000000000000000000007431310e026b69bfc676c0013e12a1a11411eec9000000000000000000000000000000000000000000000000000000000000083400000000000000000000000000000000000000000000000000000000000f4240";
-
-            let expected_hash =
-                H256::from_str("0444c991c5fe1d7291ff34b3f5c3b44ee861f021396d33ba3255b83df30e357d")?;
-            let expected_block_number = 8874020;
-            let expected_timestamp = 1682191440;
-
-            // Act
-            let call = AttributesDepositedCall::try_from(Bytes::from_str(calldata)?);
-
-            // Assert
-            assert!(call.is_ok());
-            let call = call.unwrap();
-
-            assert_eq!(call.hash, expected_hash);
-            assert_eq!(call.number, expected_block_number);
-            assert_eq!(call.timestamp, expected_timestamp);
-
-            Ok(())
-        }
     }
 }

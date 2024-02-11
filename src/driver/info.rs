@@ -48,7 +48,7 @@ impl HeadInfoQuery {
             .await
             .ok()
             .flatten()
-            .and_then(|block| HeadInfo::try_from(block).ok())
+            .and_then(|l2_block| HeadInfo::try_from_l2_block(config, l2_block).ok())
             .unwrap_or_else(|| {
                 tracing::warn!("could not get head info. Falling back to the genesis head.");
                 HeadInfo {
