@@ -42,6 +42,10 @@ pub struct ExecutionPayload {
     /// An array of beaconchain withdrawals. Always empty as this exists only for L1 compatibility
     #[serde(skip_serializing_if = "Option::is_none")]
     pub withdrawals: Option<Vec<()>>,
+    /// None if not present (pre-Ecotone)
+    pub blob_gas_used: Option<U64>,
+    /// None if not present (pre-Ecotone)
+    pub excess_blob_gas: Option<U64>,
 }
 
 impl TryFrom<Block<Transaction>> for ExecutionPayload {
@@ -76,6 +80,8 @@ impl TryFrom<Block<Transaction>> for ExecutionPayload {
             block_hash: value.hash.unwrap(),
             transactions: encoded_txs,
             withdrawals: Some(Vec::new()),
+            blob_gas_used: value.blob_gas_used.map(|v| v.as_u64().into()),
+            excess_blob_gas: value.excess_blob_gas.map(|v| v.as_u64().into()),
         })
     }
 }
@@ -106,8 +112,6 @@ pub struct PayloadAttributes {
     /// to Canyon, this value is always None. After Canyon it is an empty array. Note that we use
     /// the () type here since we never have a non empty array.
     pub withdrawals: Option<Vec<()>>,
-    /// Optional extension enabled in Ecotone and later, containing the block root of the parent beacon block.
-    pub parent_beacon_block_root: Option<H256>,
     /// The batch epoch number from derivation. This value is not expected by the engine is skipped
     /// during serialization and deserialization.
     #[serde(skip)]

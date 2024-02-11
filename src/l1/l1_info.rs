@@ -31,6 +31,8 @@ pub struct L1BlockInfo {
     pub base_fee: U256,
     /// L1 mix hash (prevrandao)
     pub mix_hash: H256,
+    /// Post-Ecotone beacon block root
+    pub parent_beacon_block_root: Option<H256>,
 }
 
 impl TryFrom<&Block<Transaction>> for L1BlockInfo {
@@ -52,12 +54,15 @@ impl TryFrom<&Block<Transaction>> for L1BlockInfo {
 
         let mix_hash = value.mix_hash.ok_or(eyre::eyre!("block not included"))?;
 
+        let parent_beacon_block_root = value.parent_beacon_block_root;
+
         Ok(L1BlockInfo {
             number,
             hash,
             timestamp,
             base_fee,
             mix_hash,
+            parent_beacon_block_root,
         })
     }
 }
