@@ -9,7 +9,7 @@ use eyre::Result;
 use crate::common::{Epoch, RawTransaction};
 use crate::config::{Config, SystemAccounts};
 use crate::derive::state::State;
-use crate::derive::PurgeableIterator;
+use crate::derive::{get_ecotone_upgrade_transactions, PurgeableIterator};
 use crate::engine::PayloadAttributes;
 use crate::l1::L1Info;
 
@@ -95,6 +95,8 @@ impl Attributes {
         let transactions = Some(self.derive_transactions(input, l1_info));
         let suggested_fee_recipient = SystemAccounts::default().fee_vault;
 
+        let parent_beacon_block_root = None; // TODO(nicolas)
+
         PayloadAttributes {
             timestamp,
             prev_randao,
@@ -106,6 +108,7 @@ impl Attributes {
             epoch,
             l1_inclusion_block,
             seq_number,
+            parent_beacon_block_root,
         }
     }
 
@@ -121,14 +124,28 @@ impl Attributes {
     ) -> Vec<RawTransaction> {
         let mut transactions = Vec::new();
 
+        // L1 info (attributes deposited) transaction, present in every block
         let attributes_tx = self.derive_attributes_deposited(l1_info, input.timestamp);
         transactions.push(attributes_tx);
 
+        // User deposit transactions, present in the first block of every epoch
         if self.sequence_number == 0 {
             let mut user_deposited_txs = self.derive_user_deposited();
             transactions.append(&mut user_deposited_txs);
         }
 
+        // Optional Ecotone upgrade transactions
+        if self
+            .config
+            .chain
+            .is_ecotone_activation_block(input.timestamp)
+        {
+            let mut ecotone_upgrade_txs = get_ecotone_upgrade_transactions();
+            transactions.append(&mut ecotone_upgrade_txs);
+            tracing::debug!("found Ecotone activation block; Upgrade transactions added");
+        }
+
+        // Remaining transactions
         let mut rest = input.transactions;
         transactions.append(&mut rest);
 

@@ -20,6 +20,10 @@ pub mod stages;
 /// A module that keeps track of the current derivation state, caching previous L1 and L2 blocks
 pub mod state;
 
+/// A module that handles the Ecotone hardfork upgrade
+pub mod ecotone_upgrade;
+pub use ecotone_upgrade::get_ecotone_upgrade_transactions;
+
 /// A module that extends the [Iterator] trait with a `purge` method
 mod purgeable;
 pub use purgeable::PurgeableIterator;

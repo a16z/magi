@@ -106,6 +106,8 @@ pub struct PayloadAttributes {
     /// to Canyon, this value is always None. After Canyon it is an empty array. Note that we use
     /// the () type here since we never have a non empty array.
     pub withdrawals: Option<Vec<()>>,
+    /// Optional extension enabled in Ecotone and later, containing the block root of the parent beacon block.
+    pub parent_beacon_block_root: Option<H256>,
     /// The batch epoch number from derivation. This value is not expected by the engine is skipped
     /// during serialization and deserialization.
     #[serde(skip)]

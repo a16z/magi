@@ -280,6 +280,23 @@ impl ChainConfig {
         }
     }
 
+    /// Returns true if the block is the first block subject to the Ecotone hardfork
+    pub fn is_ecotone_activation_block(&self, block_time: u64) -> bool {
+        if block_time < self.blocktime {
+            return false;
+        }
+
+        block_time - self.blocktime < self.ecotone_time
+    }
+
+    /// Returns true if Ecotone hardfork is active but the block is not the
+    /// first block subject to the hardfork. Ecotone activation at genesis does not count.
+    pub fn is_ecotone_but_not_first_block(&self, block_time: u64) -> bool {
+        let is_ecotone = block_time >= self.ecotone_time;
+
+        is_ecotone && !self.is_ecotone_activation_block(block_time)
+    }
+
     /// [ChainConfig] for Optimism
     pub fn optimism() -> Self {
         Self {

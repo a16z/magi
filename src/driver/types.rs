@@ -23,16 +23,19 @@ impl HeadInfo {
     /// The config is used to check whether the block is subject to the Ecotone hardfork
     /// (which changes the way the head info is constructed from the block).
     pub fn try_from_l2_block(config: &Config, l2_block: Block<Transaction>) -> Result<Self> {
-        if is_ecotone_but_not_first_block(config, l2_block.timestamp.as_u64()) {
-            HeadInfo::try_from_ecotone(l2_block)
+        if config
+            .chain
+            .is_ecotone_but_not_first_block(l2_block.timestamp.as_u64())
+        {
+            HeadInfo::try_from_ecotone_block(l2_block)
         } else {
-            HeadInfo::try_from_bedrock(l2_block)
+            HeadInfo::try_from_bedrock_block(l2_block)
         }
     }
 
     /// Returns `HeadInfo` consisting of the L2 block, the L1 epoch block it belongs to, and the L2 block's position in the epoch.
     /// This function is used when the L2 block is from the Bedrock hardfork or earlier.
-    fn try_from_bedrock(block: Block<Transaction>) -> Result<Self> {
+    fn try_from_bedrock_block(block: Block<Transaction>) -> Result<Self> {
         let Some(first_tx) = block.transactions.first() else {
             return Err(eyre::eyre!(
                 "Could not find the L1 attributes deposited transaction"
@@ -51,7 +54,7 @@ impl HeadInfo {
 
     /// Returns `HeadInfo` consisting of the L2 block, the L1 epoch block it belongs to, and the L2 block's position in the epoch.
     /// This function is used when the L2 block is from the Ecotone hardfork or later.
-    fn try_from_ecotone(block: Block<Transaction>) -> Result<Self> {
+    fn try_from_ecotone_block(block: Block<Transaction>) -> Result<Self> {
         let Some(first_tx) = block.transactions.first() else {
             return Err(eyre::eyre!(
                 "Could not find the L1 attributes deposited transaction"
@@ -67,21 +70,6 @@ impl HeadInfo {
             sequence_number: call.sequence_number,
         })
     }
-}
-
-/// Returns true if Ecotone hardfork is active but the block is not the
-/// first block subject to the hardfork. Ecotone activation at genesis does not count.
-fn is_ecotone_but_not_first_block(config: &Config, block_time: u64) -> bool {
-    let is_ecotone = block_time >= config.chain.ecotone_time;
-
-    if block_time < config.chain.blocktime {
-        return is_ecotone;
-    }
-
-    let is_ecotone_activation_block =
-        block_time - config.chain.blocktime < config.chain.ecotone_time;
-
-    is_ecotone && !is_ecotone_activation_block
 }
 
 #[cfg(test)]
@@ -129,7 +117,7 @@ mod tests {
             let block: Block<Transaction> = serde_json::from_str(raw_block)?;
 
             // Act
-            let head = HeadInfo::try_from_bedrock(block);
+            let head = HeadInfo::try_from_bedrock_block(block);
 
             // Assert
             assert!(head.is_err());
@@ -205,7 +193,7 @@ mod tests {
             let expected_l1_epoch_timestamp = 1682191440;
 
             // Act
-            let head = HeadInfo::try_from_bedrock(block);
+            let head = HeadInfo::try_from_bedrock_block(block);
 
             // Assert
             assert!(head.is_ok());
@@ -249,7 +237,7 @@ mod tests {
                 let provider = Provider::try_from(l2_rpc)?;
 
                 let l2_block = provider.get_block_with_txs(l2_block_hash).await?.unwrap();
-                let head = HeadInfo::try_from_bedrock(l2_block)?;
+                let head = HeadInfo::try_from_bedrock_block(l2_block)?;
 
                 let HeadInfo {
                     l2_block_info,

@@ -15,7 +15,6 @@ pub struct AttributesDepositedCall {
     pub batcher_hash: H256,
     pub fee_overhead: U256,
     pub fee_scalar: U256,
-
     pub blob_base_fee_scalar: u32,
     pub blob_base_fee: U256,
 }
@@ -37,13 +36,6 @@ lazy_static! {
         .try_into()
         .unwrap();
 }
-
-// static SET_L1_BLOCK_VALUES_BEDROCK_SELECTOR: [u8; 4] = keccak256("setL1BlockValues")[..4].try_into().unwrap();
-// static SET_L1_BLOCK_VALUES_ECOTONE_SELECTOR: Lazy<[u8; 4]> = Lazy::new(|| {
-//     keccak256("setL1BlockValuesEcotone")[..4]
-//         .try_into()
-//         .unwrap()
-// });
 
 impl AttributesDepositedCall {
     /// Bedrock Binary Format
@@ -111,7 +103,7 @@ impl AttributesDepositedCall {
             fee_overhead,
             fee_scalar,
 
-            // Ecotone fields are not present in Bedrock blocks
+            // Ecotone fields are not present in Bedrock attributes deposited calls
             blob_base_fee_scalar: 0,
             blob_base_fee: U256::zero(),
         })
@@ -181,10 +173,12 @@ impl AttributesDepositedCall {
             hash,
             sequence_number,
             batcher_hash,
-            fee_overhead: U256::zero(),
             fee_scalar,
             blob_base_fee,
             blob_base_fee_scalar,
+
+            // The pre-Ecotone L1 fee overhead value is dropped in Ecotone
+            fee_overhead: U256::zero(),
         })
     }
 }
