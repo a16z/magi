@@ -14,17 +14,25 @@ use openssl::sha::sha256;
 
 use super::{handlers::Handler, service::types::NetworkAddress};
 
+/// A module to handle peer discovery
 mod discovery;
+/// A module to handle commonly used types in the p2p system.
 mod types;
 
+/// Responsible for management of the `Discv5` & `libp2p` services.
 pub struct Service {
+    /// Handles validation & processing of inbound messages
     handlers: Vec<Box<dyn Handler>>,
+    /// The socket address that the service is listening on.
     addr: SocketAddr,
+    /// The chain ID of the network
     chain_id: u64,
+    /// A unique keypair to validate the node's identity
     keypair: Option<Keypair>,
 }
 
 impl Service {
+    /// Creates a new [Service]
     pub fn new(addr: SocketAddr, chain_id: u64) -> Self {
         Self {
             handlers: Vec::new(),
@@ -34,16 +42,20 @@ impl Service {
         }
     }
 
+    /// Adds a handler to [Service]
     pub fn add_handler(mut self, handler: Box<dyn Handler>) -> Self {
         self.handlers.push(handler);
         self
     }
 
+    /// Sets the keypair for [Service]
     pub fn set_keypair(mut self, keypair: Keypair) -> Self {
         self.keypair = Some(keypair);
         self
     }
 
+    /// Starts the Discv5 peer discovery & libp2p services
+    /// and continually listens for new peers and messages to handle
     pub fn start(mut self) -> Result<()> {
         let addr = NetworkAddress::try_from(self.addr)?;
         let keypair = self.keypair.unwrap_or_else(Keypair::generate_secp256k1);
@@ -81,6 +93,7 @@ impl Service {
     }
 }
 
+/// Computes the message ID of a `gossipsub` message
 fn compute_message_id(msg: &Message) -> MessageId {
     let mut decoder = snap::raw::Decoder::new();
     let id = match decoder.decompress_vec(&msg.data) {
@@ -107,6 +120,7 @@ fn compute_message_id(msg: &Message) -> MessageId {
     MessageId(id)
 }
 
+/// Creates the libp2p [Swarm]
 fn create_swarm(keypair: Keypair, handlers: &[Box<dyn Handler>]) -> Result<Swarm<Behaviour>> {
     let transport = tcp::tokio::Transport::new(tcp::Config::default())
         .upgrade(libp2p::core::upgrade::Version::V1Lazy)
@@ -122,14 +136,18 @@ fn create_swarm(keypair: Keypair, handlers: &[Box<dyn Handler>]) -> Result<Swarm
     )
 }
 
+/// Specifies the [NetworkBehaviour] of the node
 #[derive(NetworkBehaviour)]
 #[behaviour(out_event = "Event")]
 struct Behaviour {
+    /// Adds [libp2p::ping] to respond to inbound pings, and send periodic outbound pings
     ping: ping::Behaviour,
+    /// Adds [libp2p::gossipsub] to enable gossipsub as the routing layer
     gossipsub: gossipsub::Behaviour,
 }
 
 impl Behaviour {
+    /// Configures the swarm behaviors, subscribes to the gossip topics, and returns a new [Behaviour]
     fn new(handlers: &[Box<dyn Handler>]) -> Result<Self> {
         let ping = ping::Behaviour::default();
 
@@ -173,13 +191,18 @@ impl Behaviour {
     }
 }
 
+/// The type of message received
 enum Event {
+    /// Represents a [ping::Event]
     #[allow(dead_code)]
     Ping(ping::Event),
+    /// Represents a [gossipsub::Event]
     Gossipsub(gossipsub::Event),
 }
 
 impl Event {
+    /// Handles received gossipsub messages. Ping messages are ignored.
+    /// Reports back to [libp2p::gossipsub] to apply peer scoring and forward the message to other peers if accepted.
     fn handle(self, swarm: &mut Swarm<Behaviour>, handlers: &[Box<dyn Handler>]) {
         if let Self::Gossipsub(gossipsub::Event::Message {
             propagation_source,
@@ -203,12 +226,14 @@ impl Event {
 }
 
 impl From<ping::Event> for Event {
+    /// Converts [ping::Event] to [Event]
     fn from(value: ping::Event) -> Self {
         Event::Ping(value)
     }
 }
 
 impl From<gossipsub::Event> for Event {
+    /// Converts [gossipsub::Event] to [Event]
     fn from(value: gossipsub::Event) -> Self {
         Event::Gossipsub(value)
     }

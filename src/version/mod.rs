@@ -1,11 +1,16 @@
+/// Represents the Magi version
 #[derive(Debug)]
 pub struct Version {
+    /// The package name specified in `Cargo.toml`
     name: String,
+    /// The package version specified in `Cargo.toml`
     version: String,
+    /// `Dev` if compiled in debug mode. `Release` otherwise.
     meta: String,
 }
 
 impl Version {
+    /// Build and returns a [Version] struct
     pub fn build() -> Self {
         let meta = if cfg!(debug_assertions) {
             "dev"
@@ -22,6 +27,7 @@ impl Version {
 }
 
 impl ToString for Version {
+    /// Formatted as: {name}{version}-{meta}
     fn to_string(&self) -> String {
         format!("{}{}-{}", self.name, self.version, self.meta)
     }

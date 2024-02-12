@@ -36,29 +36,32 @@ impl FromStr for SyncMode {
     }
 }
 
-/// A system configuration
+/// The global `Magi` configuration.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Config {
-    /// The base chain RPC URL
+    /// The L1 chain RPC URL
     pub l1_rpc_url: String,
     /// The L2 chain RPC URL
     pub l2_rpc_url: String,
     /// The L2 engine API URL
     pub l2_engine_url: String,
-    /// The base chain config
+    /// The L2 chain config
     pub chain: ChainConfig,
-    /// Engine API JWT Secret
+    /// Engine API JWT Secret.
     /// This is used to authenticate with the engine API
     pub jwt_secret: String,
     /// A trusted L2 RPC URL to use for fast/checkpoint syncing
     pub checkpoint_sync_url: Option<String>,
-    /// The port of RPC server
+    /// The port of the `Magi` RPC server
     pub rpc_port: u16,
-    /// The devnet mode.
+    /// If devnet is enabled.
     pub devnet: bool,
 }
 
 impl Config {
+    /// Creates a new [Config], based on a config TOML and/or CLI flags.
+    ///
+    /// If a setting exists in the TOML and is also passed via CLI, the CLI will take priority.
     pub fn new(config_path: &PathBuf, cli_config: CliConfig, chain: ChainConfig) -> Self {
         let defaults_provider = Serialized::defaults(DefaultsProvider::default());
         let chain_provider: Serialized<ChainProvider> = chain.into();
@@ -79,8 +82,8 @@ impl Config {
                     figment::error::Kind::MissingField(field) => {
                         let field = field.replace('_', "-");
                         println!("\x1b[91merror\x1b[0m: missing configuration field: {field}");
-                        println!("\n\ttry supplying the propoper command line argument: --{field}");
-                        println!("\talternatively, you can add the field to your magi.toml file or as an environment variable");
+                        println!("\n\ttry supplying the proper command line argument: --{field}");
+                        println!("\talternatively, you can add the field to your magi.toml file");
                         println!("\nfor more information, check the github README");
                     }
                     _ => println!("cannot parse configuration: {err}"),
@@ -91,26 +94,33 @@ impl Config {
     }
 }
 
-/// Chain config items derived from the CLI
+/// Magi config items derived from the CLI
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CliConfig {
+    /// The L1 RPC
     #[serde(skip_serializing_if = "Option::is_none")]
     pub l1_rpc_url: Option<String>,
+    /// The L2 execution client RPC
     #[serde(skip_serializing_if = "Option::is_none")]
     pub l2_rpc_url: Option<String>,
+    /// The L2 engine RPC
     #[serde(skip_serializing_if = "Option::is_none")]
     pub l2_engine_url: Option<String>,
+    /// The JWT secret used to authenticate with the engine
     #[serde(skip_serializing_if = "Option::is_none")]
     pub jwt_secret: Option<String>,
+    /// A trusted L2 RPC used to obtain data from when using checkpoint sync mode.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub checkpoint_sync_url: Option<String>,
+    /// The port to serve the Magi RPC on.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc_port: Option<u16>,
+    /// If Magi is running in devnet mode.
     #[serde(default)]
     pub devnet: bool,
 }
 
-/// A Chain Configuration
+/// Configurations for a blockchain.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChainConfig {
     /// The network name
@@ -119,7 +129,7 @@ pub struct ChainConfig {
     pub l1_chain_id: u64,
     /// The L2 chain id
     pub l2_chain_id: u64,
-    /// The L1 block referenced by the L2 chain
+    /// The L1 genesis block referenced by the L2 chain
     pub l1_start_epoch: Epoch,
     /// The L2 genesis block info
     pub l2_genesis: BlockInfo,
@@ -129,7 +139,7 @@ pub struct ChainConfig {
     pub batch_inbox: Address,
     /// The deposit contract address
     pub deposit_contract: Address,
-    /// The L1 system config contract
+    /// The L1 system config contract address
     pub system_config_contract: Address,
     /// The maximum byte size of all pending channels
     pub max_channel_size: u64,
@@ -153,6 +163,7 @@ pub struct ChainConfig {
 }
 
 impl Default for ChainConfig {
+    /// Defaults to the Optimism [ChainConfig]
     fn default() -> Self {
         ChainConfig::optimism()
     }
@@ -174,7 +185,7 @@ pub struct SystemConfig {
 }
 
 impl SystemConfig {
-    /// Encoded batch sender as a H256
+    /// Encodes batch sender as a H256
     pub fn batcher_hash(&self) -> H256 {
         let mut batch_sender_bytes = self.batch_sender.as_bytes().to_vec();
         let mut batcher_hash = iter::repeat(0).take(12).collect::<Vec<_>>();
@@ -186,13 +197,18 @@ impl SystemConfig {
 /// System accounts
 #[derive(Debug, Clone)]
 pub struct SystemAccounts {
+    /// The address that submits attributes deposited transactions in every L2 block
     pub attributes_depositor: Address,
+    /// The contract address that attributes deposited transactions are submitted to
     pub attributes_predeploy: Address,
+    /// The contract address that holds fees paid to the sequencer during transaction execution & block production
     pub fee_vault: Address,
 }
 
+/// Wrapper around a [ChainConfig]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ChainProvider {
+    /// The [ChainConfig] which is unique for each blockchain
     chain: ChainConfig,
 }
 
@@ -202,14 +218,19 @@ impl From<ChainConfig> for Serialized<ChainProvider> {
     }
 }
 
+/// Provides default values for the L2 RPC & engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct DefaultsProvider {
+    /// The L2 execution node RPC
     l2_rpc_url: String,
+    /// The L2 engine RPC
     l2_engine_url: String,
+    /// The port to serve the Magi RPC server on
     rpc_port: u16,
 }
 
 impl Default for DefaultsProvider {
+    /// Provides default values for the L2 RPC & engine.
     fn default() -> Self {
         Self {
             l2_rpc_url: "http://127.0.0.1:8545".to_string(),
@@ -220,14 +241,14 @@ impl Default for DefaultsProvider {
 }
 
 impl ChainConfig {
-    /// Read and parse a chain config object from a JSON file path
+    /// Read and parse the [ChainConfig] from a JSON file path
     pub fn from_json(path: &str) -> Self {
         let file = std::fs::File::open(path).unwrap();
         let external: ExternalChainConfig = serde_json::from_reader(file).unwrap();
         external.into()
     }
 
-    /// Generates a ChainConfig object from a given network name.
+    /// Generates a [ChainConfig] instance from a given network name.
     pub fn from_network_name(network: &str) -> Self {
         match network.to_lowercase().as_str() {
             "optimism" => Self::optimism(),
@@ -245,6 +266,7 @@ impl ChainConfig {
         }
     }
 
+    /// [ChainConfig] for Optimism
     pub fn optimism() -> Self {
         Self {
             network: "optimism".to_string(),
@@ -285,6 +307,7 @@ impl ChainConfig {
         }
     }
 
+    /// [ChainConfig] for Optimism Goerli
     pub fn optimism_goerli() -> Self {
         Self {
             network: "optimism-goerli".to_string(),
@@ -324,6 +347,8 @@ impl ChainConfig {
             blocktime: 2,
         }
     }
+
+    /// [ChainConfig] for Optimism Sepolia
     pub fn optimism_sepolia() -> Self {
         Self {
             network: "optimism-sepolia".to_string(),
@@ -364,6 +389,7 @@ impl ChainConfig {
         }
     }
 
+    /// [ChainConfig] for Base
     pub fn base() -> Self {
         Self {
             network: "base".to_string(),
@@ -402,6 +428,7 @@ impl ChainConfig {
         }
     }
 
+    /// [ChainConfig] for Base Goerli
     pub fn base_goerli() -> Self {
         Self {
             network: "base-goerli".to_string(),
@@ -440,6 +467,7 @@ impl ChainConfig {
         }
     }
 
+    /// [ChainConfig] for Base Sepolia
     pub fn base_sepolia() -> Self {
         Self {
             network: "base-sepolia".to_string(),
@@ -480,6 +508,7 @@ impl ChainConfig {
 }
 
 impl Default for SystemAccounts {
+    /// The default system addresses
     fn default() -> Self {
         Self {
             attributes_depositor: addr("0xdeaddeaddeaddeaddeaddeaddeaddeaddead0001"),
@@ -489,14 +518,17 @@ impl Default for SystemAccounts {
     }
 }
 
+/// Converts a [str] to an [Address]
 fn addr(s: &str) -> Address {
     Address::from_str(s).unwrap()
 }
 
+/// Converts a [str] to a [H256].
 fn hash(s: &str) -> H256 {
     H256::from_str(s).unwrap()
 }
 
+/// Returns default blocktime of 2 (seconds).
 fn default_blocktime() -> u64 {
     2
 }
@@ -508,46 +540,73 @@ fn default_blocktime() -> u64 {
 /// genesis devnet setup command `--outfile.rollup` flag.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExternalChainConfig {
+    /// Genesis settings
     genesis: ExternalGenesisInfo,
+    /// Block time of the chain
     block_time: u64,
+    /// Maximum timestamp drift
     max_sequencer_drift: u64,
+    /// Number of L1 blocks in a sequence window
     seq_window_size: u64,
+    /// The max timeout for a channel (as measured by the frame L1 block number)
     channel_timeout: u64,
+    /// The L1 chain id
     l1_chain_id: u64,
+    /// The L2 chain id
     l2_chain_id: u64,
+    /// Timestamp of the regolith hardfork
     regolith_time: u64,
+    /// Timestamp of the canyon hardfork
     canyon_time: u64,
+    /// Timestamp of the delta hardfork
     delta_time: u64,
+    /// The batch inbox address
     batch_inbox_address: Address,
+    /// The deposit contract address
     deposit_contract_address: Address,
+    /// The L1 system config contract address
     l1_system_config_address: Address,
 }
 
+/// The Genesis property of the `rollup.json` file used in `op-node`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ExternalGenesisInfo {
+    /// L1 genesis block hash & number
     l1: ChainGenesisInfo,
+    /// L2 genesis block hash & number
     l2: ChainGenesisInfo,
+    /// L2 genesis block timestamp
     l2_time: u64,
+    /// Genesis [SystemConfigInfo] settings
     system_config: SystemConfigInfo,
 }
 
+/// System config settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct SystemConfigInfo {
+    /// The authorized batch sender that sends batcher transactions to the batch inbox on L1
     #[serde(rename = "batcherAddr")]
     batcher_addr: Address,
+    /// The current L1 fee overhead to apply to L2 transactions cost computation. Unused after Ecotone hard fork.
     overhead: H256,
+    /// The current L1 fee scalar to apply to L2 transactions cost computation. Unused after Ecotone hard fork.
     scalar: H256,
+    /// The gas limit for L2 blocks
     #[serde(rename = "gasLimit")]
     gas_limit: u64,
 }
 
+/// Genesis block hash & number
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ChainGenesisInfo {
+    /// Genesis block number
     hash: H256,
+    /// Genesis block hash
     number: u64,
 }
 
 impl From<ExternalChainConfig> for ChainConfig {
+    /// Converts an [ExternalChainConfig] to [ChainConfig].
     fn from(external: ExternalChainConfig) -> Self {
         Self {
             network: "external".to_string(),
@@ -588,6 +647,8 @@ impl From<ExternalChainConfig> for ChainConfig {
 }
 
 impl From<ChainConfig> for ExternalChainConfig {
+    /// Converts [ChainConfig] into [ExternalChainConfig]
+    /// which is the format used in ``rollup.json`` by `op-node`
     fn from(chain_config: ChainConfig) -> Self {
         let mut overhead = [0; 32];
         let mut scalar = [0; 32];

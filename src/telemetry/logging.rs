@@ -125,6 +125,7 @@ impl tracing::field::Visit for AnsiVisitor {
 /// An Ansi Term layer for tracing
 #[derive(Debug)]
 pub struct AnsiTermLayer {
+    /// Whether verbose tracing is enabled. Prints additional metadata if `true`
     verbose: bool,
 }
 

@@ -9,7 +9,7 @@
 //!
 //! Logging is constructed using the [tracing](https://crates.io/crates/tracing) crate.
 //! The `tracing` crate is a framework for instrumenting Rust programs to collect
-//! structured, event-based diagnostic information. You can use the [logging::init] function
+//! structured, event-based diagnostic information. You can use the [crate::telemetry::init] function
 //! to initialize a global logger, passing in a boolean `verbose` parameter. This function
 //! will return an error if a logger has already been initialized.
 //!
