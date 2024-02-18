@@ -5,18 +5,29 @@ use ethers::{
 use eyre::Result;
 use lazy_static::lazy_static;
 
+/// Represents the attributes deposited transcation call
 #[derive(Debug)]
 pub struct AttributesDepositedCall {
+    /// block number
     pub number: u64,
+    /// block timestamp
     pub timestamp: u64,
+    /// base fee
     pub basefee: U256,
+    /// block hash
     pub hash: H256,
+    /// sequence number of the L2 block
     pub sequence_number: u64,
+    /// batcher hash (should contain an address)
     pub batcher_hash: H256,
+    /// L1 fee overhead
     pub fee_overhead: U256,
+    /// L1 fee scalar
     pub fee_scalar: U256,
-    pub blob_base_fee_scalar: u32,
-    pub blob_base_fee: U256,
+    /// Blob base fee scalar (after Ecotone)
+    pub blob_base_fee_scalar: Option<u32>,
+    /// Blob base fee (after Ecotone)
+    pub blob_base_fee: Option<U256>,
 }
 
 const L1_INFO_BEDROCK_LEN: usize = 4 + 32 * 8;
@@ -104,8 +115,8 @@ impl AttributesDepositedCall {
             fee_scalar,
 
             // Ecotone fields are not present in Bedrock attributes deposited calls
-            blob_base_fee_scalar: 0,
-            blob_base_fee: U256::zero(),
+            blob_base_fee_scalar: None,
+            blob_base_fee: None,
         })
     }
 
@@ -143,7 +154,8 @@ impl AttributesDepositedCall {
         let fee_scalar = U256::from(fee_scalar); // up-casting for backwards compatibility
         cursor += 4;
 
-        let blob_base_fee_scalar = u32::from_be_bytes(calldata[cursor..cursor + 4].try_into()?);
+        let blob_base_fee_scalar =
+            Some(u32::from_be_bytes(calldata[cursor..cursor + 4].try_into()?));
         cursor += 4;
 
         let sequence_number = u64::from_be_bytes(calldata[cursor..cursor + 8].try_into()?);
@@ -158,7 +170,7 @@ impl AttributesDepositedCall {
         let basefee = U256::from_big_endian(&calldata[cursor..cursor + 32]);
         cursor += 32;
 
-        let blob_base_fee = U256::from_big_endian(&calldata[cursor..cursor + 32]);
+        let blob_base_fee = Some(U256::from_big_endian(&calldata[cursor..cursor + 32]));
         cursor += 32;
 
         let hash = H256::from_slice(&calldata[cursor..cursor + 32]);
@@ -227,8 +239,8 @@ mod tests {
             );
             let expected_block_number = 10519970;
             let expected_timestamp = 1707650412;
-            let expected_blob_base_fee_scalar = 862000;
-            let expected_blob_base_fee = U256::from(17683022066u64);
+            let expected_blob_base_fee_scalar = Some(862000);
+            let expected_blob_base_fee = Some(U256::from(17683022066u64));
 
             // Act
             let call = AttributesDepositedCall::try_from_ecotone(Bytes::from_str(calldata)?);

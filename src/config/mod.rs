@@ -105,7 +105,7 @@ pub struct CliConfig {
     /// The L1 RPC
     #[serde(skip_serializing_if = "Option::is_none")]
     pub l1_rpc_url: Option<String>,
-    /// The L1 beacon client RPC
+    /// The L1 beacon chain RPC URL
     #[serde(skip_serializing_if = "Option::is_none")]
     pub l1_beacon_url: Option<String>,
     /// The L2 execution client RPC

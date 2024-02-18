@@ -14,6 +14,8 @@ use crate::config::Config;
 
 const BLOB_CARRYING_TRANSACTION_TYPE: u64 = 3;
 
+/// The data contained in a batcher transaction.
+/// The actual source of this data can be either calldata or blobs.
 pub type BatcherTransactionData = Bytes;
 
 /// The blob fetcher is responsible for fetching blob data from the L1 beacon chain,
@@ -29,19 +31,20 @@ pub struct BlobFetcher {
     seconds_per_slot: AtomicU64,
 }
 
+/// A beacon chain blob sidecar object.
+/// KZG commitment and proof fields are not used in the current implementation.
 #[derive(Debug, Deserialize)]
 pub struct BlobSidecar {
+    /// Blob index (transactions can have more than one blob)
     #[serde(deserialize_with = "deserialize_string_to_u64")]
     pub index: u64,
+    /// Blob data (not decoded)
     #[serde(deserialize_with = "deserialize_blob_bytes")]
     pub blob: Vec<u8>,
-    // kzg_commitment: String,
-    // kzg_proof: String,
-    // signed_block_header: Value,
-    // kzg_commitment_inclusion_proof: Vec<String>,
 }
 
 impl BlobFetcher {
+    /// Create a new blob fetcher with the given config.
     pub fn new(config: Arc<Config>) -> Self {
         Self {
             config,

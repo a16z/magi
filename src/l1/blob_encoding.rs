@@ -6,6 +6,7 @@ const ENCODING_VERSION: u8 = 0;
 const VERSION_OFFSET: usize = 1;
 const ROUNDS: usize = 1024;
 
+/// Encodes a blob of data into a byte array
 pub fn decode_blob_data(blob: &[u8]) -> Result<Bytes> {
     let mut output = vec![0; MAX_BLOB_DATA_SIZE];
 

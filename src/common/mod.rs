@@ -9,6 +9,8 @@ use figment::value::{Dict, Tag, Value};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::engine::ExecutionPayload;
+
+/// Attributes deposited transaction helpers
 pub mod attributes_deposited;
 pub use attributes_deposited::AttributesDepositedCall;
 

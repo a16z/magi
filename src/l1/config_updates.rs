@@ -1,10 +1,16 @@
 use ethers::types::{Address, Log, U256};
 use eyre::Result;
 
+/// Represents a system config update event
+#[derive(Debug)]
 pub enum SystemConfigUpdate {
+    /// The batch sender address has been updated
     BatchSender(Address),
+    /// The fee overhead and scalar have been updated
     Fees(U256, U256),
+    /// The gas has been updated
     Gas(U256),
+    /// The unsafe block signer has been updated
     UnsafeBlockSigner(Address),
 }
 
