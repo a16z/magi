@@ -43,8 +43,10 @@ pub struct ExecutionPayload {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub withdrawals: Option<Vec<()>>,
     /// None if not present (pre-Ecotone)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub blob_gas_used: Option<U64>,
     /// None if not present (pre-Ecotone)
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub excess_blob_gas: Option<U64>,
 }
 

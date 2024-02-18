@@ -28,10 +28,11 @@ pub struct BlockHandler {
 }
 
 struct ExecutionPayloadEnvelope {
-    parent_beacon_block_root: Option<H256>,
     payload: ExecutionPayload,
     signature: Signature,
     hash: PayloadHash,
+    #[allow(unused)]
+    parent_beacon_block_root: Option<H256>,
 }
 
 impl Handler for BlockHandler {
@@ -40,11 +41,11 @@ impl Handler for BlockHandler {
         tracing::debug!("received block");
 
         let decoded = if msg.topic == self.blocks_v1_topic.hash() {
-            decode_block_msg::<ExecutionPayloadV1SSZ>(msg.data)
+            decode_pre_ecotone_block_msg::<ExecutionPayloadV1SSZ>(msg.data)
         } else if msg.topic == self.blocks_v2_topic.hash() {
-            decode_block_msg::<ExecutionPayloadV2SSZ>(msg.data)
+            decode_pre_ecotone_block_msg::<ExecutionPayloadV2SSZ>(msg.data)
         } else if msg.topic == self.blocks_v3_topic.hash() {
-            decode_ecotone_block_msg(msg.data)
+            decode_post_ecotone_block_msg(msg.data)
         } else {
             return MessageAcceptance::Reject;
         };
@@ -73,7 +74,7 @@ impl Handler for BlockHandler {
 }
 
 impl BlockHandler {
-    /// Creates a new [BlockHandler] and opens a channel @todo
+    /// Creates a new [BlockHandler] and opens a channel
     pub fn new(
         chain_id: u64,
         unsafe_recv: watch::Receiver<Address>,
@@ -114,7 +115,7 @@ impl BlockHandler {
 }
 
 /// Decodes a sequence of bytes to an [ExecutionPayloadEnvelope]
-fn decode_block_msg<T>(data: Vec<u8>) -> Result<ExecutionPayloadEnvelope>
+fn decode_pre_ecotone_block_msg<T>(data: Vec<u8>) -> Result<ExecutionPayloadEnvelope>
 where
     T: SimpleSerialize,
     ExecutionPayload: From<T>,
@@ -139,11 +140,11 @@ where
     })
 }
 
-/// The Ecotone V3 block topic encoding includes the parent beacon block root
-/// as described in the [specs].
+/// Decodes a sequence of bytes to an [ExecutionPayloadEnvelope]. The Ecotone V3
+/// block topic encoding includes the parent beacon block root as described in the [specs].
 ///
 /// [specs]: https://specs.optimism.io/protocol/rollup-node-p2p.html#block-encoding
-fn decode_ecotone_block_msg(data: Vec<u8>) -> Result<ExecutionPayloadEnvelope> {
+fn decode_post_ecotone_block_msg(data: Vec<u8>) -> Result<ExecutionPayloadEnvelope> {
     let mut decoder = snap::raw::Decoder::new();
     let decompressed = decoder.decompress_vec(&data)?;
     let sig_data = &decompressed[..65];
