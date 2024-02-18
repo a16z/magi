@@ -858,6 +858,7 @@ mod test {
             "regolith_time": 1,
             "canyon_time": 2,
             "delta_time": 3,
+            "ecotone_time": 4,
             "batch_inbox_address": "0xff00000000000000000000000000000000000000",
             "deposit_contract_address": "0x6900000000000000000000000000000000000001",
             "l1_system_config_address": "0x6900000000000000000000000000000000000009"
@@ -906,6 +907,7 @@ mod test {
         assert_eq!(chain.regolith_time, 1);
         assert_eq!(chain.canyon_time, 2);
         assert_eq!(chain.delta_time, 3);
+        assert_eq!(chain.ecotone_time, 4);
         assert_eq!(chain.blocktime, 2);
         assert_eq!(
             chain.l2_to_l1_message_passer,
