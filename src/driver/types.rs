@@ -46,7 +46,7 @@ impl HeadInfo {
         let call = AttributesDepositedCall::try_from_bedrock(tx_calldata)?;
 
         Ok(Self {
-            l2_block_info: block.try_into()?,
+            l2_block_info: BlockInfo::try_from(block)?,
             l1_epoch: Epoch::from(&call),
             sequence_number: call.sequence_number,
         })
@@ -65,7 +65,7 @@ impl HeadInfo {
         let call = AttributesDepositedCall::try_from_ecotone(tx_calldata)?;
 
         Ok(Self {
-            l2_block_info: block.try_into()?,
+            l2_block_info: BlockInfo::try_from(block)?,
             l1_epoch: Epoch::from(&call),
             sequence_number: call.sequence_number,
         })
@@ -238,6 +238,59 @@ mod tests {
 
                 let l2_block = provider.get_block_with_txs(l2_block_hash).await?.unwrap();
                 let head = HeadInfo::try_from_bedrock_block(l2_block)?;
+
+                let HeadInfo {
+                    l2_block_info,
+                    l1_epoch,
+                    sequence_number,
+                } = head;
+
+                assert_eq!(l2_block_info.number, expected_l2_block_number);
+                assert_eq!(l2_block_info.timestamp, expected_l2_block_timestamp);
+
+                assert_eq!(l1_epoch.hash, expected_l1_epoch_hash);
+                assert_eq!(l1_epoch.number, expected_l1_epoch_block_number);
+                assert_eq!(l1_epoch.timestamp, expected_l1_epoch_timestamp);
+
+                assert_eq!(sequence_number, 4);
+            }
+
+            Ok(())
+        }
+    }
+
+    mod head_info_ecotone {
+        use crate::driver::HeadInfo;
+        use std::str::FromStr;
+
+        use ethers::{
+            providers::{Middleware, Provider},
+            types::H256,
+        };
+        use eyre::Result;
+
+        #[tokio::test]
+        async fn test_head_info_from_l2_block_hash() -> Result<()> {
+            if std::env::var("L1_TEST_RPC_URL").is_ok() && std::env::var("L2_TEST_RPC_URL").is_ok()
+            {
+                let l2_block_hash = H256::from_str(
+                    "0xbdd36f0c7ec8e17647dac2780130a842c47dba0025387e80408c161fdb115412",
+                )?;
+
+                let expected_l2_block_number = 21564471;
+                let expected_l2_block_timestamp = 1708557010;
+
+                let expected_l1_epoch_hash = H256::from_str(
+                    "0x231ac984a3fc58757efe373b0b5bff0589c0e67a969a6cbc56ec959739525b31",
+                )?;
+                let expected_l1_epoch_block_number = 10575507;
+                let expected_l1_epoch_timestamp = 1708556928;
+
+                let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
+                let provider = Provider::try_from(l2_rpc)?;
+
+                let l2_block = provider.get_block_with_txs(l2_block_hash).await?.unwrap();
+                let head = HeadInfo::try_from_ecotone_block(l2_block)?;
 
                 let HeadInfo {
                     l2_block_info,
