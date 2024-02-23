@@ -303,7 +303,7 @@ impl ChainConfig {
             blocktime: 2,
             regolith_time: 0,
             canyon_time: 170499240,
-            delta_time: u64::MAX,
+            delta_time: 1708560000,
         }
     }
 
@@ -424,7 +424,7 @@ impl ChainConfig {
             blocktime: 2,
             regolith_time: 0,
             canyon_time: 1704992401,
-            delta_time: u64::MAX,
+            delta_time: 1708560000,
         }
     }
 
