@@ -15,7 +15,7 @@ use serde::Serialize;
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    let sync_mode = cli.sync_mode.clone();
+    let sync_mode = cli.sync_mode;
     let verbose = cli.verbose;
     let logs_dir = cli.logs_dir.clone();
     let logs_rotation = cli.logs_rotation.clone();
@@ -24,6 +24,12 @@ async fn main() -> Result<()> {
 
     let _guards = telemetry::init(verbose, logs_dir, logs_rotation);
     metrics::init()?;
+
+    tracing::info!(
+        target: "magi",
+        "Starting Magi. sync mode={}, network={}",
+        sync_mode, config.chain.network
+    );
 
     let runner = Runner::from_config(config)
         .with_sync_mode(sync_mode)

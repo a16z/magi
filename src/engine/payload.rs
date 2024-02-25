@@ -177,7 +177,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_from_block_hash_to_execution_paylaod() -> Result<()> {
-        if std::env::var("L1_TEST_RPC_URL").is_ok() && std::env::var("L2_TEST_RPC_URL").is_ok() {
+        if std::env::var("L2_TEST_RPC_URL").is_ok() {
             let checkpoint_hash: H256 =
                 "0xc2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973".parse()?;
 

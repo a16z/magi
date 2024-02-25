@@ -1,4 +1,4 @@
-use std::{iter, path::PathBuf, process::exit, str::FromStr};
+use std::{fmt, iter, path::PathBuf, process::exit, str::FromStr};
 
 use ethers::types::{Address, H256, U256};
 use figment::{
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::common::{BlockInfo, Epoch};
 
 /// Sync Mode Specifies how `magi` should sync the L2 chain
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SyncMode {
     /// Fast sync mode
     Fast,
@@ -32,6 +32,17 @@ impl FromStr for SyncMode {
             "challenge" => Ok(Self::Challenge),
             "full" => Ok(Self::Full),
             _ => Err("invalid sync mode".to_string()),
+        }
+    }
+}
+
+impl fmt::Display for SyncMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Fast => write!(f, "fast"),
+            Self::Checkpoint => write!(f, "checkpoint"),
+            Self::Challenge => write!(f, "challenge"),
+            Self::Full => write!(f, "full"),
         }
     }
 }
@@ -281,20 +292,16 @@ impl ChainConfig {
     }
 
     /// Returns true if the block is the first block subject to the Ecotone hardfork
-    pub fn is_ecotone_activation_block(&self, block_time: u64) -> bool {
-        if block_time < self.blocktime {
-            return false;
-        }
-
-        block_time - self.blocktime < self.ecotone_time
+    pub fn is_ecotone_activation_block(&self, l2_block_timestamp: u64) -> bool {
+        l2_block_timestamp == self.ecotone_time
     }
 
     /// Returns true if Ecotone hardfork is active but the block is not the
     /// first block subject to the hardfork. Ecotone activation at genesis does not count.
-    pub fn is_ecotone_but_not_first_block(&self, block_time: u64) -> bool {
-        let is_ecotone = block_time >= self.ecotone_time;
+    pub fn is_ecotone_but_not_first_block(&self, l2_block_timestamp: u64) -> bool {
+        let is_ecotone = l2_block_timestamp >= self.ecotone_time;
 
-        is_ecotone && !self.is_ecotone_activation_block(block_time)
+        is_ecotone && !self.is_ecotone_activation_block(l2_block_timestamp)
     }
 
     /// [ChainConfig] for Optimism

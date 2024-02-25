@@ -99,8 +99,9 @@ impl BlobFetcher {
         let slot = self.get_slot_from_time(block.timestamp.as_u64()).await?;
         // perf: fetch only the required indexes instead of all
         let blobs = self.fetch_blob_sidecars(slot).await?;
+        tracing::debug!("fetched {} blobs for slot {}", blobs.len(), slot);
 
-        for (blob_index, blob_hash) in indexed_blobs {
+        for (blob_index, _) in indexed_blobs {
             let Some(blob_sidecar) = blobs.iter().find(|b| b.index == blob_index as u64) else {
                 // This can happen in the case the blob retention window has expired
                 // and the data is no longer available. This case is not handled yet.
@@ -109,7 +110,6 @@ impl BlobFetcher {
 
             // decode the full blob
             let decoded_blob_data = decode_blob_data(&blob_sidecar.blob)?;
-            tracing::debug!("successfully decoded blob data for hash {:?}", blob_hash);
 
             batcher_transactions_data.push(decoded_blob_data);
         }

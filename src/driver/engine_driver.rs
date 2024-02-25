@@ -224,9 +224,6 @@ fn should_skip(block: &Block<Transaction>, attributes: &PayloadAttributes) -> Re
         attributes.timestamp
     );
 
-    tracing::debug!("block: {:?}", block);
-    tracing::debug!("attributes: {:?}", attributes);
-
     let attributes_hashes = attributes
         .transactions
         .as_ref()
@@ -242,6 +239,7 @@ fn should_skip(block: &Block<Transaction>, attributes: &PayloadAttributes) -> Re
         .collect::<Vec<_>>();
 
     tracing::debug!("attribute hashes: {:?}", attributes_hashes);
+    tracing::debug!("block hashes: {:?}", block_hashes);
 
     let is_same = attributes_hashes == block_hashes
         && attributes.timestamp.as_u64() == block.timestamp.as_u64()

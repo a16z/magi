@@ -91,8 +91,6 @@ impl Runner {
     /// Syncs via L1 block derivation from the latest finalized block the execution client has synced to.
     /// Otherwise syncs from genesis
     pub async fn full_sync(&self) -> Result<()> {
-        tracing::info!("starting full sync");
-
         self.start_driver().await?;
         Ok(())
     }
@@ -102,8 +100,6 @@ impl Runner {
     ///
     /// Note: the `admin` RPC method must be available on the execution client as checkpoint_sync relies on `admin_addPeer`
     pub async fn checkpoint_sync(&self) -> Result<()> {
-        tracing::info!("starting checkpoint sync");
-
         let l2_provider = Provider::try_from(&self.config.l2_rpc_url)?;
         let checkpoint_sync_url =
             Provider::try_from(self.config.checkpoint_sync_url.as_ref().ok_or(eyre::eyre!(

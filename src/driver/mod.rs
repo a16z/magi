@@ -195,7 +195,8 @@ impl<E: Engine> Driver<E> {
 
             self.engine_driver
                 .handle_attributes(next_attributes)
-                .await?;
+                .await
+                .map_err(|e| eyre::eyre!("failed to handle attributes: {}", e))?;
 
             tracing::info!(
                 "safe head updated: {} {:?}",

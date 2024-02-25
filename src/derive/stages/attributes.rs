@@ -73,8 +73,8 @@ impl Attributes {
     ///
     /// Calls `derive_transactions` to generate the raw transactions
     fn derive_attributes(&mut self, input: BlockInput<Epoch>) -> PayloadAttributes {
-        tracing::debug!("attributes derived from block {}", input.epoch.number);
-        tracing::debug!("batch epoch hash {:?}", input.epoch.hash);
+        tracing::debug!("deriving attributes from block: {}", input.epoch.number);
+        tracing::debug!("batch epoch hash: {:?}", input.epoch.hash);
 
         self.update_sequence_number(input.epoch.hash);
 
@@ -137,9 +137,9 @@ impl Attributes {
             .chain
             .is_ecotone_activation_block(input.timestamp)
         {
+            tracing::debug!("found Ecotone activation block; Upgrade transactions added");
             let mut ecotone_upgrade_txs = get_ecotone_upgrade_transactions();
             transactions.append(&mut ecotone_upgrade_txs);
-            tracing::debug!("found Ecotone activation block; Upgrade transactions added");
         }
 
         // Remaining transactions
