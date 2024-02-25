@@ -23,8 +23,6 @@ services:
       - op-geth
     env_file:
       - .env
-    environment:
-      - RUST_LOG=magi=debug
     ports:
       - 9200:9200
       - "${RPC_PORT}:${RPC_PORT}"

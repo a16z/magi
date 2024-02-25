@@ -137,7 +137,7 @@ impl Attributes {
             .chain
             .is_ecotone_activation_block(input.timestamp)
         {
-            tracing::debug!("found Ecotone activation block; Upgrade transactions added");
+            tracing::info!("found Ecotone activation block; Upgrade transactions added");
             let mut ecotone_upgrade_txs = get_ecotone_upgrade_transactions();
             transactions.append(&mut ecotone_upgrade_txs);
         }

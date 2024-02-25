@@ -12,6 +12,8 @@ use serde_json::Value;
 use super::decode_blob_data;
 use crate::config::Config;
 
+/// The transaction type used to identify transactions that carry blobs
+/// according to EIP 4844.
 const BLOB_CARRYING_TRANSACTION_TYPE: u64 = 3;
 
 /// The data contained in a batcher transaction.
@@ -117,6 +119,7 @@ impl BlobFetcher {
         Ok(batcher_transactions_data)
     }
 
+    /// Check if a transaction was sent from the batch sender to the batch inbox.
     #[inline]
     fn is_valid_batcher_transaction(&self, tx: &Transaction) -> bool {
         let batch_sender = self.config.chain.system_config.batch_sender;
@@ -125,7 +128,12 @@ impl BlobFetcher {
         tx.from == batch_sender && tx.to.map(|to| to == batch_inbox).unwrap_or(false)
     }
 
-    #[inline]
+    /// Given a timestamp, return the slot number at which the timestamp
+    /// was included in the beacon chain.
+    ///
+    /// This method uses a cached genesis timestamp and seconds per slot
+    /// value to calculate the slot number. If the cache is empty, it fetches
+    /// the required data from the beacon RPC.
     async fn get_slot_from_time(&self, time: u64) -> Result<u64> {
         let mut genesis_timestamp = self.genesis_timestamp.load(Ordering::Relaxed);
         let mut seconds_per_slot = self.seconds_per_slot.load(Ordering::Relaxed);
@@ -160,6 +168,7 @@ impl BlobFetcher {
         Ok((time - genesis_timestamp) / seconds_per_slot)
     }
 
+    /// Fetch the blob sidecars for a given slot.
     async fn fetch_blob_sidecars(&self, slot: u64) -> Result<Vec<BlobSidecar>> {
         let base_url = format!("{}/eth/v1/beacon/blob_sidecars", self.config.l1_beacon_url);
         let full_url = format!("{}/{}", base_url, slot);
@@ -173,6 +182,7 @@ impl BlobFetcher {
         Ok(blobs)
     }
 
+    /// Fetch the genesis timestamp from the beacon chain.
     async fn fetch_beacon_genesis_timestamp(&self) -> Result<u64> {
         let base_url = format!("{}/eth/v1/beacon/genesis", self.config.l1_beacon_url);
 
@@ -187,6 +197,7 @@ impl BlobFetcher {
         Ok(genesis_time)
     }
 
+    /// Fetch the beacon chain spec.
     async fn fetch_beacon_spec(&self) -> Result<Value> {
         let base_url = format!("{}/eth/v1/config/spec", self.config.l1_beacon_url);
 
