@@ -1,0 +1,57 @@
+name: Build and Publish Docker
+
+on:
+  workflow_dispatch: {}
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: a16zcrypto/magi
+
+jobs:
+  container:
+    runs-on: ubuntu-20.04
+    permissions:
+      id-token: write
+      packages: write
+      contents: read
+    timeout-minutes: 60
+
+    steps:
+    - name: Checkout repository
+      id: checkout
+      uses: actions/checkout@v3
+
+    - name: Install Docker BuildX
+      uses: docker/setup-buildx-action@v2
+      id: buildx
+      with:
+          install: true
+
+    - name: Log into Docker Hub
+      uses: docker/login-action@v2
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Finalize Docker Metadata
+      id: docker_tagging
+      run: |
+        echo "::set-output name=docker_tags::${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${GITHUB_REF##*/}"
+
+    - name: Set up Docker Buildx cache
+      uses: actions/cache@v2
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v3
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.docker_tagging.outputs.docker_tags }}
+        cache-from: type=local,src=/tmp/.buildx-cache
+        cache-to: type=local,dest=/tmp/.buildx-cache
