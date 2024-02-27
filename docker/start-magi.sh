@@ -21,6 +21,7 @@ then
         --l2-rpc-url http://${EXECUTION_CLIENT}:8545 \
         --l2-engine-url http://${EXECUTION_CLIENT}:8551 \
         --rpc-port $RPC_PORT \
+        --rpc-addr $RPC_ADDR \
         $DEVNET \
         --sync-mode $SYNC_MODE
 elif [ $SYNC_MODE = "checkpoint" ]
@@ -32,6 +33,7 @@ then
         --l2-rpc-url http://${EXECUTION_CLIENT}:8545 \
         --l2-engine-url http://${EXECUTION_CLIENT}:8551 \
         --rpc-port $RPC_PORT \
+        --rpc-addr $RPC_ADDR \
         $DEVNET \
         --sync-mode $SYNC_MODE \
         --checkpoint-sync-url $CHECKPOINT_SYNC_URL \

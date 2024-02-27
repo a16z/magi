@@ -140,6 +140,7 @@ mod test_utils {
             jwt_secret: Default::default(),
             checkpoint_sync_url: Default::default(),
             rpc_port: Default::default(),
+            rpc_addr: Default::default(),
             devnet: false,
         }
     }

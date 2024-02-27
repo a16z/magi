@@ -54,6 +54,9 @@ pub struct Config {
     pub checkpoint_sync_url: Option<String>,
     /// The port of the `Magi` RPC server
     pub rpc_port: u16,
+    /// The socket address of RPC server
+    pub rpc_addr: String,
+    /// The devnet mode.
     /// If devnet is enabled.
     pub devnet: bool,
 }
@@ -115,6 +118,8 @@ pub struct CliConfig {
     /// The port to serve the Magi RPC on.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc_port: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rpc_addr: Option<String>,
     /// If Magi is running in devnet mode.
     #[serde(default)]
     pub devnet: bool,
@@ -227,6 +232,7 @@ struct DefaultsProvider {
     l2_engine_url: String,
     /// The port to serve the Magi RPC server on
     rpc_port: u16,
+    rpc_addr: String,
 }
 
 impl Default for DefaultsProvider {
@@ -236,6 +242,7 @@ impl Default for DefaultsProvider {
             l2_rpc_url: "http://127.0.0.1:8545".to_string(),
             l2_engine_url: "http://127.0.0.1:8551".to_string(),
             rpc_port: 9545,
+            rpc_addr: "127.0.0.1".to_string(),
         }
     }
 }
