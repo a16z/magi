@@ -47,6 +47,7 @@ pub struct ExecutionPayload {
 impl TryFrom<Block<Transaction>> for ExecutionPayload {
     type Error = eyre::Report;
 
+    /// Converts a [Block] to an [ExecutionPayload]
     fn try_from(value: Block<Transaction>) -> Result<Self> {
         let encoded_txs = (*value
             .transactions

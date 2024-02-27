@@ -14,21 +14,30 @@ use self::{
     state::State,
 };
 
+/// A module that handles the block derivation stages
 pub mod stages;
+/// A module that keeps track of the current derivation state, caching previous L1 and L2 blocks
 pub mod state;
 
+/// A module that extends the [Iterator] trait with a `purge` method
 mod purgeable;
 pub use purgeable::PurgeableIterator;
 
+/// The derivation pipeline is iterated on to update attributes for new blocks.
 pub struct Pipeline {
+    /// A channel sender to send a `BatcherTransactionMessage`
     batcher_transaction_sender: mpsc::Sender<BatcherTransactionMessage>,
+    /// An `Attributes` object
     attributes: Attributes,
+    /// Pending `PayloadAttributes`
     pending_attributes: Option<PayloadAttributes>,
 }
 
 impl Iterator for Pipeline {
     type Item = PayloadAttributes;
 
+    /// Returns the pending [PayloadAttributes].
+    /// If none exist it will call `Attributes::next()` to advance to the next block and return those attributes instead.
     fn next(&mut self) -> Option<Self::Item> {
         if self.pending_attributes.is_some() {
             self.pending_attributes.take()
@@ -39,6 +48,7 @@ impl Iterator for Pipeline {
 }
 
 impl Pipeline {
+    /// Creates a new [Pipeline] and initializes [BatcherTransactions], [Channels], [Batches], and [Attributes]
     pub fn new(state: Arc<RwLock<State>>, config: Arc<Config>, seq: u64) -> Result<Self> {
         let (tx, rx) = mpsc::channel();
         let batcher_transactions = BatcherTransactions::new(rx);
@@ -53,12 +63,15 @@ impl Pipeline {
         })
     }
 
+    /// Sends [BatcherTransactions] & the L1 block they were received in to the [BatcherTransactions] receiver.
     pub fn push_batcher_transactions(&self, txs: Vec<Vec<u8>>, l1_origin: u64) -> Result<()> {
         self.batcher_transaction_sender
             .send(BatcherTransactionMessage { txs, l1_origin })?;
         Ok(())
     }
 
+    /// Returns a reference to the pending [PayloadAttributes].
+    /// If none are pending, it will call `self.next()` to advance to the next block and return those attributes instead.
     pub fn peek(&mut self) -> Option<&PayloadAttributes> {
         if self.pending_attributes.is_none() {
             let next_attributes = self.next();
@@ -68,6 +81,7 @@ impl Pipeline {
         self.pending_attributes.as_ref()
     }
 
+    /// Resets the state of `self.attributes` by calling `Attributes::purge()`
     pub fn purge(&mut self) -> Result<()> {
         self.attributes.purge();
         Ok(())

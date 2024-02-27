@@ -20,9 +20,11 @@ use crate::{
     derive::stages::attributes::UserDeposited,
 };
 
+/// [H256] event signature for `ConfigUpdate`.
 static CONFIG_UPDATE_TOPIC: Lazy<H256> =
     Lazy::new(|| H256::from_slice(&keccak256("ConfigUpdate(uint256,uint8,bytes)")));
 
+/// [H256] event signature for `TransactionDeposited`.
 static TRANSACTION_DEPOSITED_TOPIC: Lazy<H256> = Lazy::new(|| {
     H256::from_slice(&keccak256(
         "TransactionDeposited(address,address,uint256,bytes)",
@@ -30,7 +32,7 @@ static TRANSACTION_DEPOSITED_TOPIC: Lazy<H256> = Lazy::new(|| {
 });
 
 /// Handles watching the L1 chain and monitoring for new blocks, deposits,
-/// and batcher transactions. The monitoring loop is spawned in a seperate
+/// and batcher transactions. The monitoring loop is spawned in a separate
 /// task and communication happens via the internal channels. When ChainWatcher
 /// is dropped, the monitoring task is automatically aborted.
 pub struct ChainWatcher {
@@ -95,13 +97,13 @@ struct InnerWatcher {
     provider: Arc<Provider<RetryClient<Http>>>,
     /// Channel to send block updates
     block_update_sender: mpsc::Sender<BlockUpdate>,
-    /// Most recent ingested block
+    /// The current L1 block to process
     current_block: u64,
-    /// Most recent block
+    /// Most recent L1 block
     head_block: u64,
-    /// Most recent finalized block
+    /// Most recent finalized L1 block
     finalized_block: u64,
-    /// List of blocks that have not been finalized yet
+    /// List of L1 blocks that have not been finalized yet
     unfinalized_blocks: Vec<BlockInfo>,
     /// Mapping from block number to user deposits. Past block deposits
     /// are removed as they are no longer needed
@@ -112,6 +114,7 @@ struct InnerWatcher {
     system_config_update: (u64, Option<SystemConfig>),
 }
 
+/// A type alias for a vector of bytes. Represents the calldata in a batcher transaction
 type BatcherTransactionData = Vec<u8>;
 
 impl Drop for ChainWatcher {
@@ -123,8 +126,7 @@ impl Drop for ChainWatcher {
 }
 
 impl ChainWatcher {
-    /// Creates a new ChainWatcher and begins the monitoring task.
-    /// Errors if the rpc url in the config is invalid.
+    /// Creates a new [ChainWatcher]
     pub fn new(l1_start_block: u64, l2_start_block: u64, config: Arc<Config>) -> Result<Self> {
         Ok(Self {
             handle: None,
@@ -135,7 +137,7 @@ impl ChainWatcher {
         })
     }
 
-    /// Starts the chain watcher at the given block numbers
+    /// Starts the chain watcher at the current [ChainWatcher] start blocks
     pub fn start(&mut self) -> Result<()> {
         if let Some(handle) = self.handle.take() {
             handle.abort();
@@ -191,6 +193,7 @@ impl ChainWatcher {
 }
 
 impl InnerWatcher {
+    /// Creates a new [InnerWatcher]
     async fn new(
         config: Arc<Config>,
         block_update_sender: mpsc::Sender<BlockUpdate>,
@@ -246,6 +249,13 @@ impl InnerWatcher {
         }
     }
 
+    /// Handles processing of the next L1 block.
+    ///
+    /// - Updates the finalized L1 block if this has changed and notifies the block update channel.
+    /// - Updates the L1 head block.
+    /// - Checks for system config changes and updates the [SystemConfig] in [InnerWatcher] if necessary.
+    /// - Fetches the block +  user deposited transactions
+    /// - Notifies the block update channel that either a new block, or a reorg was received.
     async fn try_ingest_block(&mut self) -> Result<()> {
         if self.current_block > self.finalized_block {
             let finalized_block = self.get_finalized().await?;
@@ -310,6 +320,7 @@ impl InnerWatcher {
         Ok(())
     }
 
+    /// Checks L1 event logs for emitted `ConfigUpdated` events and updates the [SystemConfig] in the [InnerWatcher]
     async fn update_system_config(&mut self) -> Result<()> {
         let (last_update_block, _) = self.system_config_update;
 
@@ -364,6 +375,8 @@ impl InnerWatcher {
         Ok(())
     }
 
+    /// True if there are 2 or more unfinalized blocks, and the parent hash
+    /// of the last unfinalized block is not the hash of the second last unfinalized block
     fn check_reorg(&self) -> bool {
         let len = self.unfinalized_blocks.len();
         if len >= 2 {
@@ -375,6 +388,8 @@ impl InnerWatcher {
         }
     }
 
+    /// Fetches the most recent finalized L1 block number.
+    /// If running in devnet mode this will fetch the latest block number.
     async fn get_finalized(&self) -> Result<u64> {
         let block_number = match self.config.devnet {
             false => BlockNumber::Finalized,
@@ -391,6 +406,7 @@ impl InnerWatcher {
             .as_u64())
     }
 
+    /// Fetches the most recent L1 block number
     async fn get_head(&self) -> Result<u64> {
         Ok(self
             .provider
@@ -402,6 +418,7 @@ impl InnerWatcher {
             .as_u64())
     }
 
+    /// Fetches a given L1 block
     async fn get_block(&self, block_num: u64) -> Result<Block<Transaction>> {
         self.provider
             .get_block_with_txs(block_num)
@@ -409,6 +426,12 @@ impl InnerWatcher {
             .ok_or(eyre::eyre!("block not found"))
     }
 
+    /// Returns all user deposited transactions in an L1 block.
+    ///
+    /// If the [InnerWatcher] has already stored deposits in the given block, it removes and returns these.
+    ///
+    /// Otherwise `TransactionDeposited` event logs are fetched from an L1 block range
+    /// of `block_num` to `block_num + 1000`, and stored in the `deposits` mapping.
     async fn get_deposits(&mut self, block_num: u64) -> Result<Vec<UserDeposited>> {
         match self.deposits.remove(&block_num) {
             Some(deposits) => Ok(deposits),
@@ -446,6 +469,7 @@ impl InnerWatcher {
 }
 
 impl L1Info {
+    /// Creates a new [L1Info] instance.
     pub fn new(
         block: &Block<Transaction>,
         user_deposits: Vec<UserDeposited>,
@@ -483,6 +507,7 @@ impl L1Info {
     }
 }
 
+/// Filters block transactions and returns calldata in transactions sent from the batch sender to the batch inbox.
 fn create_batcher_transactions(
     block: &Block<Transaction>,
     batch_sender: Address,
@@ -496,6 +521,7 @@ fn create_batcher_transactions(
         .collect()
 }
 
+/// Creates the block update channel and begins a loop to ingest L1 blocks via [InnerWatcher::try_ingest_block()]
 fn start_watcher(
     l1_start_block: u64,
     l2_start_block: u64,
@@ -522,16 +548,22 @@ fn start_watcher(
     Ok((handle, block_update_receiver))
 }
 
+/// Represents which config option has been updated.
 enum SystemConfigUpdate {
+    /// An update of the batcher address
     BatchSender(Address),
+    /// An update of the fee scalar and/or overhead
     Fees(U256, U256),
+    /// A update of the L2 block gas limit
     Gas(U256),
+    /// An update of the unsafe block signer
     UnsafeBlockSigner(Address),
 }
 
 impl TryFrom<Log> for SystemConfigUpdate {
     type Error = eyre::Report;
 
+    /// Parses the updated config value from an event [Log] and return a [SystemConfigUpdate]
     fn try_from(log: Log) -> Result<Self> {
         let version = log
             .topics
@@ -598,12 +630,13 @@ impl TryFrom<Log> for SystemConfigUpdate {
     }
 }
 
+/// Creates a retryable ethers RPC [Provider]
 fn generate_http_provider(url: &str) -> Arc<Provider<RetryClient<Http>>> {
     let client = reqwest::ClientBuilder::new()
         .timeout(Duration::from_secs(5))
         .build()
         .unwrap();
-    let http = Http::new_with_client(Url::parse(url).expect("ivnalid rpc url"), client);
+    let http = Http::new_with_client(Url::parse(url).expect("invalid rpc url"), client);
     let policy = Box::new(HttpRateLimitRetryPolicy);
     let client = RetryClient::new(http, policy, 100, 50);
     Arc::new(Provider::new(client))

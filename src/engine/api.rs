@@ -206,6 +206,7 @@ pub struct EngineApiErrorPayload {
 
 #[async_trait::async_trait]
 impl Engine for EngineApi {
+    /// Sends an `engine_forkchoiceUpdatedV2` (V3 post Ecotone) message to the engine.
     async fn forkchoice_updated(
         &self,
         forkchoice_state: ForkchoiceState,
@@ -221,12 +222,14 @@ impl Engine for EngineApi {
         Ok(res)
     }
 
+    /// Sends an `engine_newPayloadV2` (V3 post Ecotone) message to the engine.
     async fn new_payload(&self, execution_payload: ExecutionPayload) -> Result<PayloadStatus> {
         let params = vec![serde_json::to_value(execution_payload)?];
         let res = self.post(ENGINE_NEW_PAYLOAD_V2, params).await?;
         Ok(res)
     }
 
+    /// Sends an `engine_getPayloadV2` (V3 post Ecotone) message to the engine.
     async fn get_payload(&self, payload_id: PayloadId) -> Result<ExecutionPayload> {
         let encoded = format!("{:x}", payload_id);
         let padded = format!("0x{:0>16}", encoded);
@@ -238,9 +241,11 @@ impl Engine for EngineApi {
     }
 }
 
+/// Wrapper around an [ExecutionPayload]
 #[derive(Debug, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 struct GetPayloadResponse {
+    /// The execution payload returned by the engine via `engine_getPayloadV2` (`engine_getPayloadV3` post Ecotone)
     execution_payload: ExecutionPayload,
 }
 

@@ -8,20 +8,31 @@ use crate::{common::RawTransaction, config::Config};
 
 use super::block_input::BlockInput;
 
+/// Represents a span batch: a range of encoded L2 blocks
 #[derive(Debug, Clone)]
 pub struct SpanBatch {
+    /// Uvarint encoded relative timestamp since L2 genesis
     pub rel_timestamp: u64,
+    /// Uvarint encoded L1 origin number of the last L2 block in the batch
     pub l1_origin_num: u64,
+    /// First 20 bytes of the parent hash of the first L2 block in the batch.
     pub parent_check: [u8; 20],
+    /// Last 20 bytes of the L1 origin hash of the last L2 block in the batch.
     pub l1_origin_check: [u8; 20],
+    /// Uvarint encoded number of L2 blocks in the batch.
     pub block_count: u64,
+    /// Bitlist of [SpanBatch.block_count] bits: 1 bit per block.
     pub origin_bits: Vec<bool>,
+    /// Uvarint encoded number of L2 transactions in this batch
     pub block_tx_counts: Vec<u64>,
+    /// The L2 transactions in this batch
     pub transactions: Vec<RawTransaction>,
+    /// The L1 block number this batch was derived from.
     pub l1_inclusion_block: u64,
 }
 
 impl SpanBatch {
+    /// Decodes a sequence of bytes into a [SpanBatch]
     pub fn decode(data: &[u8], l1_inclusion_block: u64, chain_id: u64) -> Result<Self> {
         let (rel_timestamp, data) = unsigned_varint::decode::u64(data)?;
         let (l1_origin_num, data) = unsigned_varint::decode::u64(data)?;
@@ -47,6 +58,7 @@ impl SpanBatch {
         })
     }
 
+    /// Returns a [BlockInput] vector for this batch. Contains all L2 block in the batch.
     pub fn block_inputs(&self, config: &Config) -> Vec<BlockInput<u64>> {
         let init_epoch_num = self.l1_origin_num
             - self
@@ -84,6 +96,7 @@ impl SpanBatch {
         inputs
     }
 
+    /// Returns the L1 origin number of the last L2 block in the batch
     pub fn start_epoch_num(&self) -> u64 {
         self.l1_origin_num
             - self
@@ -95,10 +108,12 @@ impl SpanBatch {
     }
 }
 
+/// Splits a byte slice at the specified index (length) into a tuple of 2 byte slices
 fn take_data(data: &[u8], length: usize) -> (&[u8], &[u8]) {
     (&data[0..length], &data[length..])
 }
 
+/// Decodes a bitlist into boolean values and returns a tuple of booleans + the original bitlist.
 fn decode_bitlist(data: &[u8], len: u64) -> (Vec<bool>, &[u8]) {
     let mut bitlist = Vec::new();
 
@@ -117,6 +132,7 @@ fn decode_bitlist(data: &[u8], len: u64) -> (Vec<bool>, &[u8]) {
     (bitlist, data)
 }
 
+/// Decodes the number of transactions in the batch into a U64 vector
 fn decode_block_tx_counts(data: &[u8], block_count: u64) -> Result<(Vec<u64>, &[u8])> {
     let mut tx_counts = Vec::new();
     let mut data_ref = data;
@@ -129,6 +145,7 @@ fn decode_block_tx_counts(data: &[u8], block_count: u64) -> Result<(Vec<u64>, &[
     Ok((tx_counts, data_ref))
 }
 
+/// Decodes transactions in a batch and returns a [RawTransaction] vector
 fn decode_transactions(
     chain_id: u64,
     data: &[u8],
@@ -272,6 +289,7 @@ fn decode_transactions(
     Ok((txs, data))
 }
 
+/// Decodes transaction nonces in the batch into a U64 vector
 fn decode_uvarint_list(data: &[u8], count: u64) -> (Vec<u64>, &[u8]) {
     let mut list = Vec::new();
     let mut data_ref = data;
@@ -285,6 +303,7 @@ fn decode_uvarint_list(data: &[u8], count: u64) -> (Vec<u64>, &[u8]) {
     (list, data_ref)
 }
 
+/// Decodes EIP-2718 `TransactionType` formatted transactions in the batch into a [TxData] vector
 fn decode_tx_data(data: &[u8], tx_count: u64) -> (Vec<TxData>, &[u8]) {
     let mut data_ref = data;
     let mut tx_datas = Vec::new();
@@ -351,28 +370,45 @@ fn decode_tx_data(data: &[u8], tx_count: u64) -> (Vec<TxData>, &[u8]) {
     (tx_datas, data_ref)
 }
 
+/// The transaction type - Legacy, EIP-2930, or EIP-1559
 #[derive(Debug)]
 enum TxData {
+    /// A legacy transaction type
     Legacy {
+        /// Transaction value
         value: U256,
+        /// Transaction gas price
         gas_price: U256,
+        /// Transaction calldata
         data: Bytes,
     },
+    /// An EIP-2930 transaction type
     Type1 {
+        /// Transaction value
         value: U256,
+        /// Transaction gas price
         gas_price: U256,
+        /// Transaction calldata
         data: Bytes,
+        /// Access list as specified in EIP-2930
         access_list: AccessList,
     },
+    /// An EIP-1559 transaction type
     Type2 {
+        /// Transaction value
         value: U256,
+        /// Max fee per gas as specified in EIP-1559
         max_fee: U256,
+        /// Max priority fee as specified in EIP-1559
         max_priority_fee: U256,
+        /// Transaction calldata
         data: Bytes,
+        /// Access list as specified in EIP-2930
         access_list: AccessList,
     },
 }
 
+/// Decodes transaction `To` fields in the batch into an [Address] vector
 fn decode_tos(data: &[u8], count: u64) -> (Vec<Address>, &[u8]) {
     let mut data_ref = data;
     let mut tos = Vec::new();
@@ -385,12 +421,14 @@ fn decode_tos(data: &[u8], count: u64) -> (Vec<Address>, &[u8]) {
     (tos, data_ref)
 }
 
+/// Decodes arbitrary slice of bytes into an [Address]
 fn decode_address(data: &[u8]) -> (Address, &[u8]) {
     let (address_bytes, data) = take_data(data, 20);
     let address = Address::from_slice(address_bytes);
     (address, data)
 }
 
+/// Decodes transaction `R` & `S` signature fields in the batch into a (U256, U256) vector
 fn decode_signatures(data: &[u8], tx_count: u64) -> (Vec<(U256, U256)>, &[u8]) {
     let mut sigs = Vec::new();
     let mut data_ref = data;
@@ -407,6 +445,7 @@ fn decode_signatures(data: &[u8], tx_count: u64) -> (Vec<(U256, U256)>, &[u8]) {
     (sigs, data_ref)
 }
 
+/// Decodes a U256 from an arbitrary slice of bytes
 fn decode_u256(data: &[u8]) -> (U256, &[u8]) {
     let (bytes, data) = take_data(data, 32);
     let value = U256::from_big_endian(bytes);

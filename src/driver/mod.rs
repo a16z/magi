@@ -28,8 +28,13 @@ use crate::{
 
 use self::engine_driver::EngineDriver;
 
+/// A module to handle block production & validation
 mod engine_driver;
+
+/// A module to handle fetching blocks
 mod info;
+
+/// A module to handle conversions to a [HeadInfo] struct
 mod types;
 pub use types::*;
 
@@ -52,9 +57,9 @@ pub struct Driver<E: Engine> {
     chain_watcher: ChainWatcher,
     /// Channel to receive the shutdown signal from
     shutdown_recv: watch::Receiver<bool>,
-    /// Channel to receive unsafe block from
+    /// Channel to receive unsafe blocks from
     unsafe_block_recv: Receiver<ExecutionPayload>,
-    /// Channel to send unsafe signer updated to block handler
+    /// Channel to send unsafe signer updates to block handler
     unsafe_block_signer_sender: Sender<Address>,
     /// Networking service
     network_service: Option<Service>,
@@ -63,6 +68,7 @@ pub struct Driver<E: Engine> {
 }
 
 impl Driver<EngineApi> {
+    /// Creates a new [Driver] from the given [Config]
     pub async fn from_config(config: Config, shutdown_recv: watch::Receiver<bool>) -> Result<Self> {
         let client = reqwest::ClientBuilder::new()
             .timeout(Duration::from_secs(5))
@@ -150,6 +156,7 @@ impl<E: Engine> Driver<E> {
         }
     }
 
+    /// Loops until the [EngineApi] is online and receives a response from the engine.
     async fn await_engine_ready(&self) {
         while !self.engine_driver.engine_ready().await {
             self.check_shutdown().await;
@@ -157,7 +164,7 @@ impl<E: Engine> Driver<E> {
         }
     }
 
-    /// Attempts to advance the execution node forward using either L1 info our
+    /// Attempts to advance the execution node forward using either L1 info or
     /// blocks received on the p2p network.
     async fn advance(&mut self) -> Result<()> {
         self.advance_safe_head().await?;
@@ -217,6 +224,7 @@ impl<E: Engine> Driver<E> {
         Ok(())
     }
 
+    /// Collects unsafe blocks received via p2p gossip and updates the forkchoice with the first available unsafe block.
     async fn advance_unsafe_head(&mut self) -> Result<()> {
         while let Ok(payload) = self.unsafe_block_recv.try_recv() {
             self.future_unsafe_blocks.push(payload);
@@ -241,6 +249,7 @@ impl<E: Engine> Driver<E> {
         Ok(())
     }
 
+    /// Updates the [State] `safe_head`
     fn update_state_head(&self) -> Result<()> {
         let mut state = self
             .state
@@ -305,6 +314,7 @@ impl<E: Engine> Driver<E> {
         Ok(())
     }
 
+    /// Updates the current finalized L2 block in the [EngineDriver] based on their inclusion in finalized L1 blocks
     fn update_finalized(&mut self) {
         let new_finalized = self
             .unfinalized_blocks
@@ -322,6 +332,7 @@ impl<E: Engine> Driver<E> {
             .retain(|(_, _, inclusion, _)| *inclusion > self.finalized_l1_block_number);
     }
 
+    /// Begins p2p networking if fully synced with no unfinalized blocks
     fn try_start_networking(&mut self) -> Result<()> {
         if self.synced() {
             if let Some(service) = self.network_service.take() {
@@ -332,12 +343,14 @@ impl<E: Engine> Driver<E> {
         Ok(())
     }
 
+    /// Updates Prometheus metrics
     fn update_metrics(&self) {
         metrics::FINALIZED_HEAD.set(self.engine_driver.finalized_head.number as i64);
         metrics::SAFE_HEAD.set(self.engine_driver.safe_head.number as i64);
         metrics::SYNCED.set(self.synced() as i64);
     }
 
+    /// True if there are no unfinalized blocks
     fn synced(&self) -> bool {
         !self.unfinalized_blocks.is_empty()
     }

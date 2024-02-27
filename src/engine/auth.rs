@@ -39,7 +39,7 @@ impl JwtSecret {
         }
     }
 
-    /// Generates a random [`JwtSecret`][crate::auth::JwtSecret].
+    /// Generates a random [`JwtSecret`]
     pub fn random() -> Self {
         let random_bytes: [u8; 32] = rand::thread_rng().gen();
         let secret = hex::encode(random_bytes);
