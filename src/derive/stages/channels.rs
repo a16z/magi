@@ -3,7 +3,9 @@ use std::sync::Arc;
 use super::batcher_transactions::{BatcherTransaction, Frame};
 use crate::{config::Config, derive::PurgeableIterator};
 
+/// Represents the `channel bank` stage to track & process channels
 pub struct Channels<I> {
+    /// A [BatcherTransaction] iterator
     batcher_tx_iter: I,
     /// List of incomplete channels
     pending_channels: Vec<PendingChannel>,
@@ -21,6 +23,7 @@ where
 {
     type Item = Channel;
 
+    /// Processes frames until there are either none left or a channel is ready
     fn next(&mut self) -> Option<Self::Item> {
         self.process_frames()
     }
@@ -30,6 +33,7 @@ impl<I> PurgeableIterator for Channels<I>
 where
     I: PurgeableIterator<Item = BatcherTransaction>,
 {
+    /// Clears the iterator, `pending_channels` & `frame_bank`
     fn purge(&mut self) {
         self.batcher_tx_iter.purge();
         self.pending_channels.clear();
@@ -38,6 +42,7 @@ where
 }
 
 impl<I> Channels<I> {
+    /// Creates a new [Channels] instance
     pub fn new(batcher_tx_iter: I, config: Arc<Config>) -> Self {
         Self {
             batcher_tx_iter,
@@ -143,10 +148,15 @@ where
 /// An intermediate pending channel
 #[derive(Debug)]
 pub struct PendingChannel {
+    /// A unique identifier for this channel
     channel_id: u128,
+    /// Frames seen so far
     frames: Vec<Frame>,
+    /// The number of frames seen
     size: Option<u16>,
+    /// The highest L1 block number frames in this channel were submitted in
     highest_l1_block: u64,
+    /// The lowest L1 block number frames in this channel were submitted in
     lowest_l1_block: u64,
 }
 
@@ -168,6 +178,7 @@ impl PendingChannel {
         }
     }
 
+    /// Checks if we have seen the last frame for this channel
     pub fn is_complete(&self) -> bool {
         self.size == Some(self.frames.len() as u16)
     }
@@ -186,6 +197,7 @@ impl PendingChannel {
             .fold(Vec::new(), |a, b| [a, b.frame_data.clone()].concat())
     }
 
+    /// The highest L1 inclusion block of frames in the channel.
     pub fn l1_inclusion_block(&self) -> u64 {
         self.frames
             .iter()
@@ -222,12 +234,16 @@ impl PendingChannel {
 /// A Channel
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Channel {
+    /// A unique identifier for the channel
     pub id: u128,
+    /// Data from all of the frames in the channel
     pub data: Vec<u8>,
+    /// The L1 block that the channel can be fully built from. This is the inclusion block of the last frame in the channel.
     pub l1_inclusion_block: u64,
 }
 
 impl From<PendingChannel> for Channel {
+    /// Converts a [PendingChannel] to a [Channel]
     fn from(pc: PendingChannel) -> Self {
         Channel {
             id: pc.channel_id,

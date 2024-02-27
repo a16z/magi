@@ -21,26 +21,37 @@ use jsonrpsee::{
 
 use serde::{Deserialize, Serialize};
 
+/// This trait defines a set of RPC methods that can be
+/// queried by clients under the `optimism` namespace
 #[rpc(server, namespace = "optimism")]
 pub trait Rpc {
+    /// Returns the L2 output information for a given block.
+    /// See the [Optimism spec](https://specs.optimism.io/protocol/rollup-node.html?highlight=rpc#l2-output-rpc-method) for more details
     #[method(name = "outputAtBlock")]
     async fn output_at_block(&self, block_number: u64) -> Result<OutputRootResponse, Error>;
 
+    /// Returns the rollup configuration options.
     #[method(name = "rollupConfig")]
     async fn rollup_config(&self) -> Result<ExternalChainConfig, Error>;
 
+    /// Returns details about the Magi version of the node.
     #[method(name = "version")]
     async fn version(&self) -> Result<String, Error>;
 }
 
+/// The Magi RPC server which implements the same `optimism` namespace methods as `op-node`
 #[derive(Debug)]
 pub struct RpcServerImpl {
+    /// The Magi version of the node
     version: Version,
+    /// The Magi [Config]
     config: Arc<Config>,
 }
 
 #[async_trait]
 impl RpcServer for RpcServerImpl {
+    /// Returns the L2 output information for a given block.
+    /// See the [Optimism spec](https://specs.optimism.io/protocol/rollup-node.html?highlight=rpc#l2-output-rpc-method) for more details
     async fn output_at_block(&self, block_number: u64) -> Result<OutputRootResponse, Error> {
         let l2_provider = convert_err(Provider::try_from(self.config.l2_rpc_url.clone()))?;
 
@@ -77,21 +88,26 @@ impl RpcServer for RpcServerImpl {
         })
     }
 
+    /// Returns the rollup configuration options.
     async fn rollup_config(&self) -> Result<ExternalChainConfig, Error> {
         let config = (*self.config).clone();
 
         Ok(ExternalChainConfig::from(config.chain))
     }
 
+    /// Returns details about the Magi version of the node.
     async fn version(&self) -> Result<String, Error> {
         Ok(self.version.to_string())
     }
 }
 
+/// Converts a generic error to a [jsonrpsee::core::error] if one exists
 fn convert_err<T, E: Display>(res: Result<T, E>) -> Result<T, Error> {
     res.map_err(|err| Error::Custom(err.to_string()))
 }
 
+/// Computes the L2 output root.
+/// Refer to the [Optimism Spec](https://specs.optimism.io/protocol/proposals.html#l2-output-commitment-construction) for details
 fn compute_l2_output_root(block: Block<H256>, storage_root: H256) -> H256 {
     let version: H256 = Default::default();
     let digest = keccak256(
@@ -107,6 +123,7 @@ fn compute_l2_output_root(block: Block<H256>, storage_root: H256) -> H256 {
     H256::from_slice(&digest)
 }
 
+/// Starts the Magi RPC server
 pub async fn run_server(config: Arc<Config>) -> Result<SocketAddr> {
     let port = config.rpc_port;
     let addr = config.rpc_addr.clone();
@@ -129,12 +146,17 @@ pub async fn run_server(config: Arc<Config>) -> Result<SocketAddr> {
     Ok(addr)
 }
 
+/// The response for the `optimism_outputAtBlock` RPC method.
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct OutputRootResponse {
+    /// The output root which serves as a commitment to the current state of the chain
     pub output_root: H256,
+    /// The output root version number, beginning with 0
     pub version: H256,
+    /// The state root
     pub state_root: H256,
+    /// The 32 byte storage root of the `L2toL1MessagePasser` contract address
     pub withdrawal_storage_root: H256,
 }
 

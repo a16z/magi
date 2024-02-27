@@ -16,16 +16,25 @@ use crate::{
     engine::{Engine, EngineApi, ExecutionPayload, ForkchoiceState, Status},
 };
 
+/// Temporary trusted/static peer used for checkpoint sync mode.
+// TODO: use a list of whitelisted bootnodes instead
 const TRUSTED_PEER_ENODE: &str = "enode://e85ba0beec172b17f53b373b0ab72238754259aa39f1ae5290e3244e0120882f4cf95acd203661a27c8618b27ca014d4e193266cb3feae43655ed55358eedb06@3.86.143.120:30303?discport=21693";
 
+/// The main entrypoint for starting a Magi node.
+/// Responsible for starting the syncing process.
 pub struct Runner {
+    /// The Magi [Config]
     config: Config,
+    /// The [SyncMode] - currently full & checkpoint sync are supported
     sync_mode: SyncMode,
+    /// The L2 block hash to begin syncing from
     checkpoint_hash: Option<String>,
+    /// Receiver to listen for SIGINT signals
     shutdown_recv: Receiver<bool>,
 }
 
 impl Runner {
+    /// Creates a new [Runner] from a [Config] and registers the SIGINT signal handler.
     pub fn from_config(config: Config) -> Self {
         let (shutdown_sender, shutdown_recv) = channel(false);
         ctrlc::set_handler(move || {
@@ -44,16 +53,19 @@ impl Runner {
         }
     }
 
+    /// Sets the [SyncMode]
     pub fn with_sync_mode(mut self, sync_mode: SyncMode) -> Self {
         self.sync_mode = sync_mode;
         self
     }
 
+    /// Sets the `checkpoint_hash` if running in checkpoint [SyncMode]
     pub fn with_checkpoint_hash(mut self, checkpoint_hash: Option<String>) -> Self {
         self.checkpoint_hash = checkpoint_hash;
         self
     }
 
+    /// Begins the syncing process
     pub async fn run(self) -> Result<()> {
         match self.sync_mode {
             SyncMode::Fast => self.fast_sync().await,
@@ -63,16 +75,21 @@ impl Runner {
         }
     }
 
+    /// Fast sync mode - currently unsupported
     pub async fn fast_sync(&self) -> Result<()> {
         tracing::error!("fast sync is not implemented yet");
         unimplemented!();
     }
 
+    /// Fast challenge mode - currently unsupported
     pub async fn challenge_sync(&self) -> Result<()> {
         tracing::error!("challenge sync is not implemented yet");
         unimplemented!();
     }
 
+    /// Full sync mode.
+    /// Syncs via L1 block derivation from the latest finalized block the execution client has synced to.
+    /// Otherwise syncs from genesis
     pub async fn full_sync(&self) -> Result<()> {
         tracing::info!("starting full sync");
 
@@ -80,6 +97,10 @@ impl Runner {
         Ok(())
     }
 
+    /// Checkpoint sync mode.
+    /// Syncs the execution client to a given checkpoint block, and then begins the normal derivation sync process via the [Driver]
+    ///
+    /// Note: the `admin` RPC method must be available on the execution client as checkpoint_sync relies on `admin_addPeer`
     pub async fn checkpoint_sync(&self) -> Result<()> {
         tracing::info!("starting checkpoint sync");
 
@@ -180,6 +201,7 @@ impl Runner {
         Ok(())
     }
 
+    /// Creates and starts the [Driver] which handles the derivation sync process.
     async fn start_driver(&self) -> Result<()> {
         let mut driver =
             Driver::from_config(self.config.clone(), self.shutdown_recv.clone()).await?;
@@ -192,6 +214,7 @@ impl Runner {
         Ok(())
     }
 
+    /// Exits if a SIGINT signal is received
     fn check_shutdown(&self) -> Result<()> {
         if *self.shutdown_recv.borrow() {
             tracing::warn!("shutting down");
@@ -201,6 +224,7 @@ impl Runner {
         Ok(())
     }
 
+    /// Returns `true` if the L2 block is the first in an epoch (sequence number 0)
     async fn is_epoch_boundary<T: Into<BlockId> + Send + Sync>(
         block: T,
         checkpoint_sync_url: &Provider<Http>,

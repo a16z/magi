@@ -18,6 +18,7 @@ pub struct HeadInfo {
 impl TryFrom<Block<Transaction>> for HeadInfo {
     type Error = eyre::Report;
 
+    /// Returns `HeadInfo` consisting of the L2 block, the L1 epoch block it belongs to, and the L2 block's position in the epoch.
     fn try_from(value: Block<Transaction>) -> Result<Self> {
         let tx_calldata = value
             .transactions

@@ -34,7 +34,7 @@ The Pipeline is broken up into [stages](../src/derive/stages/mod.rs) as follows.
 
 ##### Batcher Transactions
 
-The [Batcher Transactions](../src/derive/stages/batcher_transactions.rs) stage pulls transactions from its configured channel receiver, passed down from the [Pipeline](../src/derive/mod.rs) parent. To construct a [Batcher Transaction](../src/derive/stages/batcher_transactions.rs) from the raw transaction data, it constructs [Frames](../src/derive/stages/batcher_transactions.rs) following the [Batch Submission Wire Format](https://github.com/ethereum-optimism/optimism/blob/develop/specs/derivation.md#batch-submission-wire-format) documented in the [Optimism Specs](https://github.com/ethereum-optimism/optimism/blob/develop/specs/README.md).
+The [Batcher Transactions](../src/derive/stages/batcher_transactions.rs) stage pulls transactions from its configured channel receiver, passed down from the [Pipeline](../src/derive/mod.rs) parent. To construct a [Batcher Transaction](../src/derive/stages/batcher_transactions.rs) from the raw transaction data, it constructs [Frames](../src/derive/stages/batcher_transactions.rs) following the [Batch Submission Wire Format](https://github.com/ethereum-optimism/specs/blob/main/specs/protocol/derivation.md#batch-submission-wire-format) documented in the [Optimism Specs](https://github.com/ethereum-optimism/specs/tree/main).
 
 ##### Channels
 
@@ -44,7 +44,7 @@ Remember, since the [L1 Chain Watcher](#l1-chain-watcher) is spawned as a separa
 
 ##### Batches
 
-Next up, the [Batches](../src/derive/stages/batches.rs) stage iterates over the prior [Channel](../src/derive/stages/channels.rs) stage, decoding [Batch](../src/derive/stages/batches.rs) objects from the inner channel data. [Batch](../src/derive/stages/batches.rs) objects are RLP-decoded from the channel data following the [Batch Encoding Format](https://github.com/ethereum-optimism/optimism/blob/develop/specs/derivation.md#batch-format), detailed below.
+Next up, the [Batches](../src/derive/stages/batches.rs) stage iterates over the prior [Channel](../src/derive/stages/channels.rs) stage, decoding [Batch](../src/derive/stages/batches.rs) objects from the inner channel data. [Batch](../src/derive/stages/batches.rs) objects are RLP-decoded from the channel data following the [Batch Encoding Format](https://github.com/ethereum-optimism/specs/blob/main/specs/protocol/derivation.md#batch-format), detailed below.
 
 For version 0, [Batch](../src/derive/stages/batches.rs) objects are encoded as follows:
 
