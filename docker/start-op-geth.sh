@@ -49,6 +49,14 @@ then
         wget "https://raw.githubusercontent.com/base-org/node/main/goerli/genesis-l2.json" -O ./genesis-l2.json
         geth init --datadir=$DATADIR ./genesis-l2.json
     fi
+elif [ $NETWORK = "base-sepolia" ]
+then
+    CHAIN_ID=84532
+    if [ ! -d $DATADIR ]
+    then
+        wget "https://raw.githubusercontent.com/base-org/node/main/sepolia/genesis-l2.json" -O ./genesis-l2.json
+        geth init --datadir=$DATADIR ./genesis-l2.json
+    fi
 elif [ $NETWORK = "custom" ] || [ $NETWORK = "devnet" ]
 then
     CHAIN_ID=$(jq '.config.chainId' ./genesis-l2-attached.json)
