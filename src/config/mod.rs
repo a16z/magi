@@ -134,6 +134,7 @@ pub struct CliConfig {
     /// The port to serve the Magi RPC on.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc_port: Option<u16>,
+    /// The address to serve the Magi RPC on.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc_addr: Option<String>,
     /// If Magi is running in devnet mode.
