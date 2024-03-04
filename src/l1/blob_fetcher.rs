@@ -80,10 +80,7 @@ impl BlobFetcher {
 
             let tx_type = tx.transaction_type.map(|t| t.as_u64()).unwrap_or(0);
             if tx_type != BLOB_CARRYING_TRANSACTION_TYPE {
-                // this is necessary because ethers-rs wraps `bytes::Bytes` into its own type
-                // that doesn't come with free conversion back to `bytes::Bytes`.
-                let calldata = Bytes::from(tx.input.to_vec().clone());
-                batcher_transactions_data.push(calldata);
+                batcher_transactions_data.push(tx.input.0.clone());
                 continue;
             }
 
