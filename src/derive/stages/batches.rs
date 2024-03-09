@@ -144,12 +144,17 @@ where
                 if current_l1_block > epoch.number + seq_window_size {
                     let next_timestamp = safe_head.timestamp + self.config.chain.blocktime;
                     let epoch = if next_timestamp < next_epoch.timestamp {
-                        epoch
+                        // We're deriving empty batches in the current epoch
+                        Some(epoch)
+                    } else if current_l1_block > next_epoch.number + seq_window_size {
+                        // The `next_epoch` also passed seq window, so it is safe to create empty batches in `next_epoch` and advance to it
+                        Some(next_epoch)
                     } else {
-                        next_epoch
+                        // The `next_epoch` is still within its seq window, so don't create empty batches
+                        None
                     };
 
-                    Some(BlockInput {
+                    epoch.map(|epoch| BlockInput {
                         epoch: epoch.number,
                         timestamp: next_timestamp,
                         transactions: Vec::new(),
