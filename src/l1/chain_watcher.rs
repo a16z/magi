@@ -1,5 +1,6 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
+use bytes::Bytes;
 use ethers::{
     providers::{Http, HttpRateLimitRetryPolicy, Middleware, Provider, RetryClient},
     types::{Address, Block, BlockNumber, Filter, Transaction, H256, U256},
@@ -14,6 +15,7 @@ use crate::{
     common::BlockInfo,
     config::{Config, SystemConfig},
     derive::stages::attributes::UserDeposited,
+    l1::decode_blob_data,
 };
 
 use super::{l1_info::L1BlockInfo, BlobFetcher, L1Info, SystemConfigUpdate};
@@ -26,6 +28,14 @@ static TRANSACTION_DEPOSITED_TOPIC: Lazy<H256> = Lazy::new(|| {
         "TransactionDeposited(address,address,uint256,bytes)",
     ))
 });
+
+/// The transaction type used to identify transactions that carry blobs
+/// according to EIP 4844.
+const BLOB_CARRYING_TRANSACTION_TYPE: u64 = 3;
+
+/// The data contained in a batcher transaction.
+/// The actual source of this data can be either calldata or blobs.
+pub type BatcherTransactionData = Bytes;
 
 /// Handles watching the L1 chain and monitoring for new blocks, deposits,
 /// and batcher transactions. The monitoring loop is spawned in a seperate
@@ -166,7 +176,7 @@ impl InnerWatcher {
         l2_start_block: u64,
     ) -> Self {
         let provider = generate_http_provider(&config.l1_rpc_url);
-        let blob_fetcher = Arc::new(BlobFetcher::new(Arc::clone(&config)));
+        let blob_fetcher = Arc::new(BlobFetcher::new(config.l1_beacon_url.clone()));
 
         let system_config = if l2_start_block == config.chain.l2_genesis.number {
             config.chain.system_config
@@ -243,7 +253,7 @@ impl InnerWatcher {
 
             let block = self.get_block(self.current_block).await?;
             let user_deposits = self.get_deposits(self.current_block).await?;
-            let batcher_transactions = self.blob_fetcher.get_batcher_transactions(&block).await?;
+            let batcher_transactions = self.get_batcher_transactions(&block).await?;
 
             let finalized = self.current_block >= self.finalized_block;
 
@@ -415,6 +425,79 @@ impl InnerWatcher {
             }
         }
     }
+
+    /// Given a block, return a list of [`BatcherTransactionData`] containing either the
+    /// calldata or the decoded blob data for each batcher transaction in the block.
+    pub async fn get_batcher_transactions(
+        &self,
+        block: &Block<Transaction>,
+    ) -> Result<Vec<BatcherTransactionData>> {
+        let mut batcher_transactions_data = Vec::new();
+        let mut indexed_blobs = Vec::new();
+        let mut blob_index = 0;
+
+        for tx in block.transactions.iter() {
+            let tx_blob_hashes: Vec<String> = tx
+                .other
+                .get_deserialized("blobVersionedHashes")
+                .unwrap_or(Ok(Vec::new()))
+                .unwrap_or_default();
+
+            if !self.is_valid_batcher_transaction(tx) {
+                blob_index += tx_blob_hashes.len();
+                continue;
+            }
+
+            let tx_type = tx.transaction_type.map(|t| t.as_u64()).unwrap_or(0);
+            if tx_type != BLOB_CARRYING_TRANSACTION_TYPE {
+                batcher_transactions_data.push(tx.input.0.clone());
+                continue;
+            }
+
+            for blob_hash in tx_blob_hashes {
+                indexed_blobs.push((blob_index, blob_hash));
+                blob_index += 1;
+            }
+        }
+
+        // if at this point there are no blobs, return early
+        if indexed_blobs.is_empty() {
+            return Ok(batcher_transactions_data);
+        }
+
+        let slot = self
+            .blob_fetcher
+            .get_slot_from_time(block.timestamp.as_u64())
+            .await?;
+
+        // perf: fetch only the required indexes instead of all
+        let blobs = self.blob_fetcher.fetch_blob_sidecars(slot).await?;
+        tracing::debug!("fetched {} blobs for slot {}", blobs.len(), slot);
+
+        for (blob_index, _) in indexed_blobs {
+            let Some(blob_sidecar) = blobs.iter().find(|b| b.index == blob_index as u64) else {
+                // This can happen in the case the blob retention window has expired
+                // and the data is no longer available. This case is not handled yet.
+                eyre::bail!("blob index {} not found in fetched sidecars", blob_index);
+            };
+
+            // decode the full blob
+            let decoded_blob_data = decode_blob_data(&blob_sidecar.blob)?;
+
+            batcher_transactions_data.push(decoded_blob_data);
+        }
+
+        Ok(batcher_transactions_data)
+    }
+
+    /// Check if a transaction was sent from the batch sender to the batch inbox.
+    #[inline]
+    fn is_valid_batcher_transaction(&self, tx: &Transaction) -> bool {
+        let batch_sender = self.config.chain.system_config.batch_sender;
+        let batch_inbox = self.config.chain.batch_inbox;
+
+        tx.from == batch_sender && tx.to.map(|to| to == batch_inbox).unwrap_or(false)
+    }
 }
 
 fn generate_http_provider(url: &str) -> Arc<Provider<RetryClient<Http>>> {
@@ -452,4 +535,54 @@ fn start_watcher(
     });
 
     Ok((handle, block_update_receiver))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use ethers::providers::{Http, Middleware, Provider};
+    use tokio::sync::mpsc;
+
+    use crate::{
+        config::{ChainConfig, Config},
+        l1::chain_watcher::InnerWatcher,
+    };
+
+    // TODO: update with a test from mainnet after dencun is active
+    // also, this test will be flaky as nodes start to purge old blobs
+    #[tokio::test]
+    async fn test_get_batcher_transactions() {
+        let Ok(l1_beacon_url) = std::env::var("L1_GOERLI_BEACON_RPC_URL") else {
+            println!("L1_GOERLI_BEACON_RPC_URL not set; skipping test");
+            return;
+        };
+        let Ok(l1_rpc_url) = std::env::var("L1_TEST_RPC_URL") else {
+            println!("L1_TEST_RPC_URL not set; skipping test");
+            return;
+        };
+
+        let config = Arc::new(Config {
+            l1_beacon_url,
+            chain: ChainConfig::optimism_goerli(),
+            ..Default::default()
+        });
+
+        let l1_block_number = 10515928;
+        let l1_provider = Provider::<Http>::try_from(l1_rpc_url).unwrap();
+        let l1_block = l1_provider
+            .get_block_with_txs(l1_block_number)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let watcher_inner = InnerWatcher::new(config, mpsc::channel(1).0, l1_block_number, 0).await;
+
+        let batcher_transactions = watcher_inner
+            .get_batcher_transactions(&l1_block)
+            .await
+            .unwrap();
+
+        assert_eq!(batcher_transactions.len(), 1);
+    }
 }

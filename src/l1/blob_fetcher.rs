@@ -1,24 +1,8 @@
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc,
-};
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use bytes::Bytes;
-use ethers::types::{Block, Transaction};
 use eyre::Result;
 use serde::Deserialize;
 use serde_json::Value;
-
-use super::decode_blob_data;
-use crate::config::Config;
-
-/// The transaction type used to identify transactions that carry blobs
-/// according to EIP 4844.
-const BLOB_CARRYING_TRANSACTION_TYPE: u64 = 3;
-
-/// The data contained in a batcher transaction.
-/// The actual source of this data can be either calldata or blobs.
-pub type BatcherTransactionData = Bytes;
 
 /// The blob fetcher is responsible for fetching blob data from the L1 beacon chain,
 /// along with relevant parsing and validation.
@@ -27,7 +11,7 @@ pub type BatcherTransactionData = Bytes;
 /// included in the beacon chain is fetched on the first call to [`Self::get_slot_from_time`]
 /// and cached for all subsequent calls.
 pub struct BlobFetcher {
-    config: Arc<Config>,
+    l1_beacon_url: String,
     client: reqwest::Client,
     genesis_timestamp: AtomicU64,
     seconds_per_slot: AtomicU64,
@@ -47,82 +31,13 @@ pub struct BlobSidecar {
 
 impl BlobFetcher {
     /// Create a new blob fetcher with the given config.
-    pub fn new(config: Arc<Config>) -> Self {
+    pub fn new(l1_beacon_url: String) -> Self {
         Self {
-            config,
+            l1_beacon_url,
             client: reqwest::Client::new(),
             genesis_timestamp: AtomicU64::new(0),
             seconds_per_slot: AtomicU64::new(0),
         }
-    }
-
-    /// Given a block, return a list of `BatcherTransactionData` containing either the
-    /// calldata or the decoded blob data for each batcher transaction in the block.
-    pub async fn get_batcher_transactions(
-        &self,
-        block: &Block<Transaction>,
-    ) -> Result<Vec<BatcherTransactionData>> {
-        let mut batcher_transactions_data = Vec::new();
-        let mut indexed_blobs = Vec::new();
-        let mut blob_index = 0;
-
-        for tx in block.transactions.iter() {
-            let tx_blob_hashes: Vec<String> = tx
-                .other
-                .get_deserialized("blobVersionedHashes")
-                .unwrap_or(Ok(Vec::new()))
-                .unwrap_or_default();
-
-            if !self.is_valid_batcher_transaction(tx) {
-                blob_index += tx_blob_hashes.len();
-                continue;
-            }
-
-            let tx_type = tx.transaction_type.map(|t| t.as_u64()).unwrap_or(0);
-            if tx_type != BLOB_CARRYING_TRANSACTION_TYPE {
-                batcher_transactions_data.push(tx.input.0.clone());
-                continue;
-            }
-
-            for blob_hash in tx_blob_hashes {
-                indexed_blobs.push((blob_index, blob_hash));
-                blob_index += 1;
-            }
-        }
-
-        // if at this point there are no blobs, return early
-        if indexed_blobs.is_empty() {
-            return Ok(batcher_transactions_data);
-        }
-
-        let slot = self.get_slot_from_time(block.timestamp.as_u64()).await?;
-        // perf: fetch only the required indexes instead of all
-        let blobs = self.fetch_blob_sidecars(slot).await?;
-        tracing::debug!("fetched {} blobs for slot {}", blobs.len(), slot);
-
-        for (blob_index, _) in indexed_blobs {
-            let Some(blob_sidecar) = blobs.iter().find(|b| b.index == blob_index as u64) else {
-                // This can happen in the case the blob retention window has expired
-                // and the data is no longer available. This case is not handled yet.
-                eyre::bail!("blob index {} not found in fetched sidecars", blob_index);
-            };
-
-            // decode the full blob
-            let decoded_blob_data = decode_blob_data(&blob_sidecar.blob)?;
-
-            batcher_transactions_data.push(decoded_blob_data);
-        }
-
-        Ok(batcher_transactions_data)
-    }
-
-    /// Check if a transaction was sent from the batch sender to the batch inbox.
-    #[inline]
-    fn is_valid_batcher_transaction(&self, tx: &Transaction) -> bool {
-        let batch_sender = self.config.chain.system_config.batch_sender;
-        let batch_inbox = self.config.chain.batch_inbox;
-
-        tx.from == batch_sender && tx.to.map(|to| to == batch_inbox).unwrap_or(false)
     }
 
     /// Given a timestamp, return the slot number at which the timestamp
@@ -131,7 +46,7 @@ impl BlobFetcher {
     /// This method uses a cached genesis timestamp and seconds per slot
     /// value to calculate the slot number. If the cache is empty, it fetches
     /// the required data from the beacon RPC.
-    async fn get_slot_from_time(&self, time: u64) -> Result<u64> {
+    pub async fn get_slot_from_time(&self, time: u64) -> Result<u64> {
         let mut genesis_timestamp = self.genesis_timestamp.load(Ordering::Relaxed);
         let mut seconds_per_slot = self.seconds_per_slot.load(Ordering::Relaxed);
 
@@ -166,8 +81,8 @@ impl BlobFetcher {
     }
 
     /// Fetch the blob sidecars for a given slot.
-    async fn fetch_blob_sidecars(&self, slot: u64) -> Result<Vec<BlobSidecar>> {
-        let base_url = format!("{}/eth/v1/beacon/blob_sidecars", self.config.l1_beacon_url);
+    pub async fn fetch_blob_sidecars(&self, slot: u64) -> Result<Vec<BlobSidecar>> {
+        let base_url = format!("{}/eth/v1/beacon/blob_sidecars", self.l1_beacon_url);
         let full_url = format!("{}/{}", base_url, slot);
 
         let res = self.client.get(full_url).send().await?.error_for_status()?;
@@ -180,8 +95,8 @@ impl BlobFetcher {
     }
 
     /// Fetch the genesis timestamp from the beacon chain.
-    async fn fetch_beacon_genesis_timestamp(&self) -> Result<u64> {
-        let base_url = format!("{}/eth/v1/beacon/genesis", self.config.l1_beacon_url);
+    pub async fn fetch_beacon_genesis_timestamp(&self) -> Result<u64> {
+        let base_url = format!("{}/eth/v1/beacon/genesis", self.l1_beacon_url);
 
         let res = self.client.get(base_url).send().await?.error_for_status()?;
         let res = serde_json::from_slice::<Value>(&res.bytes().await?)?;
@@ -195,8 +110,8 @@ impl BlobFetcher {
     }
 
     /// Fetch the beacon chain spec.
-    async fn fetch_beacon_spec(&self) -> Result<Value> {
-        let base_url = format!("{}/eth/v1/config/spec", self.config.l1_beacon_url);
+    pub async fn fetch_beacon_spec(&self) -> Result<Value> {
+        let base_url = format!("{}/eth/v1/config/spec", self.l1_beacon_url);
 
         let res = self.client.get(base_url).send().await?.error_for_status()?;
         let res = serde_json::from_slice::<Value>(&res.bytes().await?)?;
@@ -226,10 +141,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use ethers::providers::{Http, Middleware, Provider};
 
     use super::*;
-    use crate::config::ChainConfig;
 
     // TODO: update with a test from mainnet after dencun is active
     #[tokio::test]
@@ -239,48 +152,10 @@ mod tests {
             return;
         };
 
-        let config = Arc::new(Config {
-            l1_beacon_url,
-            ..Default::default()
-        });
-
         let slot_number = 7576509;
-        let fetcher = BlobFetcher::new(config);
+        let fetcher = BlobFetcher::new(l1_beacon_url);
         let blobs = fetcher.fetch_blob_sidecars(slot_number).await.unwrap();
 
         assert_eq!(blobs.len(), 6);
-    }
-
-    // TODO: update with a test from mainnet after dencun is active
-    // also, this test will be flaky as nodes start to purge old blobs
-    #[tokio::test]
-    async fn test_get_batcher_transactions() {
-        let Ok(l1_beacon_url) = std::env::var("L1_GOERLI_BEACON_RPC_URL") else {
-            println!("L1_GOERLI_BEACON_RPC_URL not set; skipping test");
-            return;
-        };
-        let Ok(l1_rpc_url) = std::env::var("L1_TEST_RPC_URL") else {
-            println!("L1_TEST_RPC_URL not set; skipping test");
-            return;
-        };
-
-        let config = Arc::new(Config {
-            l1_beacon_url,
-            chain: ChainConfig::optimism_goerli(),
-            ..Default::default()
-        });
-
-        let l1_block_number = 10515928;
-        let l1_provider = Provider::<Http>::try_from(l1_rpc_url).unwrap();
-        let l1_block = l1_provider
-            .get_block_with_txs(l1_block_number)
-            .await
-            .unwrap()
-            .unwrap();
-
-        let fetcher = BlobFetcher::new(config);
-        let batcher_transactions = fetcher.get_batcher_transactions(&l1_block).await.unwrap();
-
-        assert_eq!(batcher_transactions.len(), 1);
     }
 }

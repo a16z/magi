@@ -1,7 +1,8 @@
 use ethers::types::{Block, Transaction, H256, U256};
 
-use super::BatcherTransactionData;
 use crate::{config::SystemConfig, derive::stages::attributes::UserDeposited};
+
+use super::chain_watcher::BatcherTransactionData;
 
 /// Data tied to a specific L1 block
 #[derive(Debug)]

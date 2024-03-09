@@ -131,7 +131,7 @@ impl Attributes {
             transactions.append(&mut user_deposited_txs);
         }
 
-        // Optional Ecotone upgrade transactions
+        // Ecotone upgrade transactions
         if self
             .config
             .chain

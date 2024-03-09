@@ -14,7 +14,7 @@ pub use l1_info::L1Info;
 /// Module responsible for extracting batcher transaction data from
 /// L1 batcher transaction data or blobs (after the Ecotone hardfork)
 pub mod blob_fetcher;
-pub use blob_fetcher::{BatcherTransactionData, BlobFetcher, BlobSidecar};
+pub use blob_fetcher::{BlobFetcher, BlobSidecar};
 
 /// Helper module for decoding blob data
 pub mod blob_encoding;
