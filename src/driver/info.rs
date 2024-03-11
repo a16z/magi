@@ -44,19 +44,33 @@ pub struct HeadInfoQuery {}
 impl HeadInfoQuery {
     /// Fetches the latest finalized L2 block
     pub async fn get_head_info<P: InnerProvider>(p: &P, config: &Config) -> HeadInfo {
-        p.get_block_with_txs(BlockId::Number(BlockNumber::Finalized))
+        let parsed_head_info = match p
+            .get_block_with_txs(BlockId::Number(BlockNumber::Finalized))
             .await
-            .ok()
-            .flatten()
-            .and_then(|block| HeadInfo::try_from(block).ok())
-            .unwrap_or_else(|| {
-                tracing::warn!("could not get head info. Falling back to the genesis head.");
-                HeadInfo {
-                    l2_block_info: config.chain.l2_genesis,
-                    l1_epoch: config.chain.l1_start_epoch,
-                    sequence_number: 0,
+        {
+            Ok(Some(block)) => match HeadInfo::try_from_l2_block(config, block) {
+                Ok(head_info) => Some(head_info),
+                Err(e) => {
+                    tracing::debug!(err = ?e, "could not parse L2 block into head info");
+                    None
                 }
-            })
+            },
+            e => {
+                tracing::debug!("could not get finalied L2 block: {:?}", e);
+                None
+            }
+        };
+
+        if let Some(head_info) = parsed_head_info {
+            head_info
+        } else {
+            tracing::warn!("could not get head info. Falling back to the genesis head.");
+            HeadInfo {
+                l2_block_info: config.chain.l2_genesis,
+                l1_epoch: config.chain.l1_start_epoch,
+                sequence_number: 0,
+            }
+        }
     }
 }
 
@@ -134,6 +148,7 @@ mod test_utils {
     pub fn optimism_config() -> Config {
         Config {
             l1_rpc_url: Default::default(),
+            l1_beacon_url: Default::default(),
             l2_rpc_url: Default::default(),
             l2_engine_url: Default::default(),
             chain: ChainConfig::optimism(),

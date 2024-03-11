@@ -24,6 +24,15 @@ pub struct BlockHandler {
     blocks_v1_topic: IdentTopic,
     /// The libp2p topic for Canyon/Delta blocks: `/optimism/{chain_id}/1/blocks`
     blocks_v2_topic: IdentTopic,
+    blocks_v3_topic: IdentTopic,
+}
+
+struct ExecutionPayloadEnvelope {
+    payload: ExecutionPayload,
+    signature: Signature,
+    hash: PayloadHash,
+    #[allow(unused)]
+    parent_beacon_block_root: Option<H256>,
 }
 
 impl Handler for BlockHandler {
@@ -32,17 +41,19 @@ impl Handler for BlockHandler {
         tracing::debug!("received block");
 
         let decoded = if msg.topic == self.blocks_v1_topic.hash() {
-            decode_block_msg::<ExecutionPayloadV1SSZ>(msg.data)
+            decode_pre_ecotone_block_msg::<ExecutionPayloadV1SSZ>(msg.data)
         } else if msg.topic == self.blocks_v2_topic.hash() {
-            decode_block_msg::<ExecutionPayloadV2SSZ>(msg.data)
+            decode_pre_ecotone_block_msg::<ExecutionPayloadV2SSZ>(msg.data)
+        } else if msg.topic == self.blocks_v3_topic.hash() {
+            decode_post_ecotone_block_msg(msg.data)
         } else {
             return MessageAcceptance::Reject;
         };
 
         match decoded {
-            Ok((payload, signature, payload_hash)) => {
-                if self.block_valid(&payload, signature, payload_hash) {
-                    _ = self.block_sender.send(payload);
+            Ok(envelope) => {
+                if self.block_valid(&envelope) {
+                    _ = self.block_sender.send(envelope.payload);
                     MessageAcceptance::Accept
                 } else {
                     tracing::warn!("invalid unsafe block");
@@ -63,7 +74,7 @@ impl Handler for BlockHandler {
 }
 
 impl BlockHandler {
-    /// Creates a new [BlockHandler] and opens a channel @todo
+    /// Creates a new [BlockHandler] and opens a channel
     pub fn new(
         chain_id: u64,
         unsafe_recv: watch::Receiver<Address>,
@@ -76,6 +87,7 @@ impl BlockHandler {
             unsafe_signer_recv: unsafe_recv,
             blocks_v1_topic: IdentTopic::new(format!("/optimism/{}/0/blocks", chain_id)),
             blocks_v2_topic: IdentTopic::new(format!("/optimism/{}/1/blocks", chain_id)),
+            blocks_v3_topic: IdentTopic::new(format!("/optimism/{}/2/blocks", chain_id)),
         };
 
         (handler, recv)
@@ -84,31 +96,26 @@ impl BlockHandler {
     /// Determines if a block is valid.
     ///
     /// True if the block is less than 1 minute old, and correctly signed by the unsafe block signer.
-    fn block_valid(
-        &self,
-        payload: &ExecutionPayload,
-        sig: Signature,
-        payload_hash: PayloadHash,
-    ) -> bool {
+    fn block_valid(&self, envelope: &ExecutionPayloadEnvelope) -> bool {
         let current_timestamp = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
             .as_secs();
 
-        let is_future = payload.timestamp.as_u64() > current_timestamp + 5;
-        let is_past = payload.timestamp.as_u64() < current_timestamp - 60;
+        let is_future = envelope.payload.timestamp.as_u64() > current_timestamp + 5;
+        let is_past = envelope.payload.timestamp.as_u64() < current_timestamp - 60;
         let time_valid = !(is_future || is_past);
 
-        let msg = payload_hash.signature_message(self.chain_id);
+        let msg = envelope.hash.signature_message(self.chain_id);
         let block_signer = *self.unsafe_signer_recv.borrow();
-        let sig_valid = sig.verify(msg, block_signer).is_ok();
+        let sig_valid = envelope.signature.verify(msg, block_signer).is_ok();
 
         time_valid && sig_valid
     }
 }
 
-/// Decodes a sequence of bytes to a tuple of ([ExecutionPayload], [Signature], [PayloadHash])
-fn decode_block_msg<T>(data: Vec<u8>) -> Result<(ExecutionPayload, Signature, PayloadHash)>
+/// Decodes a sequence of bytes to an [ExecutionPayloadEnvelope]
+fn decode_pre_ecotone_block_msg<T>(data: Vec<u8>) -> Result<ExecutionPayloadEnvelope>
 where
     T: SimpleSerialize,
     ExecutionPayload: From<T>,
@@ -123,9 +130,42 @@ where
     let payload: T = deserialize(block_data)?;
     let payload: ExecutionPayload = ExecutionPayload::from(payload);
 
-    let payload_hash = PayloadHash::from(block_data);
+    let hash = PayloadHash::from(block_data);
 
-    Ok((payload, signature, payload_hash))
+    Ok(ExecutionPayloadEnvelope {
+        parent_beacon_block_root: None,
+        signature,
+        payload,
+        hash,
+    })
+}
+
+/// Decodes a sequence of bytes to an [ExecutionPayloadEnvelope]. The Ecotone V3
+/// block topic encoding includes the parent beacon block root as described in the [specs].
+///
+/// [specs]: https://specs.optimism.io/protocol/rollup-node-p2p.html#block-encoding
+fn decode_post_ecotone_block_msg(data: Vec<u8>) -> Result<ExecutionPayloadEnvelope> {
+    let mut decoder = snap::raw::Decoder::new();
+    let decompressed = decoder.decompress_vec(&data)?;
+    let sig_data = &decompressed[..65];
+    let parent_beacon_block_root = &decompressed[65..97];
+    let block_data = &decompressed[97..];
+
+    let signature = Signature::try_from(sig_data)?;
+
+    let parent_beacon_block_root = Some(H256::from_slice(parent_beacon_block_root));
+
+    let payload: ExecutionPayloadV3SSZ = deserialize(block_data)?;
+    let payload = ExecutionPayload::from(payload);
+
+    let hash = PayloadHash::from(block_data);
+
+    Ok(ExecutionPayloadEnvelope {
+        parent_beacon_block_root,
+        signature,
+        payload,
+        hash,
+    })
 }
 
 /// Represents the Keccak256 hash of the block
@@ -214,6 +254,8 @@ impl From<ExecutionPayloadV1SSZ> for ExecutionPayload {
             block_hash: convert_hash(value.block_hash),
             transactions: convert_tx_list(value.transactions),
             withdrawals: None,
+            blob_gas_used: None,
+            excess_blob_gas: None,
         }
     }
 }
@@ -286,6 +328,53 @@ impl From<ExecutionPayloadV2SSZ> for ExecutionPayload {
             block_hash: convert_hash(value.block_hash),
             transactions: convert_tx_list(value.transactions),
             withdrawals: Some(Vec::new()),
+            blob_gas_used: None,
+            excess_blob_gas: None,
+        }
+    }
+}
+
+#[derive(SimpleSerialize, Default)]
+struct ExecutionPayloadV3SSZ {
+    pub parent_hash: Bytes32,
+    pub fee_recipient: VecAddress,
+    pub state_root: Bytes32,
+    pub receipts_root: Bytes32,
+    pub logs_bloom: Vector<u8, 256>,
+    pub prev_randao: Bytes32,
+    pub block_number: u64,
+    pub gas_limit: u64,
+    pub gas_used: u64,
+    pub timestamp: u64,
+    pub extra_data: List<u8, 32>,
+    pub base_fee_per_gas: U256,
+    pub block_hash: Bytes32,
+    pub transactions: List<Transaction, 1048576>,
+    pub withdrawals: List<Withdrawal, 16>,
+    pub blob_gas_used: u64,
+    pub excess_blob_gas: u64,
+}
+
+impl From<ExecutionPayloadV3SSZ> for ExecutionPayload {
+    fn from(value: ExecutionPayloadV3SSZ) -> Self {
+        Self {
+            parent_hash: convert_hash(value.parent_hash),
+            fee_recipient: convert_address(value.fee_recipient),
+            state_root: convert_hash(value.state_root),
+            receipts_root: convert_hash(value.receipts_root),
+            logs_bloom: convert_byte_vector(value.logs_bloom),
+            prev_randao: convert_hash(value.prev_randao),
+            block_number: value.block_number.into(),
+            gas_limit: value.gas_limit.into(),
+            gas_used: value.gas_used.into(),
+            timestamp: value.timestamp.into(),
+            extra_data: convert_byte_list(value.extra_data),
+            base_fee_per_gas: convert_uint(value.base_fee_per_gas),
+            block_hash: convert_hash(value.block_hash),
+            transactions: convert_tx_list(value.transactions),
+            withdrawals: Some(Vec::new()),
+            blob_gas_used: Some(value.blob_gas_used.into()),
+            excess_blob_gas: Some(value.excess_blob_gas.into()),
         }
     }
 }

@@ -1,4 +1,4 @@
-use std::{iter, path::PathBuf, process::exit, str::FromStr};
+use std::{fmt, iter, path::PathBuf, process::exit, str::FromStr};
 
 use ethers::types::{Address, H256, U256};
 use figment::{
@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::common::{BlockInfo, Epoch};
 
 /// Sync Mode Specifies how `magi` should sync the L2 chain
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SyncMode {
     /// Fast sync mode
     Fast,
@@ -36,11 +36,24 @@ impl FromStr for SyncMode {
     }
 }
 
+impl fmt::Display for SyncMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Fast => write!(f, "fast"),
+            Self::Checkpoint => write!(f, "checkpoint"),
+            Self::Challenge => write!(f, "challenge"),
+            Self::Full => write!(f, "full"),
+        }
+    }
+}
+
 /// The global `Magi` configuration.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Config {
     /// The L1 chain RPC URL
     pub l1_rpc_url: String,
+    /// The base chain beacon client RPC URL
+    pub l1_beacon_url: String,
     /// The L2 chain RPC URL
     pub l2_rpc_url: String,
     /// The L2 engine API URL
@@ -103,6 +116,9 @@ pub struct CliConfig {
     /// The L1 RPC
     #[serde(skip_serializing_if = "Option::is_none")]
     pub l1_rpc_url: Option<String>,
+    /// The L1 beacon chain RPC URL
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub l1_beacon_url: Option<String>,
     /// The L2 execution client RPC
     #[serde(skip_serializing_if = "Option::is_none")]
     pub l2_rpc_url: Option<String>,
@@ -118,6 +134,7 @@ pub struct CliConfig {
     /// The port to serve the Magi RPC on.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc_port: Option<u16>,
+    /// The address to serve the Magi RPC on.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rpc_addr: Option<String>,
     /// If Magi is running in devnet mode.
@@ -160,6 +177,8 @@ pub struct ChainConfig {
     pub canyon_time: u64,
     /// Timestamp of the delta hardfork
     pub delta_time: u64,
+    /// Timestamp of the ecotone hardfork
+    pub ecotone_time: u64,
     /// Network blocktime
     #[serde(default = "default_blocktime")]
     pub blocktime: u64,
@@ -273,6 +292,19 @@ impl ChainConfig {
         }
     }
 
+    /// Returns true if the block is the first block subject to the Ecotone hardfork
+    pub fn is_ecotone_activation_block(&self, l2_block_timestamp: u64) -> bool {
+        l2_block_timestamp == self.ecotone_time
+    }
+
+    /// Returns true if Ecotone hardfork is active but the block is not the
+    /// first block subject to the hardfork. Ecotone activation at genesis does not count.
+    pub fn is_ecotone_but_not_first_block(&self, l2_block_timestamp: u64) -> bool {
+        let is_ecotone = l2_block_timestamp >= self.ecotone_time;
+
+        is_ecotone && !self.is_ecotone_activation_block(l2_block_timestamp)
+    }
+
     /// [ChainConfig] for Optimism
     pub fn optimism() -> Self {
         Self {
@@ -311,6 +343,7 @@ impl ChainConfig {
             regolith_time: 0,
             canyon_time: 170499240,
             delta_time: 1708560000,
+            ecotone_time: 1710781201,
         }
     }
 
@@ -351,6 +384,7 @@ impl ChainConfig {
             regolith_time: 1679079600,
             canyon_time: 1699981200,
             delta_time: 1703116800,
+            ecotone_time: 1707238800,
             blocktime: 2,
         }
     }
@@ -392,6 +426,7 @@ impl ChainConfig {
             regolith_time: 0,
             canyon_time: 1699981200,
             delta_time: 1703203200,
+            ecotone_time: 1708534800,
             blocktime: 2,
         }
     }
@@ -432,6 +467,7 @@ impl ChainConfig {
             regolith_time: 0,
             canyon_time: 1704992401,
             delta_time: 1708560000,
+            ecotone_time: 1710781201,
         }
     }
 
@@ -470,6 +506,7 @@ impl ChainConfig {
             regolith_time: 1683219600,
             canyon_time: 1699981200,
             delta_time: 1703116800,
+            ecotone_time: 1707238800,
             blocktime: 2,
         }
     }
@@ -509,6 +546,7 @@ impl ChainConfig {
             regolith_time: 0,
             canyon_time: 1699981200,
             delta_time: 1703203200,
+            ecotone_time: 1708534800,
             blocktime: 2,
         }
     }
@@ -567,6 +605,8 @@ pub struct ExternalChainConfig {
     canyon_time: u64,
     /// Timestamp of the delta hardfork
     delta_time: u64,
+    /// Timestamp of the ecotone hardfork
+    ecotone_time: u64,
     /// The batch inbox address
     batch_inbox_address: Address,
     /// The deposit contract address
@@ -647,6 +687,7 @@ impl From<ExternalChainConfig> for ChainConfig {
             regolith_time: external.regolith_time,
             canyon_time: external.canyon_time,
             delta_time: external.delta_time,
+            ecotone_time: external.ecotone_time,
             blocktime: external.block_time,
             l2_to_l1_message_passer: addr("0x4200000000000000000000000000000000000016"),
         }
@@ -696,6 +737,7 @@ impl From<ChainConfig> for ExternalChainConfig {
             regolith_time: chain_config.regolith_time,
             canyon_time: chain_config.canyon_time,
             delta_time: chain_config.delta_time,
+            ecotone_time: chain_config.ecotone_time,
             batch_inbox_address: chain_config.batch_inbox,
             deposit_contract_address: chain_config.deposit_contract,
             l1_system_config_address: chain_config.system_config_contract,
@@ -824,6 +866,7 @@ mod test {
             "regolith_time": 1,
             "canyon_time": 2,
             "delta_time": 3,
+            "ecotone_time": 4,
             "batch_inbox_address": "0xff00000000000000000000000000000000000000",
             "deposit_contract_address": "0x6900000000000000000000000000000000000001",
             "l1_system_config_address": "0x6900000000000000000000000000000000000009"
@@ -872,6 +915,7 @@ mod test {
         assert_eq!(chain.regolith_time, 1);
         assert_eq!(chain.canyon_time, 2);
         assert_eq!(chain.delta_time, 3);
+        assert_eq!(chain.ecotone_time, 4);
         assert_eq!(chain.blocktime, 2);
         assert_eq!(
             chain.l2_to_l1_message_passer,

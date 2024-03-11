@@ -15,7 +15,7 @@ use serde::Serialize;
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    let sync_mode = cli.sync_mode.clone();
+    let sync_mode = cli.sync_mode;
     let verbose = cli.verbose;
     let logs_dir = cli.logs_dir.clone();
     let logs_rotation = cli.logs_rotation.clone();
@@ -24,6 +24,12 @@ async fn main() -> Result<()> {
 
     let _guards = telemetry::init(verbose, logs_dir, logs_rotation);
     metrics::init()?;
+
+    tracing::info!(
+        target: "magi",
+        "Starting Magi. sync mode={}, network={}",
+        sync_mode, config.chain.network
+    );
 
     let runner = Runner::from_config(config)
         .with_sync_mode(sync_mode)
@@ -43,6 +49,8 @@ pub struct Cli {
     network: String,
     #[clap(long)]
     l1_rpc_url: Option<String>,
+    #[clap(long)]
+    l1_beacon_url: Option<String>,
     #[clap(long)]
     l2_rpc_url: Option<String>,
     #[clap(short = 'm', long, default_value = "full")]
@@ -109,6 +117,7 @@ impl From<Cli> for CliConfig {
         let jwt_secret = value.jwt_secret();
         Self {
             l1_rpc_url: value.l1_rpc_url,
+            l1_beacon_url: value.l1_beacon_url,
             l2_rpc_url: value.l2_rpc_url,
             l2_engine_url: value.l2_engine_url,
             jwt_secret,

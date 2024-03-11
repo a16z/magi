@@ -195,7 +195,8 @@ impl<E: Engine> Driver<E> {
 
             self.engine_driver
                 .handle_attributes(next_attributes)
-                .await?;
+                .await
+                .map_err(|e| eyre::eyre!("failed to handle attributes: {}", e))?;
 
             tracing::info!(
                 "safe head updated: {} {:?}",
@@ -273,8 +274,11 @@ impl<E: Engine> Driver<E> {
                     self.unsafe_block_signer_sender
                         .send(l1_info.system_config.unsafe_block_signer)?;
 
-                    self.pipeline
-                        .push_batcher_transactions(l1_info.batcher_transactions.clone(), num)?;
+                    self.pipeline.push_batcher_transactions(
+                        // cloning `bytes::Bytes` is cheap
+                        l1_info.batcher_transactions.clone(),
+                        num,
+                    )?;
 
                     self.state
                         .write()
@@ -385,6 +389,7 @@ mod tests {
             let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
             let cli_config = CliConfig {
                 l1_rpc_url: Some(rpc.to_owned()),
+                l1_beacon_url: None,
                 l2_rpc_url: Some(l2_rpc.to_owned()),
                 l2_engine_url: None,
                 jwt_secret: Some(

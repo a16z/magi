@@ -2,7 +2,10 @@ use ethers::types::{Block, Transaction};
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 
-use crate::common::{AttributesDepositedCall, BlockInfo, Epoch};
+use crate::{
+    common::{AttributesDepositedCall, BlockInfo, Epoch},
+    config::Config,
+};
 
 /// Block info for the current head of the chain
 #[derive(Debug, Default, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -15,24 +18,54 @@ pub struct HeadInfo {
     pub sequence_number: u64,
 }
 
-impl TryFrom<Block<Transaction>> for HeadInfo {
-    type Error = eyre::Report;
+impl HeadInfo {
+    /// Returns the head info from the given L2 block and the system config.
+    /// The config is used to check whether the block is subject to the Ecotone hardfork
+    /// (which changes the way the head info is constructed from the block).
+    pub fn try_from_l2_block(config: &Config, l2_block: Block<Transaction>) -> Result<Self> {
+        if config
+            .chain
+            .is_ecotone_but_not_first_block(l2_block.timestamp.as_u64())
+        {
+            HeadInfo::try_from_ecotone_block(l2_block)
+        } else {
+            HeadInfo::try_from_bedrock_block(l2_block)
+        }
+    }
 
     /// Returns `HeadInfo` consisting of the L2 block, the L1 epoch block it belongs to, and the L2 block's position in the epoch.
-    fn try_from(value: Block<Transaction>) -> Result<Self> {
-        let tx_calldata = value
-            .transactions
-            .first()
-            .ok_or(eyre::eyre!(
+    /// This function is used when the L2 block is from the Bedrock hardfork or earlier.
+    fn try_from_bedrock_block(block: Block<Transaction>) -> Result<Self> {
+        let Some(first_tx) = block.transactions.first() else {
+            return Err(eyre::eyre!(
                 "Could not find the L1 attributes deposited transaction"
-            ))?
-            .input
-            .clone();
+            ));
+        };
 
-        let call = AttributesDepositedCall::try_from(tx_calldata)?;
+        let tx_calldata = first_tx.input.clone();
+        let call = AttributesDepositedCall::try_from_bedrock(tx_calldata)?;
 
         Ok(Self {
-            l2_block_info: value.try_into()?,
+            l2_block_info: BlockInfo::try_from(block)?,
+            l1_epoch: Epoch::from(&call),
+            sequence_number: call.sequence_number,
+        })
+    }
+
+    /// Returns `HeadInfo` consisting of the L2 block, the L1 epoch block it belongs to, and the L2 block's position in the epoch.
+    /// This function is used when the L2 block is from the Ecotone hardfork or later.
+    fn try_from_ecotone_block(block: Block<Transaction>) -> Result<Self> {
+        let Some(first_tx) = block.transactions.first() else {
+            return Err(eyre::eyre!(
+                "Could not find the L1 attributes deposited transaction"
+            ));
+        };
+
+        let tx_calldata = first_tx.input.clone();
+        let call = AttributesDepositedCall::try_from_ecotone(tx_calldata)?;
+
+        Ok(Self {
+            l2_block_info: BlockInfo::try_from(block)?,
             l1_epoch: Epoch::from(&call),
             sequence_number: call.sequence_number,
         })
@@ -41,7 +74,7 @@ impl TryFrom<Block<Transaction>> for HeadInfo {
 
 #[cfg(test)]
 mod tests {
-    mod head_info {
+    mod head_info_bedrock {
         use crate::driver::HeadInfo;
         use std::str::FromStr;
 
@@ -84,7 +117,7 @@ mod tests {
             let block: Block<Transaction> = serde_json::from_str(raw_block)?;
 
             // Act
-            let head = HeadInfo::try_from(block);
+            let head = HeadInfo::try_from_bedrock_block(block);
 
             // Assert
             assert!(head.is_err());
@@ -160,7 +193,7 @@ mod tests {
             let expected_l1_epoch_timestamp = 1682191440;
 
             // Act
-            let head = HeadInfo::try_from(block);
+            let head = HeadInfo::try_from_bedrock_block(block);
 
             // Assert
             assert!(head.is_ok());
@@ -204,7 +237,60 @@ mod tests {
                 let provider = Provider::try_from(l2_rpc)?;
 
                 let l2_block = provider.get_block_with_txs(l2_block_hash).await?.unwrap();
-                let head = HeadInfo::try_from(l2_block)?;
+                let head = HeadInfo::try_from_bedrock_block(l2_block)?;
+
+                let HeadInfo {
+                    l2_block_info,
+                    l1_epoch,
+                    sequence_number,
+                } = head;
+
+                assert_eq!(l2_block_info.number, expected_l2_block_number);
+                assert_eq!(l2_block_info.timestamp, expected_l2_block_timestamp);
+
+                assert_eq!(l1_epoch.hash, expected_l1_epoch_hash);
+                assert_eq!(l1_epoch.number, expected_l1_epoch_block_number);
+                assert_eq!(l1_epoch.timestamp, expected_l1_epoch_timestamp);
+
+                assert_eq!(sequence_number, 4);
+            }
+
+            Ok(())
+        }
+    }
+
+    mod head_info_ecotone {
+        use crate::driver::HeadInfo;
+        use std::str::FromStr;
+
+        use ethers::{
+            providers::{Middleware, Provider},
+            types::H256,
+        };
+        use eyre::Result;
+
+        #[tokio::test]
+        async fn test_head_info_from_l2_block_hash() -> Result<()> {
+            if std::env::var("L1_TEST_RPC_URL").is_ok() && std::env::var("L2_TEST_RPC_URL").is_ok()
+            {
+                let l2_block_hash = H256::from_str(
+                    "0xbdd36f0c7ec8e17647dac2780130a842c47dba0025387e80408c161fdb115412",
+                )?;
+
+                let expected_l2_block_number = 21564471;
+                let expected_l2_block_timestamp = 1708557010;
+
+                let expected_l1_epoch_hash = H256::from_str(
+                    "0x231ac984a3fc58757efe373b0b5bff0589c0e67a969a6cbc56ec959739525b31",
+                )?;
+                let expected_l1_epoch_block_number = 10575507;
+                let expected_l1_epoch_timestamp = 1708556928;
+
+                let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
+                let provider = Provider::try_from(l2_rpc)?;
+
+                let l2_block = provider.get_block_with_txs(l2_block_hash).await?.unwrap();
+                let head = HeadInfo::try_from_ecotone_block(l2_block)?;
 
                 let HeadInfo {
                     l2_block_info,

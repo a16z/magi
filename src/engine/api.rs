@@ -121,8 +121,8 @@ impl EngineApi {
         body.insert("method".to_string(), Value::String(method.to_string()));
         body.insert("params".to_string(), Value::Array(params));
 
-        tracing::debug!("Sending request to url: {:?}", self.base_url);
-        tracing::debug!("Sending request: {:?}", serde_json::to_string(&body));
+        tracing::trace!("Sending request to url: {:?}", self.base_url);
+        tracing::trace!("Sending request: {:?}", serde_json::to_string(&body));
 
         // Send the client request
         let client = self
@@ -166,7 +166,7 @@ impl EngineApi {
         }
 
         if let Some(err) = res.error {
-            eyre::bail!(err.message);
+            eyre::bail!("Engine API POST error: {}", err.message);
         }
 
         // This scenario shouldn't occur as the response should always have either data or an error

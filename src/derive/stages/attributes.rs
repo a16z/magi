@@ -9,7 +9,7 @@ use eyre::Result;
 use crate::common::{Epoch, RawTransaction};
 use crate::config::{Config, SystemAccounts};
 use crate::derive::state::State;
-use crate::derive::PurgeableIterator;
+use crate::derive::{get_ecotone_upgrade_transactions, PurgeableIterator};
 use crate::engine::PayloadAttributes;
 use crate::l1::L1Info;
 
@@ -73,8 +73,8 @@ impl Attributes {
     ///
     /// Calls `derive_transactions` to generate the raw transactions
     fn derive_attributes(&mut self, input: BlockInput<Epoch>) -> PayloadAttributes {
-        tracing::debug!("attributes derived from block {}", input.epoch.number);
-        tracing::debug!("batch epoch hash {:?}", input.epoch.hash);
+        tracing::debug!("deriving attributes from block: {}", input.epoch.number);
+        tracing::debug!("batch epoch hash: {:?}", input.epoch.hash);
 
         self.update_sequence_number(input.epoch.hash);
 
@@ -121,14 +121,28 @@ impl Attributes {
     ) -> Vec<RawTransaction> {
         let mut transactions = Vec::new();
 
+        // L1 info (attributes deposited) transaction, present in every block
         let attributes_tx = self.derive_attributes_deposited(l1_info, input.timestamp);
         transactions.push(attributes_tx);
 
+        // User deposit transactions, present in the first block of every epoch
         if self.sequence_number == 0 {
             let mut user_deposited_txs = self.derive_user_deposited();
             transactions.append(&mut user_deposited_txs);
         }
 
+        // Ecotone upgrade transactions
+        if self
+            .config
+            .chain
+            .is_ecotone_activation_block(input.timestamp)
+        {
+            tracing::info!("found Ecotone activation block; Upgrade transactions added");
+            let mut ecotone_upgrade_txs = get_ecotone_upgrade_transactions();
+            transactions.append(&mut ecotone_upgrade_txs);
+        }
+
+        // Remaining transactions
         let mut rest = input.transactions;
         transactions.append(&mut rest);
 

@@ -173,13 +173,18 @@ async fn l2_refs(
 
     let mut refs = BTreeMap::new();
     for i in start..=head_num {
-        let block = provider.get_block_with_txs(i).await;
-        if let Ok(Some(block)) = block {
-            if let Ok(head_info) = HeadInfo::try_from(block) {
-                refs.insert(
-                    head_info.l2_block_info.number,
-                    (head_info.l2_block_info, head_info.l1_epoch),
-                );
+        let l2_block = provider.get_block_with_txs(i).await;
+        if let Ok(Some(l2_block)) = l2_block {
+            match HeadInfo::try_from_l2_block(config, l2_block) {
+                Ok(head_info) => {
+                    refs.insert(
+                        head_info.l2_block_info.number,
+                        (head_info.l2_block_info, head_info.l1_epoch),
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(err = ?e, "could not get head info for L2 block {}", i);
+                }
             }
         }
     }

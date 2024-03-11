@@ -17,7 +17,7 @@ path = "./bin/network.rs"
 tokio = { version = "1.28.0", features = ["full"] }
 async-trait = "0.1.73"
 eyre = "0.6.8"
-ethers = { version = "2.0.8", features = ["optimism"] }
+ethers = { version = "2.0.11", features = ["optimism"] }
 hex = "0.4.3"
 libflate = "1.2.0"
 openssl = { version = "0.10", features = ["vendored"] }

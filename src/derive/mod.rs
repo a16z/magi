@@ -1,5 +1,6 @@
 use std::sync::{mpsc, Arc, RwLock};
 
+use bytes::Bytes;
 use eyre::Result;
 
 use crate::{config::Config, engine::PayloadAttributes};
@@ -18,6 +19,10 @@ use self::{
 pub mod stages;
 /// A module that keeps track of the current derivation state, caching previous L1 and L2 blocks
 pub mod state;
+
+/// A module that handles the Ecotone hardfork upgrade
+pub mod ecotone_upgrade;
+pub use ecotone_upgrade::get_ecotone_upgrade_transactions;
 
 /// A module that extends the [Iterator] trait with a `purge` method
 mod purgeable;
@@ -64,7 +69,7 @@ impl Pipeline {
     }
 
     /// Sends [BatcherTransactions] & the L1 block they were received in to the [BatcherTransactions] receiver.
-    pub fn push_batcher_transactions(&self, txs: Vec<Vec<u8>>, l1_origin: u64) -> Result<()> {
+    pub fn push_batcher_transactions(&self, txs: Vec<Bytes>, l1_origin: u64) -> Result<()> {
         self.batcher_transaction_sender
             .send(BatcherTransactionMessage { txs, l1_origin })?;
         Ok(())
@@ -116,6 +121,7 @@ mod tests {
 
             let config = Arc::new(Config {
                 l1_rpc_url: rpc.to_string(),
+                l1_beacon_url: String::new(),
                 l2_rpc_url: l2_rpc.to_string(),
                 chain: ChainConfig::optimism_goerli(),
                 l2_engine_url: String::new(),

@@ -42,6 +42,12 @@ pub struct ExecutionPayload {
     /// An array of beaconchain withdrawals. Always empty as this exists only for L1 compatibility
     #[serde(skip_serializing_if = "Option::is_none")]
     pub withdrawals: Option<Vec<()>>,
+    /// None if not present (pre-Ecotone)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub blob_gas_used: Option<U64>,
+    /// None if not present (pre-Ecotone)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub excess_blob_gas: Option<U64>,
 }
 
 impl TryFrom<Block<Transaction>> for ExecutionPayload {
@@ -76,6 +82,8 @@ impl TryFrom<Block<Transaction>> for ExecutionPayload {
             block_hash: value.hash.unwrap(),
             transactions: encoded_txs,
             withdrawals: Some(Vec::new()),
+            blob_gas_used: value.blob_gas_used.map(|v| v.as_u64().into()),
+            excess_blob_gas: value.excess_blob_gas.map(|v| v.as_u64().into()),
         })
     }
 }
@@ -169,7 +177,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_from_block_hash_to_execution_paylaod() -> Result<()> {
-        if std::env::var("L1_TEST_RPC_URL").is_ok() && std::env::var("L2_TEST_RPC_URL").is_ok() {
+        if std::env::var("L2_TEST_RPC_URL").is_ok() {
             let checkpoint_hash: H256 =
                 "0xc2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973".parse()?;
 

@@ -182,6 +182,7 @@ mod tests {
         std::env::set_var("RUST_LOG", "trace");
         let cli_config = CliConfig {
             l1_rpc_url: Some("".to_string()),
+            l1_beacon_url: Some("".to_string()),
             l2_rpc_url: None,
             l2_engine_url: None,
             jwt_secret: Some("".to_string()),
