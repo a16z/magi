@@ -1,8 +1,8 @@
 use std::{process, time::Duration};
 
 use ethers::{
-    providers::{Http, Middleware, Provider},
-    types::{BlockId, BlockNumber, H256},
+    providers::{Middleware, Provider},
+    types::{Block, BlockId, BlockNumber, Transaction, H256},
 };
 use eyre::Result;
 use tokio::{
@@ -11,8 +11,8 @@ use tokio::{
 };
 
 use crate::{
-    config::{Config, SyncMode, SystemAccounts},
-    driver::Driver,
+    config::{Config, SyncMode},
+    driver::{Driver, HeadInfo},
     engine::{Engine, EngineApi, ExecutionPayload, ForkchoiceState, Status},
 };
 
@@ -112,7 +112,12 @@ impl Runner {
                     .parse()
                     .expect("invalid checkpoint block hash provided");
 
-                match Self::is_epoch_boundary(block_hash, &checkpoint_sync_url).await? {
+                let l2_block = checkpoint_sync_url
+                    .get_block_with_txs(block_hash)
+                    .await?
+                    .ok_or_else(|| eyre::eyre!("could not find block"))?;
+
+                match is_epoch_boundary(l2_block, &self.config)? {
                     true => checkpoint_sync_url
                         .get_block_with_txs(block_hash)
                         .await?
@@ -127,7 +132,12 @@ impl Runner {
                 tracing::info!("finding the latest epoch boundary to use as checkpoint");
 
                 let mut block_number = checkpoint_sync_url.get_block_number().await?;
-                while !Self::is_epoch_boundary(block_number, &checkpoint_sync_url).await? {
+                let l2_block = checkpoint_sync_url
+                    .get_block_with_txs(block_number)
+                    .await?
+                    .ok_or_else(|| eyre::eyre!("could not find block"))?;
+
+                while !is_epoch_boundary(l2_block.clone(), &self.config)? {
                     self.check_shutdown()?;
                     block_number -= 1.into();
                 }
@@ -219,29 +229,12 @@ impl Runner {
 
         Ok(())
     }
+}
 
-    /// Returns `true` if the L2 block is the first in an epoch (sequence number 0)
-    async fn is_epoch_boundary<T: Into<BlockId> + Send + Sync>(
-        block: T,
-        checkpoint_sync_url: &Provider<Http>,
-    ) -> Result<bool> {
-        let l2_block = checkpoint_sync_url
-            .get_block_with_txs(block)
-            .await?
-            .ok_or_else(|| eyre::eyre!("could not find block"))?;
+/// Returns `true` if the L2 block is the first in an epoch (sequence number 0)
+fn is_epoch_boundary(l2_block: Block<Transaction>, config: &Config) -> Result<bool> {
+    let head_info = HeadInfo::try_from_l2_block(config, l2_block)?;
+    let sequence_number = head_info.sequence_number;
 
-        let sequence_number = &l2_block
-            .transactions
-            .iter()
-            .find(|tx| tx.to.unwrap() == SystemAccounts::default().attributes_predeploy)
-            .expect("could not find setL1BlockValues tx in the epoch boundary search")
-            .input
-            .clone()
-            .into_iter()
-            .skip(132)
-            .take(32)
-            .collect::<Vec<u8>>();
-
-        Ok(sequence_number == &[0; 32])
-    }
+    Ok(sequence_number == 0)
 }
