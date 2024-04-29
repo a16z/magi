@@ -31,8 +31,8 @@ run:
 	cd docker && docker compose up
 
 # Composes docker with local images
-run-local:
-	make build-local && cd docker && docker compose up
+run-local: build-local
+	 cd docker && docker compose up
 
 # Runs op-geth with docker
 run-geth:

@@ -18,7 +18,7 @@ To launch the OP devnet, ensure you have [Docker](https://www.docker.com/):
 
     cd optimism
     git submodule update --init --recursive
-    make devnet-up
+    just devnet-up
 
 For troubleshooting, please refer to the official [documentation](https://community.optimism.io/docs/developers/build/dev-node/#).
 
@@ -130,6 +130,9 @@ To test withdrawal from your account refer to this [tutorial](https://stack.opti
 
 ## Trouble shooting
 
-If the Magi node stops syncing, you can reset the devnet. To do this, navigate to the Optimism root directory and run the following command: make devnet-clean. Afterward, start again both the devnet and Magi.
+If the Magi node stops syncing, you can reset the devnet.
+To do this, navigate to the root of the Optimism monorepo directory
+and run the following command: `make devnet-clean`.
+Afterward, start again both the devnet and Magi.
 
 If the issue continues, please create a new issue on GitHub providing detailed information about the problem.
