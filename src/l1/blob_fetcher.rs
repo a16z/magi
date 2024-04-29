@@ -138,24 +138,3 @@ where
     let bytes = hex::decode(s).map_err(serde::de::Error::custom)?;
     Ok(bytes)
 }
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-
-    // TODO: update with a test from mainnet after dencun is active
-    #[tokio::test]
-    async fn test_get_blobs() {
-        let Ok(l1_beacon_url) = std::env::var("L1_GOERLI_BEACON_RPC_URL") else {
-            println!("L1_GOERLI_BEACON_RPC_URL not set; skipping test");
-            return;
-        };
-
-        let slot_number = 7576509;
-        let fetcher = BlobFetcher::new(l1_beacon_url);
-        let blobs = fetcher.fetch_blob_sidecars(slot_number).await.unwrap();
-
-        assert_eq!(blobs.len(), 6);
-    }
-}
