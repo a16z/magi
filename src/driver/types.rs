@@ -43,7 +43,7 @@ impl HeadInfo {
         };
 
         let tx_calldata = first_tx.input.clone();
-        let call = AttributesDepositedCall::try_from_bedrock(tx_calldata)?;
+        let call = AttributesDepositedCall::try_from_bedrock(tx_calldata.to_vec().into())?;
 
         Ok(Self {
             l2_block_info: BlockInfo::try_from(block)?,
@@ -62,7 +62,7 @@ impl HeadInfo {
         };
 
         let tx_calldata = first_tx.input.clone();
-        let call = AttributesDepositedCall::try_from_ecotone(tx_calldata)?;
+        let call = AttributesDepositedCall::try_from_ecotone(tx_calldata.to_vec().into())?;
 
         Ok(Self {
             l2_block_info: BlockInfo::try_from(block)?,
