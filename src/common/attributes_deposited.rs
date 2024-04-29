@@ -1,7 +1,7 @@
 use eyre::Result;
 use lazy_static::lazy_static;
 
-use alloy_primitives::{B256, U256, Bytes, keccak256};
+use alloy_primitives::{keccak256, Bytes, B256, U256};
 
 /// Represents the attributes deposited transcation call
 #[derive(Debug)]
@@ -78,12 +78,16 @@ impl AttributesDepositedCall {
 
         let number = U256::from_be_slice(calldata[cursor..cursor + 32].try_into()?);
         // down-casting to u64 is safe for the block number
-        let number = number.try_into().map_err(|_| eyre::eyre!("invalid block number"))?;
+        let number = number
+            .try_into()
+            .map_err(|_| eyre::eyre!("invalid block number"))?;
         cursor += 32;
 
         let timestamp = U256::from_be_slice(calldata[cursor..cursor + 32].try_into()?);
         // down-casting to u64 is safe for UNIX timestamp
-        let timestamp = timestamp.try_into().map_err(|_| eyre::eyre!("invalid timestamp"))?;
+        let timestamp = timestamp
+            .try_into()
+            .map_err(|_| eyre::eyre!("invalid timestamp"))?;
         cursor += 32;
 
         let basefee = U256::from_be_slice(&calldata[cursor..cursor + 32]);
@@ -94,7 +98,9 @@ impl AttributesDepositedCall {
 
         let seq_num = U256::from_be_slice(calldata[cursor..cursor + 32].try_into()?);
         // down-casting to u64 is safe for the sequence number
-        let seq_num = seq_num.try_into().map_err(|_| eyre::eyre!("invalid sequence number"))?;
+        let seq_num = seq_num
+            .try_into()
+            .map_err(|_| eyre::eyre!("invalid sequence number"))?;
         cursor += 32;
 
         let batcher_hash = B256::from_slice(&calldata[cursor..cursor + 32]);
