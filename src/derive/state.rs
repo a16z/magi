@@ -1,5 +1,6 @@
 use std::{collections::BTreeMap, sync::Arc};
 
+use alloy_primitives::B256;
 use ethers::{
     providers::{Http, Middleware, Provider},
     types::H256,
@@ -76,7 +77,7 @@ impl State {
     pub fn epoch_by_hash(&self, hash: H256) -> Option<Epoch> {
         self.l1_info_by_hash(hash).map(|info| Epoch {
             number: info.block_info.number,
-            hash: info.block_info.hash,
+            hash: B256::from_slice(info.block_info.hash.as_bytes()),
             timestamp: info.block_info.timestamp,
         })
     }
@@ -85,7 +86,7 @@ impl State {
     pub fn epoch_by_number(&self, num: u64) -> Option<Epoch> {
         self.l1_info_by_number(num).map(|info| Epoch {
             number: info.block_info.number,
-            hash: info.block_info.hash,
+            hash: B256::from_slice(info.block_info.hash.as_bytes()),
             timestamp: info.block_info.timestamp,
         })
     }

@@ -78,6 +78,7 @@ mod tests {
         use crate::driver::HeadInfo;
         use std::str::FromStr;
 
+        use alloy_primitives::b256;
         use ethers::{
             providers::{Middleware, Provider},
             types::{Block, Transaction, H256},
@@ -181,14 +182,13 @@ mod tests {
 
             let block: Block<Transaction> = serde_json::from_str(raw_block)?;
 
-            let expected_l2_block_hash = H256::from_str(
-                "0x2e4f4aff36bb7951be9742ad349fb1db84643c6bbac5014f3d196fd88fe333eb",
-            )?;
+            let expected_l2_block_hash =
+                b256!("2e4f4aff36bb7951be9742ad349fb1db84643c6bbac5014f3d196fd88fe333eb");
             let expected_l2_block_number = 8381743;
             let expected_l2_block_timestamp = 1682191554;
 
             let expected_l1_epoch_hash =
-                H256::from_str("0444c991c5fe1d7291ff34b3f5c3b44ee861f021396d33ba3255b83df30e357d")?;
+                b256!("0444c991c5fe1d7291ff34b3f5c3b44ee861f021396d33ba3255b83df30e357d");
             let expected_l1_epoch_block_number = 8874020;
             let expected_l1_epoch_timestamp = 1682191440;
 
@@ -221,15 +221,14 @@ mod tests {
             if std::env::var("L1_TEST_RPC_URL").is_ok() && std::env::var("L2_TEST_RPC_URL").is_ok()
             {
                 let l2_block_hash = H256::from_str(
-                    "0x75d4a658d7b6430c874c5518752a8d90fb1503eccd6ae4cfc97fd4aedeebb939",
+                    "75d4a658d7b6430c874c5518752a8d90fb1503eccd6ae4cfc97fd4aedeebb939",
                 )?;
 
                 let expected_l2_block_number = 8428108;
                 let expected_l2_block_timestamp = 1682284284;
 
-                let expected_l1_epoch_hash = H256::from_str(
-                    "0x76ab90dc2afea158bbe14a99f22d5f867b51719378aa37d1a3aa3833ace67cad",
-                )?;
+                let expected_l1_epoch_hash =
+                    b256!("76ab90dc2afea158bbe14a99f22d5f867b51719378aa37d1a3aa3833ace67cad");
                 let expected_l1_epoch_block_number = 8879997;
                 let expected_l1_epoch_timestamp = 1682284164;
 
@@ -263,6 +262,7 @@ mod tests {
         use crate::driver::HeadInfo;
         use std::str::FromStr;
 
+        use alloy_primitives::b256;
         use ethers::{
             providers::{Middleware, Provider},
             types::H256,
@@ -280,9 +280,8 @@ mod tests {
                 let expected_l2_block_number = 21564471;
                 let expected_l2_block_timestamp = 1708557010;
 
-                let expected_l1_epoch_hash = H256::from_str(
-                    "0x231ac984a3fc58757efe373b0b5bff0589c0e67a969a6cbc56ec959739525b31",
-                )?;
+                let expected_l1_epoch_hash =
+                    b256!("231ac984a3fc58757efe373b0b5bff0589c0e67a969a6cbc56ec959739525b31");
                 let expected_l1_epoch_block_number = 10575507;
                 let expected_l1_epoch_timestamp = 1708556928;
 

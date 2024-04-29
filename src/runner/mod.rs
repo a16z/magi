@@ -230,10 +230,13 @@ impl Runner {
             .await?
             .ok_or_else(|| eyre::eyre!("could not find block"))?;
 
+        let predeploy = ethers::types::Address::from_slice(
+            SystemAccounts::default().attributes_predeploy.as_slice(),
+        );
         let sequence_number = &l2_block
             .transactions
             .iter()
-            .find(|tx| tx.to.unwrap() == SystemAccounts::default().attributes_predeploy)
+            .find(|tx| tx.to.map_or(false, |to| to == predeploy))
             .expect("could not find setL1BlockValues tx in the epoch boundary search")
             .input
             .clone()

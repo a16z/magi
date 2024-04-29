@@ -204,7 +204,7 @@ where
         }
 
         // check that block builds on existing chain
-        if batch.parent_hash != head.hash {
+        if alloy_primitives::B256::from_slice(batch.parent_hash.as_bytes()) != head.hash {
             tracing::warn!("invalid parent hash");
             return BatchStatus::Drop;
         }
@@ -226,7 +226,8 @@ where
         };
 
         if let Some(batch_origin) = batch_origin {
-            if batch.epoch_hash != batch_origin.hash {
+            if alloy_primitives::B256::from_slice(batch.epoch_hash.as_bytes()) != batch_origin.hash
+            {
                 tracing::warn!("invalid epoch hash");
                 return BatchStatus::Drop;
             }
@@ -323,7 +324,7 @@ where
 
         // check that block builds on existing chain
 
-        if prev_l2_block.hash.as_bytes()[..20] != batch.parent_check {
+        if prev_l2_block.hash.as_slice()[..20] != batch.parent_check {
             tracing::warn!("batch parent check failed");
             return BatchStatus::Drop;
         }
@@ -341,7 +342,7 @@ where
         }
 
         if let Some(l1_origin) = state.epoch_by_number(end_epoch_num) {
-            if batch.l1_origin_check != l1_origin.hash.as_bytes()[..20] {
+            if batch.l1_origin_check != l1_origin.hash.as_slice()[..20] {
                 tracing::warn!("origin check failed");
                 return BatchStatus::Drop;
             }

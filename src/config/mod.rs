@@ -1,6 +1,6 @@
 use std::{fmt, iter, path::PathBuf, process::exit, str::FromStr};
 
-use ethers::types::{Address, H256, U256};
+use alloy_primitives::{Address, B256, U256};
 use figment::{
     providers::{Format, Serialized, Toml},
     Figment,
@@ -209,12 +209,12 @@ pub struct SystemConfig {
 }
 
 impl SystemConfig {
-    /// Encodes batch sender as a H256
-    pub fn batcher_hash(&self) -> H256 {
-        let mut batch_sender_bytes = self.batch_sender.as_bytes().to_vec();
+    /// Encodes batch sender as a [B256].
+    pub fn batcher_hash(&self) -> B256 {
+        let mut batch_sender_bytes = self.batch_sender.as_slice().to_vec();
         let mut batcher_hash = iter::repeat(0).take(12).collect::<Vec<_>>();
         batcher_hash.append(&mut batch_sender_bytes);
-        H256::from_slice(&batcher_hash)
+        B256::from_slice(&batcher_hash)
     }
 }
 
@@ -445,7 +445,7 @@ impl ChainConfig {
             l2_genesis: BlockInfo {
                 hash: hash("0xf712aa9241cc24369b143cf6dce85f0902a9731e70d66818a3a5845b296c73dd"),
                 number: 0,
-                parent_hash: H256::zero(),
+                parent_hash: B256::ZERO,
                 timestamp: 1686789347,
             },
             system_config: SystemConfig {
@@ -485,7 +485,7 @@ impl ChainConfig {
             l2_genesis: BlockInfo {
                 hash: hash("0xa3ab140f15ea7f7443a4702da64c10314eb04d488e72974e02e2d728096b4f76"),
                 number: 0,
-                parent_hash: H256::zero(),
+                parent_hash: B256::ZERO,
                 timestamp: 1675193616,
             },
             system_config: SystemConfig {
@@ -525,7 +525,7 @@ impl ChainConfig {
             l2_genesis: BlockInfo {
                 hash: hash("0x0dcc9e089e30b90ddfc55be9a37dd15bc551aeee999d2e2b51414c54eaf934e4"),
                 number: 0,
-                parent_hash: H256::zero(),
+                parent_hash: B256::ZERO,
                 timestamp: 1695768288,
             },
             system_config: SystemConfig {
@@ -569,8 +569,8 @@ fn addr(s: &str) -> Address {
 }
 
 /// Converts a [str] to a [H256].
-fn hash(s: &str) -> H256 {
-    H256::from_str(s).unwrap()
+fn hash(s: &str) -> B256 {
+    B256::from_str(s).unwrap()
 }
 
 /// Returns default blocktime of 2 (seconds).
@@ -635,9 +635,9 @@ struct SystemConfigInfo {
     #[serde(rename = "batcherAddr")]
     batcher_addr: Address,
     /// The current L1 fee overhead to apply to L2 transactions cost computation. Unused after Ecotone hard fork.
-    overhead: H256,
+    overhead: B256,
     /// The current L1 fee scalar to apply to L2 transactions cost computation. Unused after Ecotone hard fork.
-    scalar: H256,
+    scalar: B256,
     /// The gas limit for L2 blocks
     #[serde(rename = "gasLimit")]
     gas_limit: u64,
@@ -647,7 +647,7 @@ struct SystemConfigInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ChainGenesisInfo {
     /// Genesis block number
-    hash: H256,
+    hash: B256,
     /// Genesis block hash
     number: u64,
 }
@@ -667,15 +667,15 @@ impl From<ExternalChainConfig> for ChainConfig {
             l2_genesis: BlockInfo {
                 hash: external.genesis.l2.hash,
                 number: external.genesis.l2.number,
-                parent_hash: H256::zero(),
+                parent_hash: B256::ZERO,
                 timestamp: external.genesis.l2_time,
             },
             system_config: SystemConfig {
                 batch_sender: external.genesis.system_config.batcher_addr,
                 gas_limit: U256::from(external.genesis.system_config.gas_limit),
-                l1_fee_overhead: external.genesis.system_config.overhead.0.into(),
-                l1_fee_scalar: external.genesis.system_config.scalar.0.into(),
-                unsafe_block_signer: Address::zero(),
+                l1_fee_overhead: external.genesis.system_config.overhead.into(),
+                l1_fee_scalar: external.genesis.system_config.scalar.into(),
+                unsafe_block_signer: Address::ZERO,
             },
             batch_inbox: external.batch_inbox_address,
             deposit_contract: external.deposit_contract_address,
@@ -698,18 +698,6 @@ impl From<ChainConfig> for ExternalChainConfig {
     /// Converts [ChainConfig] into [ExternalChainConfig]
     /// which is the format used in ``rollup.json`` by `op-node`
     fn from(chain_config: ChainConfig) -> Self {
-        let mut overhead = [0; 32];
-        let mut scalar = [0; 32];
-
-        chain_config
-            .system_config
-            .l1_fee_overhead
-            .to_big_endian(&mut overhead);
-        chain_config
-            .system_config
-            .l1_fee_scalar
-            .to_big_endian(&mut scalar);
-
         Self {
             genesis: ExternalGenesisInfo {
                 l1: ChainGenesisInfo {
@@ -723,9 +711,9 @@ impl From<ChainConfig> for ExternalChainConfig {
                 l2_time: chain_config.l2_genesis.timestamp,
                 system_config: SystemConfigInfo {
                     batcher_addr: chain_config.system_config.batch_sender,
-                    overhead: H256::from_slice(&overhead),
-                    scalar: H256::from_slice(&scalar),
-                    gas_limit: chain_config.system_config.gas_limit.as_u64(),
+                    overhead: chain_config.system_config.l1_fee_overhead.into(),
+                    scalar: chain_config.system_config.l1_fee_scalar.into(),
+                    gas_limit: chain_config.system_config.gas_limit.try_into().unwrap(),
                 },
             },
             block_time: chain_config.blocktime,
@@ -809,31 +797,29 @@ mod test {
             chain_config.system_config.batch_sender
         );
 
-        let mut overhead = [0; 32];
-        let mut scalar = [0; 32];
-
-        chain_config
+        let overhead: U256 = external_config
+            .genesis
             .system_config
-            .l1_fee_overhead
-            .to_big_endian(&mut overhead);
-        chain_config
+            .overhead
+            .try_into()
+            .unwrap();
+        let scalar: U256 = external_config
+            .genesis
             .system_config
-            .l1_fee_scalar
-            .to_big_endian(&mut scalar);
+            .scalar
+            .try_into()
+            .unwrap();
+        let gas_limit: U256 = external_config
+            .genesis
+            .system_config
+            .gas_limit
+            .try_into()
+            .unwrap();
 
-        assert_eq!(
-            external_config.genesis.system_config.overhead,
-            H256::from_slice(&overhead),
-        );
-        assert_eq!(
-            external_config.genesis.system_config.scalar,
-            H256::from_slice(&scalar),
-        );
+        assert_eq!(chain_config.system_config.l1_fee_overhead, overhead,);
+        assert_eq!(chain_config.system_config.l1_fee_scalar, scalar,);
 
-        assert_eq!(
-            external_config.genesis.system_config.gas_limit,
-            chain_config.system_config.gas_limit.as_u64()
-        );
+        assert_eq!(chain_config.system_config.gas_limit, gas_limit,);
     }
 
     #[test]

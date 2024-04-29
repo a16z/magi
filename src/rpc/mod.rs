@@ -9,7 +9,7 @@ use eyre::Result;
 
 use ethers::{
     providers::{Middleware, Provider},
-    types::{Block, BlockId, H256},
+    types::{Address, Block, BlockId, H256},
     utils::keccak256,
 };
 
@@ -67,7 +67,7 @@ impl RpcServer for RpcServerImpl {
         let state_proof = convert_err(
             l2_provider
                 .get_proof(
-                    self.config.chain.l2_to_l1_message_passer,
+                    Address::from_slice(self.config.chain.l2_to_l1_message_passer.as_slice()),
                     locations,
                     block_id,
                 )
