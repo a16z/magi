@@ -17,7 +17,7 @@ path = "./bin/network.rs"
 tokio = { version = "1.28.0", features = ["full"] }
 async-trait = "0.1.73"
 eyre = "0.6.8"
-ethers = { version = "2.0.11", features = ["optimism"] }
+ethers = { version = "2.0.14", features = ["optimism"] }
 hex = "0.4.3"
 libflate = "1.2.0"
 openssl = { version = "0.10", features = ["vendored"] }
@@ -29,6 +29,8 @@ again = "0.1"
 
 # Alloy types
 alloy-primitives = { version = "0.7.1", default-features = false, features = ["serde"] }
+alloy-provider = { git = "https://github.com/alloy-rs/alloy", rev = "e3f2f07" }
+alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy", rev = "e3f2f07" }
 
 # Logging and Metrics
 chrono = "0.4.22"
