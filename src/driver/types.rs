@@ -42,8 +42,8 @@ impl HeadInfo {
             ));
         };
 
-        let tx_calldata = first_tx.input.clone();
-        let call = AttributesDepositedCall::try_from_bedrock(tx_calldata)?;
+        let tx_calldata = first_tx.input.to_vec();
+        let call = AttributesDepositedCall::try_from_bedrock(tx_calldata.into())?;
 
         Ok(Self {
             l2_block_info: BlockInfo::try_from(block)?,
@@ -61,8 +61,8 @@ impl HeadInfo {
             ));
         };
 
-        let tx_calldata = first_tx.input.clone();
-        let call = AttributesDepositedCall::try_from_ecotone(tx_calldata)?;
+        let tx_calldata = first_tx.input.to_vec();
+        let call = AttributesDepositedCall::try_from_ecotone(tx_calldata.into())?;
 
         Ok(Self {
             l2_block_info: BlockInfo::try_from(block)?,
