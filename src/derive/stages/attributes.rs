@@ -46,7 +46,8 @@ impl PurgeableIterator for Attributes {
     fn purge(&mut self) {
         self.block_input_iter.purge();
         self.sequence_number = 0;
-        self.epoch_hash = self.state.read().unwrap().safe_epoch.hash;
+        self.epoch_hash =
+            ethers::types::H256::from_slice(self.state.read().unwrap().safe_epoch.hash.as_slice());
     }
 }
 
@@ -64,7 +65,7 @@ impl Attributes {
             block_input_iter,
             state,
             sequence_number: seq,
-            epoch_hash,
+            epoch_hash: H256::from_slice(epoch_hash.as_slice()),
             config,
         }
     }
@@ -76,10 +77,11 @@ impl Attributes {
         tracing::debug!("deriving attributes from block: {}", input.epoch.number);
         tracing::debug!("batch epoch hash: {:?}", input.epoch.hash);
 
-        self.update_sequence_number(input.epoch.hash);
+        let epoch_hash = H256::from_slice(input.epoch.hash.as_slice());
+        self.update_sequence_number(epoch_hash);
 
         let state = self.state.read().unwrap();
-        let l1_info = state.l1_info_by_hash(input.epoch.hash).unwrap();
+        let l1_info = state.l1_info_by_hash(epoch_hash).unwrap();
 
         let withdrawals = if input.timestamp >= self.config.chain.canyon_time {
             Some(Vec::new())
@@ -98,10 +100,10 @@ impl Attributes {
         PayloadAttributes {
             timestamp,
             prev_randao,
-            suggested_fee_recipient,
+            suggested_fee_recipient: Address::from_slice(suggested_fee_recipient.as_slice()),
             transactions,
             no_tx_pool: true,
-            gas_limit: U64([l1_info.system_config.gas_limit.as_u64()]),
+            gas_limit: U64([l1_info.system_config.gas_limit.try_into().unwrap()]),
             withdrawals,
             epoch,
             l1_inclusion_block,
@@ -233,8 +235,8 @@ impl From<AttributesDeposited> for DepositedTransaction {
 
         Self {
             source_hash,
-            from,
-            to,
+            from: Address::from_slice(from.as_slice()),
+            to: to.map(|t| Address::from_slice(t.as_slice())),
             mint: U256::zero(),
             value: U256::zero(),
             gas: attributes_deposited.gas,
@@ -328,15 +330,18 @@ impl AttributesDeposited {
 
         let gas = if is_regolith { 1_000_000 } else { 150_000_000 };
 
+        let batcher_hash = H256::from_slice(l1_info.system_config.batcher_hash().as_slice());
+        let fee_overhead = U256::from(l1_info.system_config.l1_fee_overhead.to_be_bytes());
+        let fee_scalar = U256::from(l1_info.system_config.l1_fee_scalar.to_be_bytes());
         Self {
             number: l1_info.block_info.number,
             timestamp: l1_info.block_info.timestamp,
             base_fee: l1_info.block_info.base_fee,
             hash: l1_info.block_info.hash,
             sequence_number: seq,
-            batcher_hash: l1_info.system_config.batcher_hash(),
-            fee_overhead: l1_info.system_config.l1_fee_overhead,
-            fee_scalar: l1_info.system_config.l1_fee_scalar,
+            batcher_hash,
+            fee_overhead,
+            fee_scalar,
             gas,
             is_system_tx,
         }

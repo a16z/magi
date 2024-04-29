@@ -1,7 +1,8 @@
 use std::fmt::Debug;
 
+use alloy_primitives::B256;
 use ethers::{
-    types::{Block, Transaction, H256},
+    types::{Block, Transaction},
     utils::rlp::{Decodable, DecoderError, Rlp},
 };
 use eyre::Result;
@@ -18,11 +19,11 @@ pub use attributes_deposited::AttributesDepositedCall;
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Default, Serialize, Deserialize)]
 pub struct BlockInfo {
     /// The block hash
-    pub hash: H256,
+    pub hash: B256,
     /// The block number
     pub number: u64,
     /// The parent block hash
-    pub parent_hash: H256,
+    pub parent_hash: B256,
     /// The block timestamp
     pub timestamp: u64,
 }
@@ -37,7 +38,7 @@ pub struct Epoch {
     /// The block number
     pub number: u64,
     /// The block hash
-    pub hash: H256,
+    pub hash: B256,
     /// The block timestamp
     pub timestamp: u64,
 }
@@ -45,12 +46,12 @@ pub struct Epoch {
 impl From<BlockInfo> for Value {
     fn from(value: BlockInfo) -> Value {
         let mut dict = Dict::new();
-        dict.insert("hash".to_string(), Value::from(value.hash.as_bytes()));
+        dict.insert("hash".to_string(), Value::from(value.hash.as_slice()));
         dict.insert("number".to_string(), Value::from(value.number));
         dict.insert("timestamp".to_string(), Value::from(value.timestamp));
         dict.insert(
             "parent_hash".to_string(),
-            Value::from(value.parent_hash.as_bytes()),
+            Value::from(value.parent_hash.as_slice()),
         );
         Value::Dict(Tag::Default, dict)
     }
@@ -70,8 +71,8 @@ impl TryFrom<Block<Transaction>> for BlockInfo {
 
         Ok(BlockInfo {
             number,
-            hash,
-            parent_hash: block.parent_hash,
+            hash: B256::from_slice(hash.as_bytes()),
+            parent_hash: B256::from_slice(block.parent_hash.as_bytes()),
             timestamp: block.timestamp.as_u64(),
         })
     }
@@ -80,7 +81,7 @@ impl TryFrom<Block<Transaction>> for BlockInfo {
 impl From<Epoch> for Value {
     fn from(value: Epoch) -> Self {
         let mut dict = Dict::new();
-        dict.insert("hash".to_string(), Value::from(value.hash.as_bytes()));
+        dict.insert("hash".to_string(), Value::from(value.hash.as_slice()));
         dict.insert("number".to_string(), Value::from(value.number));
         dict.insert("timestamp".to_string(), Value::from(value.timestamp));
         Value::Dict(Tag::Default, dict)
@@ -92,8 +93,8 @@ impl From<&ExecutionPayload> for BlockInfo {
     fn from(value: &ExecutionPayload) -> Self {
         Self {
             number: value.block_number.as_u64(),
-            hash: value.block_hash,
-            parent_hash: value.parent_hash,
+            hash: B256::from_slice(value.block_hash.as_bytes()),
+            parent_hash: B256::from_slice(value.parent_hash.as_bytes()),
             timestamp: value.timestamp.as_u64(),
         }
     }
@@ -105,7 +106,7 @@ impl From<&AttributesDepositedCall> for Epoch {
         Self {
             number: call.number,
             timestamp: call.timestamp,
-            hash: H256::from_slice(call.hash.as_slice()),
+            hash: B256::from_slice(call.hash.as_slice()),
         }
     }
 }

@@ -28,7 +28,7 @@ futures-timer = "0.3.0"
 again = "0.1"
 
 # Alloy types
-alloy-primitives = { version = "0.7.1", default-features = false }
+alloy-primitives = { version = "0.7.1", default-features = false, features = ["serde"] }
 
 # Logging and Metrics
 chrono = "0.4.22"

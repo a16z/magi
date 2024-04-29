@@ -96,9 +96,9 @@ impl AttributesDepositedCall {
         let hash = B256::from_slice(&calldata[cursor..cursor + 32]);
         cursor += 32;
 
-        let seq_num = U256::from_be_slice(calldata[cursor..cursor + 32].try_into()?);
+        let sequence_number = U256::from_be_slice(calldata[cursor..cursor + 32].try_into()?);
         // down-casting to u64 is safe for the sequence number
-        let seq_num = seq_num
+        let sequence_number = sequence_number
             .try_into()
             .map_err(|_| eyre::eyre!("invalid sequence number"))?;
         cursor += 32;
@@ -116,7 +116,7 @@ impl AttributesDepositedCall {
             timestamp,
             basefee,
             hash,
-            sequence_number: seq_num,
+            sequence_number,
             batcher_hash,
             fee_overhead,
             fee_scalar,

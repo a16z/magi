@@ -1,9 +1,10 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
+use alloy_primitives::B256;
 use bytes::Bytes;
 use ethers::{
     providers::{Http, HttpRateLimitRetryPolicy, Middleware, Provider, RetryClient},
-    types::{Address, Block, BlockNumber, Filter, Transaction, H256, U256},
+    types::{Address, Block, BlockNumber, Filter, Transaction, H256},
     utils::keccak256,
 };
 use eyre::Result;
@@ -197,15 +198,18 @@ impl InnerWatcher {
                 )
                 .input;
 
-            let batch_sender = Address::from_slice(&input[176..196]);
-            let l1_fee_overhead = U256::from(H256::from_slice(&input[196..228]).as_bytes());
-            let l1_fee_scalar = U256::from(H256::from_slice(&input[228..260]).as_bytes());
+            let batch_sender = alloy_primitives::Address::from_slice(&input[176..196]);
+            let l1_fee_overhead = alloy_primitives::U256::from_be_slice(&input[196..228]);
+            let l1_fee_scalar = alloy_primitives::U256::from_be_slice(&input[228..260]);
+            let gas_lim_slice: &mut [u8] = &mut [0; 32];
+            block.gas_limit.to_big_endian(gas_lim_slice);
+            let gas_limit = alloy_primitives::U256::from_be_slice(gas_lim_slice);
 
             SystemConfig {
                 batch_sender,
                 l1_fee_overhead,
                 l1_fee_scalar,
-                gas_limit: block.gas_limit,
+                gas_limit,
                 // TODO: fetch from contract
                 unsafe_block_signer: config.chain.system_config.unsafe_block_signer,
             }
@@ -267,10 +271,10 @@ impl InnerWatcher {
 
             if l1_info.block_info.number >= self.finalized_block {
                 let block_info = BlockInfo {
-                    hash: l1_info.block_info.hash,
+                    hash: B256::from_slice(l1_info.block_info.hash.as_bytes()),
                     number: l1_info.block_info.number,
                     timestamp: l1_info.block_info.timestamp,
-                    parent_hash: block.parent_hash,
+                    parent_hash: B256::from_slice(block.parent_hash.as_bytes()),
                 };
 
                 self.unfinalized_blocks.push(block_info);
@@ -298,7 +302,9 @@ impl InnerWatcher {
         if last_update_block < self.current_block {
             let to_block = last_update_block + 1000;
             let filter = Filter::new()
-                .address(self.config.chain.system_config_contract)
+                .address(Address::from_slice(
+                    self.config.chain.system_config_contract.as_slice(),
+                ))
                 .topic0(*CONFIG_UPDATE_TOPIC)
                 .from_block(last_update_block + 1)
                 .to_block(to_block);
@@ -313,17 +319,26 @@ impl InnerWatcher {
                 let mut config = self.system_config;
                 match update {
                     SystemConfigUpdate::BatchSender(addr) => {
-                        config.batch_sender = addr;
+                        config.batch_sender =
+                            alloy_primitives::Address::from_slice(addr.as_bytes());
                     }
                     SystemConfigUpdate::Fees(overhead, scalar) => {
-                        config.l1_fee_overhead = overhead;
-                        config.l1_fee_scalar = scalar;
+                        let overhead_slice: &mut [u8] = &mut [0; 0];
+                        let scalar_slice: &mut [u8] = &mut [0; 0];
+                        overhead.to_big_endian(overhead_slice);
+                        scalar.to_big_endian(scalar_slice);
+                        config.l1_fee_overhead =
+                            alloy_primitives::U256::from_be_slice(overhead_slice);
+                        config.l1_fee_scalar = alloy_primitives::U256::from_be_slice(scalar_slice);
                     }
                     SystemConfigUpdate::Gas(gas) => {
-                        config.gas_limit = gas;
+                        let gas_slice: &mut [u8] = &mut [0; 0];
+                        gas.to_big_endian(gas_slice);
+                        config.gas_limit = alloy_primitives::U256::from_be_slice(gas_slice);
                     }
                     SystemConfigUpdate::UnsafeBlockSigner(addr) => {
-                        config.unsafe_block_signer = addr;
+                        config.unsafe_block_signer =
+                            alloy_primitives::Address::from_slice(addr.as_bytes());
                     }
                 }
 
@@ -398,7 +413,9 @@ impl InnerWatcher {
                 let end_block = self.head_block.min(block_num + 1000);
 
                 let deposit_filter = Filter::new()
-                    .address(self.config.chain.deposit_contract)
+                    .address(Address::from_slice(
+                        self.config.chain.deposit_contract.as_slice(),
+                    ))
                     .topic0(*TRANSACTION_DEPOSITED_TOPIC)
                     .from_block(block_num)
                     .to_block(end_block);
@@ -493,8 +510,9 @@ impl InnerWatcher {
     /// Check if a transaction was sent from the batch sender to the batch inbox.
     #[inline]
     fn is_valid_batcher_transaction(&self, tx: &Transaction) -> bool {
-        let batch_sender = self.config.chain.system_config.batch_sender;
-        let batch_inbox = self.config.chain.batch_inbox;
+        let batch_sender =
+            Address::from_slice(self.config.chain.system_config.batch_sender.as_slice());
+        let batch_inbox = Address::from_slice(self.config.chain.batch_inbox.as_slice());
 
         tx.from == batch_sender && tx.to.map(|to| to == batch_inbox).unwrap_or(false)
     }

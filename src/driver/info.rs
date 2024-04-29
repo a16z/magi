@@ -79,8 +79,7 @@ mod test_utils {
     use super::*;
     use crate::common::{BlockInfo, Epoch};
     use crate::config::{ChainConfig, Config};
-    use ethers::types::H256;
-    use std::str::FromStr;
+    use alloy_primitives::b256;
 
     pub struct MockProvider {
         pub block: Option<Block<Transaction>>,
@@ -93,23 +92,16 @@ mod test_utils {
     pub fn default_head_info() -> HeadInfo {
         HeadInfo {
             l2_block_info: BlockInfo {
-                hash: H256::from_str(
-                    "dbf6a80fef073de06add9b0d14026d6e5a86c85f6d102c36d3d8e9cf89c2afd3",
-                )
-                .unwrap(),
+                hash: b256!("dbf6a80fef073de06add9b0d14026d6e5a86c85f6d102c36d3d8e9cf89c2afd3"),
                 number: 105235063,
-                parent_hash: H256::from_str(
-                    "21a168dfa5e727926063a28ba16fd5ee84c814e847c81a699c7a0ea551e4ca50",
-                )
-                .unwrap(),
+                parent_hash: b256!(
+                    "21a168dfa5e727926063a28ba16fd5ee84c814e847c81a699c7a0ea551e4ca50"
+                ),
                 timestamp: 1686068903,
             },
             l1_epoch: Epoch {
                 number: 17422590,
-                hash: H256::from_str(
-                    "438335a20d98863a4c0c97999eb2481921ccd28553eac6f913af7c12aec04108",
-                )
-                .unwrap(),
+                hash: b256!("438335a20d98863a4c0c97999eb2481921ccd28553eac6f913af7c12aec04108"),
                 timestamp: 1686068903,
             },
             sequence_number: 0,

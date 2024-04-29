@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use alloy_primitives::B256;
 use ethers::providers::{Http, Middleware, Provider};
 use ethers::types::Transaction;
 use ethers::{
@@ -100,8 +101,8 @@ impl<E: Engine> EngineDriver<E> {
 
         let new_head = BlockInfo {
             number: payload.block_number.as_u64(),
-            hash: payload.block_hash,
-            parent_hash: payload.parent_hash,
+            hash: B256::from_slice(payload.block_hash.as_bytes()),
+            parent_hash: B256::from_slice(payload.parent_hash.as_bytes()),
             timestamp: payload.timestamp.as_u64(),
         };
 
@@ -198,9 +199,9 @@ impl<E: Engine> EngineDriver<E> {
     /// - `finalized_block` = `finalized_head`
     fn create_forkchoice_state(&self) -> ForkchoiceState {
         ForkchoiceState {
-            head_block_hash: self.unsafe_head.hash,
-            safe_block_hash: self.safe_head.hash,
-            finalized_block_hash: self.finalized_head.hash,
+            head_block_hash: H256::from_slice(self.unsafe_head.hash.as_slice()),
+            safe_block_hash: H256::from_slice(self.safe_head.hash.as_slice()),
+            finalized_block_hash: H256::from_slice(self.finalized_head.hash.as_slice()),
         }
     }
 
