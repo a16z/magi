@@ -1,16 +1,12 @@
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use alloy_primitives::B256;
-use bytes::Bytes;
-use ethers::{
-    providers::{Http, HttpRateLimitRetryPolicy, Middleware, Provider, RetryClient},
-    types::{Address, Block, BlockNumber, Filter, Transaction, H256},
-    utils::keccak256,
-};
 use eyre::Result;
 use once_cell::sync::Lazy;
-use reqwest::Url;
 use tokio::{spawn, sync::mpsc, task::JoinHandle, time::sleep};
+
+use alloy_primitives::{keccak256, Address, Bytes, B256, U256};
+use alloy_provider::{Provider, ProviderBuilder, ReqwestProvider};
+use alloy_rpc_types::{Block, BlockId, BlockNumberOrTag, BlockTransactions, Filter, Transaction};
 
 use crate::{
     common::BlockInfo,
@@ -21,14 +17,11 @@ use crate::{
 
 use super::{l1_info::L1BlockInfo, BlobFetcher, L1Info, SystemConfigUpdate};
 
-static CONFIG_UPDATE_TOPIC: Lazy<H256> =
-    Lazy::new(|| H256::from_slice(&keccak256("ConfigUpdate(uint256,uint8,bytes)")));
+static CONFIG_UPDATE_TOPIC: Lazy<B256> =
+    Lazy::new(|| keccak256("ConfigUpdate(uint256,uint8,bytes)"));
 
-static TRANSACTION_DEPOSITED_TOPIC: Lazy<H256> = Lazy::new(|| {
-    H256::from_slice(&keccak256(
-        "TransactionDeposited(address,address,uint256,bytes)",
-    ))
-});
+static TRANSACTION_DEPOSITED_TOPIC: Lazy<B256> =
+    Lazy::new(|| keccak256("TransactionDeposited(address,address,uint256,bytes)"));
 
 /// The transaction type used to identify transactions that carry blobs
 /// according to EIP 4844.
@@ -70,8 +63,8 @@ pub enum BlockUpdate {
 struct InnerWatcher {
     /// Global Config
     config: Arc<Config>,
-    /// Ethers provider for L1
-    provider: Arc<Provider<RetryClient<Http>>>,
+    /// [reqwest] provider for L1
+    provider: Arc<ReqwestProvider>,
     /// L1 beacon node to fetch blobs
     blob_fetcher: Arc<BlobFetcher>,
     /// Channel to send block updates
@@ -184,14 +177,20 @@ impl InnerWatcher {
         } else {
             let l2_provider = generate_http_provider(&config.l2_rpc_url);
 
+            let block_id = BlockId::Number(BlockNumberOrTag::Number(l2_start_block - 1));
             let block = l2_provider
-                .get_block_with_txs(l2_start_block - 1)
+                .get_block(block_id, true)
                 .await
                 .unwrap()
                 .unwrap();
 
-            let input = &block
-                .transactions
+            let full_txs = if let BlockTransactions::Full(txs) = block.transactions {
+                txs
+            } else {
+                panic!("Expected full transactions");
+            };
+
+            let input = &full_txs
                 .first()
                 .expect(
                     "Could not find the L1 attributes deposited transaction in the parent L2 block",
@@ -201,9 +200,8 @@ impl InnerWatcher {
             let batch_sender = alloy_primitives::Address::from_slice(&input[176..196]);
             let l1_fee_overhead = alloy_primitives::U256::from_be_slice(&input[196..228]);
             let l1_fee_scalar = alloy_primitives::U256::from_be_slice(&input[228..260]);
-            let gas_lim_slice: &mut [u8] = &mut [0; 32];
-            block.gas_limit.to_big_endian(gas_lim_slice);
-            let gas_limit = alloy_primitives::U256::from_be_slice(gas_lim_slice);
+            let gas_lim_slice = block.header.gas_limit.to_be_bytes();
+            let gas_limit = alloy_primitives::U256::from_be_slice(&gas_lim_slice);
 
             SystemConfig {
                 batch_sender,
@@ -274,7 +272,7 @@ impl InnerWatcher {
                     hash: B256::from_slice(l1_info.block_info.hash.as_bytes()),
                     number: l1_info.block_info.number,
                     timestamp: l1_info.block_info.timestamp,
-                    parent_hash: B256::from_slice(block.parent_hash.as_bytes()),
+                    parent_hash: B256::from_slice(block.header.parent_hash.as_slice()),
                 };
 
                 self.unfinalized_blocks.push(block_info);
@@ -305,7 +303,7 @@ impl InnerWatcher {
                 .address(Address::from_slice(
                     self.config.chain.system_config_contract.as_slice(),
                 ))
-                .topic0(*CONFIG_UPDATE_TOPIC)
+                .event_signature(*CONFIG_UPDATE_TOPIC)
                 .from_block(last_update_block + 1)
                 .to_block(to_block);
 
@@ -326,14 +324,15 @@ impl InnerWatcher {
                         config.l1_fee_scalar = scalar;
                     }
                     SystemConfigUpdate::Gas(gas) => {
-                        config.gas_limit = gas; 
+                        config.gas_limit = gas;
                     }
                     SystemConfigUpdate::UnsafeBlockSigner(addr) => {
                         config.unsafe_block_signer = addr;
                     }
                 }
 
-                self.system_config_update = (update_block.as_u64(), Some(config));
+                let update_block: u64 = update_block.try_into()?;
+                self.system_config_update = (update_block, Some(config));
             } else {
                 self.system_config_update = (to_block, None);
             }
@@ -365,34 +364,36 @@ impl InnerWatcher {
 
     async fn get_finalized(&self) -> Result<u64> {
         let block_number = match self.config.devnet {
-            false => BlockNumber::Finalized,
-            true => BlockNumber::Latest,
+            false => BlockNumberOrTag::Finalized,
+            true => BlockNumberOrTag::Latest,
         };
 
         Ok(self
             .provider
-            .get_block(block_number)
+            .get_block(BlockId::Number(block_number), false)
             .await?
             .ok_or(eyre::eyre!("block not found"))?
+            .header
             .number
             .ok_or(eyre::eyre!("block pending"))?
-            .as_u64())
+            .try_into()?)
     }
 
     async fn get_head(&self) -> Result<u64> {
         Ok(self
             .provider
-            .get_block(BlockNumber::Latest)
+            .get_block(BlockId::Number(BlockNumberOrTag::Latest), false)
             .await?
             .ok_or(eyre::eyre!("block not found"))?
+            .header
             .number
             .ok_or(eyre::eyre!("block pending"))?
-            .as_u64())
+            .try_into()?)
     }
 
-    async fn get_block(&self, block_num: u64) -> Result<Block<Transaction>> {
+    async fn get_block(&self, block_num: u64) -> Result<Block> {
         self.provider
-            .get_block_with_txs(block_num)
+            .get_block(BlockId::Number(BlockNumberOrTag::Number(block_num)), true)
             .await?
             .ok_or(eyre::eyre!("block not found"))
     }
@@ -403,28 +404,32 @@ impl InnerWatcher {
             None => {
                 let end_block = self.head_block.min(block_num + 1000);
 
-                let deposit_filter = Filter::new()
-                    .address(Address::from_slice(
-                        self.config.chain.deposit_contract.as_slice(),
-                    ))
-                    .topic0(*TRANSACTION_DEPOSITED_TOPIC)
-                    .from_block(block_num)
-                    .to_block(end_block);
-
-                let deposit_logs = self
-                    .provider
-                    .get_logs(&deposit_filter)
-                    .await?
-                    .into_iter()
-                    .map(|log| UserDeposited::try_from(log).unwrap())
-                    .collect::<Vec<UserDeposited>>();
-
+                // TODO: Optimize this to batch requests.
+                //       Right now we need to do this since logs don't contain the block data.
                 for num in block_num..=end_block {
-                    let deposits = deposit_logs
-                        .iter()
-                        .filter(|d| d.l1_block_num == num)
-                        .cloned()
-                        .collect();
+                    let deposit_filter = Filter::new()
+                        .address(self.config.chain.deposit_contract)
+                        .event_signature(*TRANSACTION_DEPOSITED_TOPIC)
+                        .select(num);
+
+                    let block = self
+                        .provider
+                        .get_block(BlockId::Number(BlockNumberOrTag::Number(block_num)), false)
+                        .await?
+                        .ok_or(eyre::eyre!("block not found"))?;
+                    let block_hash = block
+                        .header
+                        .hash
+                        .ok_or(eyre::eyre!("block hash not found"))?;
+
+                    let deposits = self
+                        .provider
+                        .get_logs(&deposit_filter)
+                        .await?
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, log)| UserDeposited::new(log, num, block_hash, U256::from(i)))
+                        .collect::<Result<Vec<UserDeposited>>>()?;
 
                     self.deposits.insert(num, deposits);
                 }
@@ -438,13 +443,19 @@ impl InnerWatcher {
     /// calldata or the decoded blob data for each batcher transaction in the block.
     pub async fn get_batcher_transactions(
         &self,
-        block: &Block<Transaction>,
+        block: &Block,
     ) -> Result<Vec<BatcherTransactionData>> {
-        let mut batcher_transactions_data = Vec::new();
+        let mut batcher_transactions_data: Vec<BatcherTransactionData> = Vec::new();
         let mut indexed_blobs = Vec::new();
         let mut blob_index = 0;
 
-        for tx in block.transactions.iter() {
+        let full_txs = if let BlockTransactions::Full(txs) = &block.transactions {
+            txs
+        } else {
+            eyre::bail!("expected full transactions");
+        };
+
+        for tx in full_txs.iter() {
             let tx_blob_hashes: Vec<String> = tx
                 .other
                 .get_deserialized("blobVersionedHashes")
@@ -456,9 +467,9 @@ impl InnerWatcher {
                 continue;
             }
 
-            let tx_type = tx.transaction_type.map(|t| t.as_u64()).unwrap_or(0);
+            let tx_type = tx.transaction_type.map(|t| t as u64).unwrap_or(0);
             if tx_type != BLOB_CARRYING_TRANSACTION_TYPE {
-                batcher_transactions_data.push(tx.input.0.clone());
+                batcher_transactions_data.push(tx.input.clone());
                 continue;
             }
 
@@ -473,10 +484,8 @@ impl InnerWatcher {
             return Ok(batcher_transactions_data);
         }
 
-        let slot = self
-            .blob_fetcher
-            .get_slot_from_time(block.timestamp.as_u64())
-            .await?;
+        let timestamp: u64 = block.header.timestamp.try_into()?;
+        let slot = self.blob_fetcher.get_slot_from_time(timestamp).await?;
 
         // perf: fetch only the required indexes instead of all
         let blobs = self.blob_fetcher.fetch_blob_sidecars(slot).await?;
@@ -509,15 +518,12 @@ impl InnerWatcher {
     }
 }
 
-fn generate_http_provider(url: &str) -> Arc<Provider<RetryClient<Http>>> {
-    let client = reqwest::ClientBuilder::new()
-        .timeout(Duration::from_secs(5))
-        .build()
-        .unwrap();
-    let http = Http::new_with_client(Url::parse(url).expect("invalid rpc url"), client);
-    let policy = Box::new(HttpRateLimitRetryPolicy);
-    let client = RetryClient::new(http, policy, 100, 50);
-    Arc::new(Provider::new(client))
+fn generate_http_provider(url: &str) -> Arc<ReqwestProvider> {
+    let Ok(url) = reqwest::Url::parse(url) else {
+        panic!("unable to parse url: {}", url);
+    };
+    let provider = ProviderBuilder::new().on_http(url);
+    Arc::new(provider)
 }
 
 fn start_watcher(
@@ -548,9 +554,9 @@ fn start_watcher(
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use std::sync::Arc;
 
-    use ethers::providers::{Http, Middleware, Provider};
     use tokio::sync::mpsc;
 
     use crate::{
@@ -571,6 +577,11 @@ mod tests {
             return;
         };
 
+        let Ok(l1_rpc_url) = reqwest::Url::parse(&l1_rpc_url) else {
+            panic!("unable to parse l1 rpc url: {}", l1_rpc_url);
+        };
+        let l1_provider = ProviderBuilder::new().on_http(l1_rpc_url);
+
         let config = Arc::new(Config {
             l1_beacon_url,
             chain: ChainConfig::optimism_goerli(),
@@ -578,9 +589,9 @@ mod tests {
         });
 
         let l1_block_number = 10515928;
-        let l1_provider = Provider::<Http>::try_from(l1_rpc_url).unwrap();
+        let block_id = BlockId::Number(BlockNumberOrTag::Number(l1_block_number));
         let l1_block = l1_provider
-            .get_block_with_txs(l1_block_number)
+            .get_block(block_id, false)
             .await
             .unwrap()
             .unwrap();

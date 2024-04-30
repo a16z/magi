@@ -69,7 +69,12 @@ impl Pipeline {
     }
 
     /// Sends [BatcherTransactions] & the L1 block they were received in to the [BatcherTransactions] receiver.
-    pub fn push_batcher_transactions(&self, txs: Vec<Bytes>, l1_origin: u64) -> Result<()> {
+    pub fn push_batcher_transactions(
+        &self,
+        txs: Vec<alloy_primitives::Bytes>,
+        l1_origin: u64,
+    ) -> Result<()> {
+        let txs = txs.into_iter().map(Bytes::from).collect();
         self.batcher_transaction_sender
             .send(BatcherTransactionMessage { txs, l1_origin })?;
         Ok(())

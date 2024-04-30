@@ -392,6 +392,42 @@ pub struct UserDeposited {
     pub log_index: U256,
 }
 
+impl UserDeposited {
+    /// Creates a new [UserDeposited] from the given data.
+    pub fn new(
+        log: alloy_rpc_types::Log,
+        l1_block_num: u64,
+        l1_block_hash: alloy_primitives::B256,
+        log_index: alloy_primitives::U256,
+    ) -> Result<Self> {
+        let opaque_data = decode(&[ParamType::Bytes], &log.data().data)?[0]
+            .clone()
+            .into_bytes()
+            .ok_or(eyre::eyre!("invalid data"))?;
+
+        let from = Address::from_slice(log.topics()[1].as_slice());
+        let to = Address::from_slice(log.topics()[2].as_slice());
+        let mint = U256::from_big_endian(&opaque_data[0..32]);
+        let value = U256::from_big_endian(&opaque_data[32..64]);
+        let gas = u64::from_be_bytes(opaque_data[64..72].try_into()?);
+        let is_creation = opaque_data[72] != 0;
+        let data = opaque_data[73..].to_vec();
+
+        Ok(Self {
+            from,
+            to,
+            mint,
+            value,
+            gas,
+            is_creation,
+            data,
+            l1_block_num,
+            l1_block_hash: H256::from_slice(l1_block_hash.as_slice()),
+            log_index: U256::from_big_endian(&log_index.to_be_bytes::<32>()),
+        })
+    }
+}
+
 impl TryFrom<Log> for UserDeposited {
     type Error = eyre::Report;
 

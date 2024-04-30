@@ -36,6 +36,44 @@ pub struct L1BlockInfo {
     pub parent_beacon_block_root: Option<H256>,
 }
 
+impl TryFrom<&alloy_rpc_types::Block> for L1BlockInfo {
+    type Error = eyre::Error;
+
+    fn try_from(value: &alloy_rpc_types::Block) -> std::result::Result<Self, Self::Error> {
+        let number = value
+            .header
+            .number
+            .ok_or(eyre::eyre!("block not included"))?
+            .try_into()?;
+
+        let hash = value.header.hash.ok_or(eyre::eyre!("block not included"))?;
+
+        let timestamp = value.header.timestamp.try_into()?;
+
+        let base_fee = value
+            .header
+            .base_fee_per_gas
+            .ok_or(eyre::eyre!("block is pre london"))?;
+
+        let mix_hash = value
+            .header
+            .mix_hash
+            .ok_or(eyre::eyre!("block not included"))?;
+
+        let parent_beacon_block_root = value.header.parent_beacon_block_root;
+
+        Ok(L1BlockInfo {
+            number,
+            hash: H256::from_slice(&hash.as_slice()),
+            timestamp,
+            base_fee: base_fee.into(),
+            mix_hash: H256::from_slice(&mix_hash.as_slice()),
+            parent_beacon_block_root: parent_beacon_block_root
+                .map(|x| H256::from_slice(&x.as_slice())),
+        })
+    }
+}
+
 impl TryFrom<&Block<Transaction>> for L1BlockInfo {
     type Error = eyre::Error;
 

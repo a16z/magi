@@ -1,5 +1,6 @@
+use alloy_primitives::{Address, U256, U64};
+use alloy_rpc_types::Log;
 use eyre::Result;
-use alloy_primitives::{Address, U64, U256, Log};
 
 /// Represents a system config update event
 #[derive(Debug)]
@@ -18,27 +19,29 @@ impl TryFrom<Log> for SystemConfigUpdate {
     type Error = eyre::Report;
 
     fn try_from(log: Log) -> Result<Self> {
-        let version = U64::from_be_bytes(**log
-            .topics()
-            .get(1)
-            .ok_or(eyre::eyre!("invalid system config update"))?
+        let version = U64::from_be_bytes(
+            **log
+                .topics()
+                .get(1)
+                .ok_or(eyre::eyre!("invalid system config update"))?,
         );
 
         if !version.is_zero() {
             return Err(eyre::eyre!("invalid system config update"));
         }
 
-        let update_type = U64::from_be_bytes(**log
-            .topics()
-            .get(2)
-            .ok_or(eyre::eyre!("invalid system config update"))?
+        let update_type = U64::from_be_bytes(
+            **log
+                .topics()
+                .get(2)
+                .ok_or(eyre::eyre!("invalid system config update"))?,
         );
 
         let update_type: u64 = update_type.try_into()?;
         match update_type {
             0 => {
                 let addr_bytes = log
-                    .data
+                    .data()
                     .data
                     .get(76..96)
                     .ok_or(eyre::eyre!("invalid system config update"))?;
@@ -48,13 +51,13 @@ impl TryFrom<Log> for SystemConfigUpdate {
             }
             1 => {
                 let fee_overhead = log
-                    .data
+                    .data()
                     .data
                     .get(64..96)
                     .ok_or(eyre::eyre!("invalid system config update"))?;
 
                 let fee_scalar = log
-                    .data
+                    .data()
                     .data
                     .get(96..128)
                     .ok_or(eyre::eyre!("invalid system config update"))?;
@@ -68,7 +71,7 @@ impl TryFrom<Log> for SystemConfigUpdate {
             }
             2 => {
                 let gas_bytes = log
-                    .data
+                    .data()
                     .data
                     .get(64..96)
                     .ok_or(eyre::eyre!("invalid system config update"))?;
@@ -79,7 +82,7 @@ impl TryFrom<Log> for SystemConfigUpdate {
             }
             3 => {
                 let addr_bytes = log
-                    .data
+                    .data()
                     .data
                     .get(76..96)
                     .ok_or(eyre::eyre!("invalid system config update"))?;
