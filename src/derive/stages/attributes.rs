@@ -99,7 +99,7 @@ impl Attributes {
 
         PayloadAttributes {
             timestamp,
-            prev_randao,
+            prev_randao: H256::from_slice(prev_randao.as_slice()),
             suggested_fee_recipient: Address::from_slice(suggested_fee_recipient.as_slice()),
             transactions,
             no_tx_pool: true,
@@ -336,8 +336,8 @@ impl AttributesDeposited {
         Self {
             number: l1_info.block_info.number,
             timestamp: l1_info.block_info.timestamp,
-            base_fee: l1_info.block_info.base_fee,
-            hash: l1_info.block_info.hash,
+            base_fee: U256::from_big_endian(&l1_info.block_info.base_fee.to_be_bytes::<32>()),
+            hash: H256::from_slice(l1_info.block_info.hash.as_slice()),
             sequence_number: seq,
             batcher_hash,
             fee_overhead,

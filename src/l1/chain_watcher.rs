@@ -269,7 +269,7 @@ impl InnerWatcher {
 
             if l1_info.block_info.number >= self.finalized_block {
                 let block_info = BlockInfo {
-                    hash: B256::from_slice(l1_info.block_info.hash.as_bytes()),
+                    hash: l1_info.block_info.hash,
                     number: l1_info.block_info.number,
                     timestamp: l1_info.block_info.timestamp,
                     parent_hash: B256::from_slice(block.header.parent_hash.as_slice()),
@@ -331,7 +331,7 @@ impl InnerWatcher {
                     }
                 }
 
-                let update_block: u64 = update_block.try_into()?;
+                let update_block: u64 = update_block;
                 self.system_config_update = (update_block, Some(config));
             } else {
                 self.system_config_update = (to_block, None);
@@ -368,27 +368,23 @@ impl InnerWatcher {
             true => BlockNumberOrTag::Latest,
         };
 
-        Ok(self
-            .provider
+        self.provider
             .get_block(BlockId::Number(block_number), false)
             .await?
             .ok_or(eyre::eyre!("block not found"))?
             .header
             .number
-            .ok_or(eyre::eyre!("block pending"))?
-            .try_into()?)
+            .ok_or(eyre::eyre!("block pending"))
     }
 
     async fn get_head(&self) -> Result<u64> {
-        Ok(self
-            .provider
+        self.provider
             .get_block(BlockId::Number(BlockNumberOrTag::Latest), false)
             .await?
             .ok_or(eyre::eyre!("block not found"))?
             .header
             .number
-            .ok_or(eyre::eyre!("block pending"))?
-            .try_into()?)
+            .ok_or(eyre::eyre!("block pending"))
     }
 
     async fn get_block(&self, block_num: u64) -> Result<Block> {
@@ -484,7 +480,7 @@ impl InnerWatcher {
             return Ok(batcher_transactions_data);
         }
 
-        let timestamp: u64 = block.header.timestamp.try_into()?;
+        let timestamp: u64 = block.header.timestamp;
         let slot = self.blob_fetcher.get_slot_from_time(timestamp).await?;
 
         // perf: fetch only the required indexes instead of all
