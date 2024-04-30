@@ -1,3 +1,4 @@
+use alloy_primitives::B256;
 use ethers::types::H256;
 use serde::{Deserialize, Serialize};
 
@@ -33,11 +34,12 @@ pub struct ForkchoiceState {
 impl ForkchoiceState {
     /// Creates a new fork choice state with the given head block hash.
     /// The safe and finalized block hashes are set to the head block hash.
-    pub fn from_single_head(head_block_hash: H256) -> Self {
+    pub fn from_single_head(head_block_hash: B256) -> Self {
+        let hash = H256::from_slice(head_block_hash.as_slice());
         Self {
-            head_block_hash,
-            safe_block_hash: head_block_hash,
-            finalized_block_hash: head_block_hash,
+            head_block_hash: hash,
+            safe_block_hash: hash,
+            finalized_block_hash: hash,
         }
     }
 }

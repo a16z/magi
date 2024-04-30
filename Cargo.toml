@@ -28,9 +28,12 @@ futures-timer = "0.3.0"
 again = "0.1"
 
 # Alloy types
+alloy-rlp = { version = "0.3", default-features = false }
 alloy-primitives = { version = "0.7.1", default-features = false, features = ["serde"] }
-alloy-provider = { git = "https://github.com/alloy-rs/alloy", rev = "e3f2f07" }
-alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy", rev = "e3f2f07" }
+alloy-provider = { git = "https://github.com/alloy-rs/alloy" }
+alloy-rpc-types = { git = "https://github.com/alloy-rs/alloy" }
+alloy-consensus = { git = "https://github.com/alloy-rs/alloy" }
+alloy-eips = { git = "https://github.com/alloy-rs/alloy" }
 
 # Logging and Metrics
 chrono = "0.4.22"

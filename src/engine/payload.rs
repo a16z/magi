@@ -1,3 +1,7 @@
+use alloy_consensus::TxEnvelope;
+use alloy_eips::eip2718::Encodable2718;
+use alloy_rpc_types::Block as AlloyBlock;
+use alloy_rpc_types::BlockTransactions;
 use ethers::types::{Block, Bytes, Transaction, H160, H256, U64};
 use eyre::Result;
 use serde::{Deserialize, Serialize};
@@ -48,6 +52,49 @@ pub struct ExecutionPayload {
     /// None if not present (pre-Ecotone)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub excess_blob_gas: Option<U64>,
+}
+
+impl TryFrom<AlloyBlock> for ExecutionPayload {
+    type Error = eyre::Report;
+
+    /// Converts a [Block] to an [ExecutionPayload]
+    fn try_from(value: AlloyBlock) -> Result<Self> {
+        let txs = if let BlockTransactions::Full(txs) = value.transactions {
+            txs
+        } else {
+            return Err(eyre::eyre!("Expected full transactions"));
+        };
+        let encoded_txs = (txs
+            .into_iter()
+            .map(|tx| {
+                let envelope: TxEnvelope = tx.try_into().unwrap();
+                let encoded = envelope.encoded_2718();
+                RawTransaction(encoded.to_vec())
+            })
+            .collect::<Vec<_>>())
+        .to_vec();
+
+        Ok(ExecutionPayload {
+            parent_hash: H256::from_slice(value.header.parent_hash.as_slice()),
+            fee_recipient: H160::from_slice(SystemAccounts::default().fee_vault.as_slice()),
+            state_root: H256::from_slice(value.header.state_root.as_slice()),
+            receipts_root: H256::from_slice(value.header.receipts_root.as_slice()),
+            logs_bloom: value.header.logs_bloom.0.to_vec().into(),
+            prev_randao: H256::from_slice(value.header.mix_hash.unwrap().as_slice()),
+            block_number: value.header.number.unwrap().into(),
+            gas_limit: (value.header.gas_limit as u64).into(),
+            gas_used: (value.header.gas_used as u64).into(),
+            timestamp: value.header.timestamp.into(),
+            extra_data: Bytes::from(value.header.extra_data.0),
+            base_fee_per_gas: (value.header.base_fee_per_gas.unwrap_or_else(|| 0u64.into()) as u64)
+                .into(),
+            block_hash: H256::from_slice(value.header.hash.unwrap().as_slice()),
+            transactions: encoded_txs,
+            withdrawals: Some(Vec::new()),
+            blob_gas_used: value.header.blob_gas_used.map(|v| (v as u64).into()),
+            excess_blob_gas: value.header.excess_blob_gas.map(|v| (v as u64).into()),
+        })
+    }
 }
 
 impl TryFrom<Block<Transaction>> for ExecutionPayload {
