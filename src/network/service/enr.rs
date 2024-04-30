@@ -1,6 +1,6 @@
 //! Contains the [OpStackEnrData] struct.
 
-use alloy_rlp::{Decodable, Encodable, RlpDecodable, RlpEncodable};
+use alloy_rlp::{Decodable, Encodable, RlpEncodable, RlpDecodable};
 use eyre::Result;
 
 #[derive(Debug, RlpEncodable, RlpDecodable, PartialEq, Clone)]
@@ -10,6 +10,7 @@ pub struct OpStackEnrData {
     /// The version. Always set to 0.
     pub version: u64,
 }
+
 impl TryFrom<&[u8]> for OpStackEnrData {
     type Error = eyre::Report;
 
@@ -25,5 +26,22 @@ impl From<OpStackEnrData> for Vec<u8> {
         let mut bytes = Vec::new();
         value.encode(&mut bytes);
         bytes
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_round_trip_opstack() {
+        let data = OpStackEnrData {
+            chain_id: 123,
+            version: 1,
+        };
+        let bytes: Vec<u8> = data.into();
+        let decoded = OpStackEnrData::try_from(bytes.as_slice()).unwrap();
+        assert_eq!(decoded.chain_id, 123);
+        assert_eq!(decoded.version, 1);
     }
 }
