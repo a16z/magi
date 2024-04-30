@@ -102,8 +102,9 @@ impl BlockHandler {
             .unwrap()
             .as_secs();
 
-        let is_future = envelope.payload.timestamp.as_u64() > current_timestamp + 5;
-        let is_past = envelope.payload.timestamp.as_u64() < current_timestamp - 60;
+        let timestamp: u64 = envelope.payload.timestamp.try_into().unwrap_or_default();
+        let is_future = timestamp > current_timestamp + 5;
+        let is_past = timestamp < current_timestamp - 60;
         let time_valid = !(is_future || is_past);
 
         let msg = envelope.hash.signature_message(self.chain_id);

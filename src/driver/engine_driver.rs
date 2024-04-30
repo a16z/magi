@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use alloy_primitives::B256;
 use ethers::providers::{Http, Middleware, Provider};
 use ethers::types::Transaction;
 use ethers::{
@@ -38,7 +37,8 @@ pub struct EngineDriver<E: Engine> {
 impl<E: Engine> EngineDriver<E> {
     /// Initiates validation & production of a new L2 block from the given [PayloadAttributes] and updates the forkchoice
     pub async fn handle_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
-        let block: Option<Block<Transaction>> = self.block_at(attributes.timestamp.as_u64()).await;
+        let timestamp: u64 = attributes.timestamp.try_into()?;
+        let block: Option<Block<Transaction>> = self.block_at(timestamp).await;
 
         if let Some(block) = block {
             if should_skip(&block, &attributes)? {
@@ -100,10 +100,10 @@ impl<E: Engine> EngineDriver<E> {
         let payload = self.build_payload(attributes).await?;
 
         let new_head = BlockInfo {
-            number: payload.block_number.as_u64(),
-            hash: B256::from_slice(payload.block_hash.as_bytes()),
-            parent_hash: B256::from_slice(payload.parent_hash.as_bytes()),
-            timestamp: payload.timestamp.as_u64(),
+            number: payload.block_number.try_into().unwrap_or_default(),
+            hash: payload.block_hash,
+            parent_hash: payload.parent_hash,
+            timestamp: payload.timestamp.try_into().unwrap_or_default(),
         };
 
         self.push_payload(payload).await?;
@@ -199,9 +199,9 @@ impl<E: Engine> EngineDriver<E> {
     /// - `finalized_block` = `finalized_head`
     fn create_forkchoice_state(&self) -> ForkchoiceState {
         ForkchoiceState {
-            head_block_hash: H256::from_slice(self.unsafe_head.hash.as_slice()),
-            safe_block_hash: H256::from_slice(self.safe_head.hash.as_slice()),
-            finalized_block_hash: H256::from_slice(self.finalized_head.hash.as_slice()),
+            head_block_hash: self.unsafe_head.hash,
+            safe_block_hash: self.safe_head.hash,
+            finalized_block_hash: self.finalized_head.hash,
         }
     }
 
@@ -243,10 +243,10 @@ fn should_skip(block: &Block<Transaction>, attributes: &PayloadAttributes) -> Re
     tracing::debug!("block hashes: {:?}", block_hashes);
 
     let is_same = attributes_hashes == block_hashes
-        && attributes.timestamp.as_u64() == block.timestamp.as_u64()
-        && attributes.prev_randao == block.mix_hash.unwrap()
-        && attributes.suggested_fee_recipient == block.author.unwrap()
-        && attributes.gas_limit.as_u64() == block.gas_limit.as_u64();
+        && attributes.timestamp == alloy_primitives::U64::from(block.timestamp.as_u64())
+        && attributes.prev_randao == alloy_primitives::B256::from_slice(block.mix_hash.unwrap().as_bytes())
+        && attributes.suggested_fee_recipient == alloy_primitives::Address::from_slice(block.author.unwrap().as_bytes())
+        && attributes.gas_limit == alloy_primitives::U64::from(block.gas_limit.as_u64());
 
     Ok(is_same)
 }

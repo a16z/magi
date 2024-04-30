@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 
 use ethers::abi::{decode, encode, ParamType, Token};
-use ethers::types::{Address, Log, H256, U256, U64};
+use ethers::types::{Address, Log, H256, U256};
 use ethers::utils::{keccak256, rlp::Encodable, rlp::RlpStream};
 
 use eyre::Result;
@@ -89,7 +89,6 @@ impl Attributes {
             None
         };
 
-        let timestamp = U64([input.timestamp]);
         let l1_inclusion_block = Some(input.l1_inclusion_block);
         let seq_number = Some(self.sequence_number);
         let prev_randao = l1_info.block_info.mix_hash;
@@ -98,12 +97,12 @@ impl Attributes {
         let suggested_fee_recipient = SystemAccounts::default().fee_vault;
 
         PayloadAttributes {
-            timestamp,
-            prev_randao: H256::from_slice(prev_randao.as_slice()),
-            suggested_fee_recipient: Address::from_slice(suggested_fee_recipient.as_slice()),
+            timestamp: alloy_primitives::U64::from(input.timestamp),
+            prev_randao,
+            suggested_fee_recipient,
             transactions,
             no_tx_pool: true,
-            gas_limit: U64([l1_info.system_config.gas_limit.try_into().unwrap()]),
+            gas_limit: alloy_primitives::U64::from(l1_info.system_config.gas_limit),
             withdrawals,
             epoch,
             l1_inclusion_block,

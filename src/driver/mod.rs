@@ -230,14 +230,17 @@ impl<E: Engine> Driver<E> {
         }
 
         self.future_unsafe_blocks.retain(|payload| {
-            let unsafe_block_num = payload.block_number.as_u64();
+            let unsafe_block_num: u64 = match payload.block_number.try_into() {
+                Ok(num) => num,
+                Err(_) => return false,
+            };
             let synced_block_num = self.engine_driver.unsafe_head.number;
 
             unsafe_block_num > synced_block_num && unsafe_block_num - synced_block_num < 1024
         });
 
         let next_unsafe_payload = self.future_unsafe_blocks.iter().find(|p| {
-            alloy_primitives::B256::from_slice(p.parent_hash.as_bytes())
+            p.parent_hash
                 == self.engine_driver.unsafe_head.hash
         });
 
