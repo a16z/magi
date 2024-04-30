@@ -7,11 +7,9 @@ use crate::{
 
 use eyre::Result;
 
-use ethers::{
-    providers::{Middleware, Provider},
-    types::{Address, Block, BlockId, H256},
-    utils::keccak256,
-};
+use alloy_primitives::{keccak256, B256};
+use alloy_provider::{Provider, ProviderBuilder};
+use alloy_rpc_types::{Block, BlockId, BlockNumberOrTag};
 
 use jsonrpsee::{
     core::{async_trait, Error},
@@ -53,12 +51,21 @@ impl RpcServer for RpcServerImpl {
     /// Returns the L2 output information for a given block.
     /// See the [Optimism spec](https://specs.optimism.io/protocol/rollup-node.html?highlight=rpc#l2-output-rpc-method) for more details
     async fn output_at_block(&self, block_number: u64) -> Result<OutputRootResponse, Error> {
-        let l2_provider = convert_err(Provider::try_from(self.config.l2_rpc_url.clone()))?;
+        let url = reqwest::Url::parse(&self.config.l2_rpc_url)
+            .map_err(|err| Error::Custom(format!("unable to parse l2_rpc_url: {err}")))?;
+        let l2_provider = ProviderBuilder::new()
+            .on_http(url)
+            .map_err(|err| Error::Custom(format!("unable to create provider: {err}")))?;
 
-        let block = convert_err(l2_provider.get_block(block_number).await)?
-            .ok_or(Error::Custom("unable to get block".to_string()))?;
-        let state_root = block.state_root;
+        let block = convert_err(
+            l2_provider
+                .get_block_by_number(BlockNumberOrTag::Number(block_number), true)
+                .await,
+        )?
+        .ok_or(Error::Custom("unable to get block".to_string()))?;
+        let state_root = block.header.state_root;
         let block_hash = block
+            .header
             .hash
             .ok_or(Error::Custom("block hash not found".to_string()))?;
         let locations = vec![];
@@ -67,7 +74,7 @@ impl RpcServer for RpcServerImpl {
         let state_proof = convert_err(
             l2_provider
                 .get_proof(
-                    Address::from_slice(self.config.chain.l2_to_l1_message_passer.as_slice()),
+                    self.config.chain.l2_to_l1_message_passer,
                     locations,
                     block_id,
                 )
@@ -76,9 +83,9 @@ impl RpcServer for RpcServerImpl {
 
         let withdrawal_storage_root = state_proof.storage_hash;
 
-        let output_root = compute_l2_output_root(block, state_proof.storage_hash);
+        let output_root = compute_l2_output_root(block, withdrawal_storage_root);
 
-        let version: H256 = Default::default();
+        let version: B256 = Default::default();
 
         Ok(OutputRootResponse {
             output_root,
@@ -108,19 +115,17 @@ fn convert_err<T, E: Display>(res: Result<T, E>) -> Result<T, Error> {
 
 /// Computes the L2 output root.
 /// Refer to the [Optimism Spec](https://specs.optimism.io/protocol/proposals.html#l2-output-commitment-construction) for details
-fn compute_l2_output_root(block: Block<H256>, storage_root: H256) -> H256 {
-    let version: H256 = Default::default();
-    let digest = keccak256(
+fn compute_l2_output_root(block: Block, storage_root: B256) -> B256 {
+    let version: B256 = Default::default();
+    keccak256(
         [
-            version.to_fixed_bytes(),
-            block.state_root.to_fixed_bytes(),
-            storage_root.to_fixed_bytes(),
-            block.hash.unwrap().to_fixed_bytes(),
+            version,
+            block.header.state_root,
+            storage_root,
+            block.header.hash.unwrap(),
         ]
         .concat(),
-    );
-
-    H256::from_slice(&digest)
+    )
 }
 
 /// Starts the Magi RPC server
@@ -151,13 +156,13 @@ pub async fn run_server(config: Arc<Config>) -> Result<SocketAddr> {
 #[serde(rename_all = "camelCase")]
 pub struct OutputRootResponse {
     /// The output root which serves as a commitment to the current state of the chain
-    pub output_root: H256,
+    pub output_root: B256,
     /// The output root version number, beginning with 0
-    pub version: H256,
+    pub version: B256,
     /// The state root
-    pub state_root: H256,
+    pub state_root: B256,
     /// The 32 byte storage root of the `L2toL1MessagePasser` contract address
-    pub withdrawal_storage_root: H256,
+    pub withdrawal_storage_root: B256,
 }
 
 #[cfg(test)]
