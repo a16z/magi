@@ -53,9 +53,7 @@ impl RpcServer for RpcServerImpl {
     async fn output_at_block(&self, block_number: u64) -> Result<OutputRootResponse, Error> {
         let url = reqwest::Url::parse(&self.config.l2_rpc_url)
             .map_err(|err| Error::Custom(format!("unable to parse l2_rpc_url: {err}")))?;
-        let l2_provider = ProviderBuilder::new()
-            .on_http(url)
-            .map_err(|err| Error::Custom(format!("unable to create provider: {err}")))?;
+        let l2_provider = ProviderBuilder::new().on_http(url);
 
         let block = convert_err(
             l2_provider
@@ -69,14 +67,13 @@ impl RpcServer for RpcServerImpl {
             .hash
             .ok_or(Error::Custom("block hash not found".to_string()))?;
         let locations = vec![];
-        let block_id = Some(BlockId::from(block_hash));
 
         let state_proof = convert_err(
             l2_provider
                 .get_proof(
                     self.config.chain.l2_to_l1_message_passer,
                     locations,
-                    block_id,
+                    BlockId::from(block_hash),
                 )
                 .await,
         )?;

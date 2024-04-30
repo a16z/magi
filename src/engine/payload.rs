@@ -1,6 +1,5 @@
 use alloy_consensus::TxEnvelope;
 use alloy_eips::eip2718::Encodable2718;
-use alloy_rlp::Encodable;
 use alloy_rpc_types::Block as AlloyBlock;
 use alloy_rpc_types::BlockTransactions;
 use ethers::types::{Block, Bytes, Transaction, H160, H256, U64};
@@ -68,7 +67,7 @@ impl TryFrom<AlloyBlock> for ExecutionPayload {
         let encoded_txs = (txs
             .into_iter()
             .map(|tx| {
-                let envelope = TxEnvelope::from(tx);
+                let envelope: TxEnvelope = tx.try_into().unwrap();
                 let encoded = envelope.encoded_2718();
                 RawTransaction(encoded.to_vec())
             })

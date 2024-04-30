@@ -3998,8 +3998,10 @@ version = "0.1.0"
 dependencies = [
  "again",
  "alloy-consensus",
+ "alloy-eips",
  "alloy-primitives",
  "alloy-provider",
+ "alloy-rlp",
  "alloy-rpc-types",
  "ansi_term",
  "async-trait",
