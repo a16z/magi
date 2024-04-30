@@ -14,9 +14,8 @@ use openssl::sha::sha256;
 
 use super::{handlers::Handler, service::types::NetworkAddress};
 
-/// A module to handle peer discovery
 mod discovery;
-/// A module to handle commonly used types in the p2p system.
+mod enr;
 mod types;
 
 /// Responsible for management of the `Discv5` & `libp2p` services.
