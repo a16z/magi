@@ -1,5 +1,7 @@
-use ethers::types::{Block, Transaction};
+//! A module to handle conversions to a [HeadInfo] struct.
+
 use eyre::Result;
+use alloy_rpc_types::{BlockTransactions, Block};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -22,10 +24,10 @@ impl HeadInfo {
     /// Returns the head info from the given L2 block and the system config.
     /// The config is used to check whether the block is subject to the Ecotone hardfork
     /// (which changes the way the head info is constructed from the block).
-    pub fn try_from_l2_block(config: &Config, l2_block: Block<Transaction>) -> Result<Self> {
+    pub fn try_from_l2_block(config: &Config, l2_block: Block) -> Result<Self> {
         if config
             .chain
-            .is_ecotone_but_not_first_block(l2_block.timestamp.as_u64())
+            .is_ecotone_but_not_first_block(l2_block.header.timestamp)
         {
             HeadInfo::try_from_ecotone_block(l2_block)
         } else {
@@ -35,8 +37,13 @@ impl HeadInfo {
 
     /// Returns `HeadInfo` consisting of the L2 block, the L1 epoch block it belongs to, and the L2 block's position in the epoch.
     /// This function is used when the L2 block is from the Bedrock hardfork or earlier.
-    fn try_from_bedrock_block(block: Block<Transaction>) -> Result<Self> {
-        let Some(first_tx) = block.transactions.first() else {
+    pub fn try_from_bedrock_block(block: Block) -> Result<Self> {
+        let BlockTransactions::Full(txs) = block.transactions else {
+            return Err(eyre::eyre!(
+                "Could not find the L1 attributes deposited transaction"
+            ));
+        };
+        let Some(first_tx) = txs.first() else {
             return Err(eyre::eyre!(
                 "Could not find the L1 attributes deposited transaction"
             ));
@@ -54,8 +61,13 @@ impl HeadInfo {
 
     /// Returns `HeadInfo` consisting of the L2 block, the L1 epoch block it belongs to, and the L2 block's position in the epoch.
     /// This function is used when the L2 block is from the Ecotone hardfork or later.
-    fn try_from_ecotone_block(block: Block<Transaction>) -> Result<Self> {
-        let Some(first_tx) = block.transactions.first() else {
+    pub fn try_from_ecotone_block(block: Block) -> Result<Self> {
+        let BlockTransactions::Full(txs) = block.transactions else {
+            return Err(eyre::eyre!(
+                "Could not find the L1 attributes deposited transaction"
+            ));
+        };
+        let Some(first_tx) = txs.first() else {
             return Err(eyre::eyre!(
                 "Could not find the L1 attributes deposited transaction"
             ));
@@ -76,14 +88,10 @@ impl HeadInfo {
 mod tests {
     mod head_info_bedrock {
         use crate::driver::HeadInfo;
-        use std::str::FromStr;
-
-        use alloy_primitives::b256;
-        use ethers::{
-            providers::{Middleware, Provider},
-            types::{Block, Transaction, H256},
-        };
         use eyre::Result;
+        use alloy_provider::{Provider, ProviderBuilder};
+        use alloy_primitives::b256;
+        use alloy_rpc_types::Block;
 
         #[test]
         fn should_fail_conversion_from_a_block_to_head_info_if_missing_l1_deposited_tx(
@@ -115,13 +123,9 @@ mod tests {
             }
             "#;
 
-            let block: Block<Transaction> = serde_json::from_str(raw_block)?;
+            let block: Block = serde_json::from_str(raw_block)?;
 
-            // Act
             let head = HeadInfo::try_from_bedrock_block(block);
-
-            // Assert
-            assert!(head.is_err());
             let err = head.unwrap_err();
 
             assert!(err
@@ -180,7 +184,7 @@ mod tests {
             }
             "#;
 
-            let block: Block<Transaction> = serde_json::from_str(raw_block)?;
+            let block: Block = serde_json::from_str(raw_block)?;
 
             let expected_l2_block_hash =
                 b256!("2e4f4aff36bb7951be9742ad349fb1db84643c6bbac5014f3d196fd88fe333eb");
@@ -192,10 +196,8 @@ mod tests {
             let expected_l1_epoch_block_number = 8874020;
             let expected_l1_epoch_timestamp = 1682191440;
 
-            // Act
             let head = HeadInfo::try_from_bedrock_block(block);
 
-            // Assert
             assert!(head.is_ok());
             let HeadInfo {
                 l2_block_info,
@@ -218,41 +220,43 @@ mod tests {
 
         #[tokio::test]
         async fn test_head_info_from_l2_block_hash() -> Result<()> {
-            if std::env::var("L1_TEST_RPC_URL").is_ok() && std::env::var("L2_TEST_RPC_URL").is_ok()
-            {
-                let l2_block_hash = H256::from_str(
-                    "75d4a658d7b6430c874c5518752a8d90fb1503eccd6ae4cfc97fd4aedeebb939",
-                )?;
+            let Ok(l1_rpc_url) = std::env::var("L1_TEST_RPC_URL") else {
+                eyre::bail!("L1_TEST_RPC_URL is not set");
+            };
+            let Ok(l2_rpc_url) = std::env::var("L2_TEST_RPC_URL") else {
+                eyre::bail!("L2_TEST_RPC_URL is not set");
+            };
 
-                let expected_l2_block_number = 8428108;
-                let expected_l2_block_timestamp = 1682284284;
+            let l2_block_hash = b256!("75d4a658d7b6430c874c5518752a8d90fb1503eccd6ae4cfc97fd4aedeebb939");
 
-                let expected_l1_epoch_hash =
-                    b256!("76ab90dc2afea158bbe14a99f22d5f867b51719378aa37d1a3aa3833ace67cad");
-                let expected_l1_epoch_block_number = 8879997;
-                let expected_l1_epoch_timestamp = 1682284164;
+            let expected_l2_block_number = 8428108;
+            let expected_l2_block_timestamp = 1682284284;
 
-                let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
-                let provider = Provider::try_from(l2_rpc)?;
+            let expected_l1_epoch_hash =
+                b256!("76ab90dc2afea158bbe14a99f22d5f867b51719378aa37d1a3aa3833ace67cad");
+            let expected_l1_epoch_block_number = 8879997;
+            let expected_l1_epoch_timestamp = 1682284164;
 
-                let l2_block = provider.get_block_with_txs(l2_block_hash).await?.unwrap();
-                let head = HeadInfo::try_from_bedrock_block(l2_block)?;
+            let l2_rpc_url = reqwest::Url::parse(&l2_rpc_url)?;
+            let l2_provider = ProviderBuilder::new().on_http(l2_rpc_url);
 
-                let HeadInfo {
-                    l2_block_info,
-                    l1_epoch,
-                    sequence_number,
-                } = head;
+            let l2_block = l2_provider.get_block(l2_block_hash.into(), true).await?.unwrap();
+            let head = HeadInfo::try_from_bedrock_block(l2_block)?;
 
-                assert_eq!(l2_block_info.number, expected_l2_block_number);
-                assert_eq!(l2_block_info.timestamp, expected_l2_block_timestamp);
+            let HeadInfo {
+                l2_block_info,
+                l1_epoch,
+                sequence_number,
+            } = head;
 
-                assert_eq!(l1_epoch.hash, expected_l1_epoch_hash);
-                assert_eq!(l1_epoch.number, expected_l1_epoch_block_number);
-                assert_eq!(l1_epoch.timestamp, expected_l1_epoch_timestamp);
+            assert_eq!(l2_block_info.number, expected_l2_block_number);
+            assert_eq!(l2_block_info.timestamp, expected_l2_block_timestamp);
 
-                assert_eq!(sequence_number, 4);
-            }
+            assert_eq!(l1_epoch.hash, expected_l1_epoch_hash);
+            assert_eq!(l1_epoch.number, expected_l1_epoch_block_number);
+            assert_eq!(l1_epoch.timestamp, expected_l1_epoch_timestamp);
+
+            assert_eq!(sequence_number, 4);
 
             Ok(())
         }
@@ -260,52 +264,49 @@ mod tests {
 
     mod head_info_ecotone {
         use crate::driver::HeadInfo;
-        use std::str::FromStr;
-
-        use alloy_primitives::b256;
-        use ethers::{
-            providers::{Middleware, Provider},
-            types::H256,
-        };
         use eyre::Result;
+        use alloy_provider::{Provider, ProviderBuilder};
+        use alloy_primitives::b256;
 
         #[tokio::test]
         async fn test_head_info_from_l2_block_hash() -> Result<()> {
-            if std::env::var("L1_TEST_RPC_URL").is_ok() && std::env::var("L2_TEST_RPC_URL").is_ok()
-            {
-                let l2_block_hash = H256::from_str(
-                    "0xbdd36f0c7ec8e17647dac2780130a842c47dba0025387e80408c161fdb115412",
-                )?;
+            let Ok(l1_rpc_url) = std::env::var("L1_TEST_RPC_URL") else {
+                eyre::bail!("L1_TEST_RPC_URL is not set");
+            };
+            let Ok(l2_rpc_url) = std::env::var("L2_TEST_RPC_URL") else {
+                eyre::bail!("L2_TEST_RPC_URL is not set");
+            };
 
-                let expected_l2_block_number = 21564471;
-                let expected_l2_block_timestamp = 1708557010;
+            let l2_block_hash = b256!("bdd36f0c7ec8e17647dac2780130a842c47dba0025387e80408c161fdb115412");
 
-                let expected_l1_epoch_hash =
-                    b256!("231ac984a3fc58757efe373b0b5bff0589c0e67a969a6cbc56ec959739525b31");
-                let expected_l1_epoch_block_number = 10575507;
-                let expected_l1_epoch_timestamp = 1708556928;
+            let expected_l2_block_number = 21564471;
+            let expected_l2_block_timestamp = 1708557010;
 
-                let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
-                let provider = Provider::try_from(l2_rpc)?;
+            let expected_l1_epoch_hash =
+                b256!("231ac984a3fc58757efe373b0b5bff0589c0e67a969a6cbc56ec959739525b31");
+            let expected_l1_epoch_block_number = 10575507;
+            let expected_l1_epoch_timestamp = 1708556928;
 
-                let l2_block = provider.get_block_with_txs(l2_block_hash).await?.unwrap();
-                let head = HeadInfo::try_from_ecotone_block(l2_block)?;
+            let l2_rpc_url = reqwest::Url::parse(&l2_rpc_url)?;
+            let l2_provider = ProviderBuilder::new().on_http(l2_rpc_url);
 
-                let HeadInfo {
-                    l2_block_info,
-                    l1_epoch,
-                    sequence_number,
-                } = head;
+            let l2_block = l2_provider.get_block(l2_block_hash.into(), true).await?.unwrap();
+            let head = HeadInfo::try_from_ecotone_block(l2_block)?;
 
-                assert_eq!(l2_block_info.number, expected_l2_block_number);
-                assert_eq!(l2_block_info.timestamp, expected_l2_block_timestamp);
+            let HeadInfo {
+                l2_block_info,
+                l1_epoch,
+                sequence_number,
+            } = head;
 
-                assert_eq!(l1_epoch.hash, expected_l1_epoch_hash);
-                assert_eq!(l1_epoch.number, expected_l1_epoch_block_number);
-                assert_eq!(l1_epoch.timestamp, expected_l1_epoch_timestamp);
+            assert_eq!(l2_block_info.number, expected_l2_block_number);
+            assert_eq!(l2_block_info.timestamp, expected_l2_block_timestamp);
 
-                assert_eq!(sequence_number, 4);
-            }
+            assert_eq!(l1_epoch.hash, expected_l1_epoch_hash);
+            assert_eq!(l1_epoch.number, expected_l1_epoch_block_number);
+            assert_eq!(l1_epoch.timestamp, expected_l1_epoch_timestamp);
+
+            assert_eq!(sequence_number, 4);
 
             Ok(())
         }

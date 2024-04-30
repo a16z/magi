@@ -1,10 +1,7 @@
 use std::fmt::Debug;
 
 use alloy_primitives::B256;
-use ethers::{
-    types::{Block, Transaction},
-    utils::rlp::{Decodable, DecoderError, Rlp},
-};
+use alloy_rpc_types::Block;
 use eyre::Result;
 use figment::value::{Dict, Tag, Value};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
@@ -29,7 +26,7 @@ pub struct BlockInfo {
 }
 
 /// A raw transaction
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, alloy_rlp::RlpDecodable, alloy_rlp::RlpEncodable, PartialEq, Eq)]
 pub struct RawTransaction(pub Vec<u8>);
 
 /// L1 epoch block
@@ -57,23 +54,25 @@ impl From<BlockInfo> for Value {
     }
 }
 
-impl TryFrom<Block<Transaction>> for BlockInfo {
+impl TryFrom<Block> for BlockInfo {
     type Error = eyre::Report;
 
     /// Converts a [Block] to [BlockInfo]
-    fn try_from(block: Block<Transaction>) -> Result<Self> {
+    fn try_from(block: Block) -> Result<Self> {
         let number = block
+            .header
             .number
             .ok_or(eyre::eyre!("block not included"))?
-            .as_u64();
+            .try_into()?;
 
-        let hash = block.hash.ok_or(eyre::eyre!("block not included"))?;
+        let hash = block.header.hash.ok_or(eyre::eyre!("block not included"))?;
+        let timestamp = block.header.timestamp.try_into()?;
 
         Ok(BlockInfo {
             number,
-            hash: B256::from_slice(hash.as_bytes()),
-            parent_hash: B256::from_slice(block.parent_hash.as_bytes()),
-            timestamp: block.timestamp.as_u64(),
+            hash,
+            parent_hash: block.header.parent_hash,
+            timestamp,
         })
     }
 }
@@ -108,14 +107,6 @@ impl From<&AttributesDepositedCall> for Epoch {
             timestamp: call.timestamp,
             hash: B256::from_slice(call.hash.as_slice()),
         }
-    }
-}
-
-impl Decodable for RawTransaction {
-    /// Decodes RLP encoded bytes into [RawTransaction] bytes
-    fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-        let tx_bytes: Vec<u8> = rlp.as_val()?;
-        Ok(Self(tx_bytes))
     }
 }
 

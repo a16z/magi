@@ -3,6 +3,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::io::Read;
 use std::sync::{Arc, RwLock};
+use alloy_rlp::Decodable;
 
 use ethers::utils::rlp::Rlp;
 use eyre::Result;
@@ -204,13 +205,17 @@ where
         }
 
         // check that block builds on existing chain
-        if alloy_primitives::B256::from_slice(batch.parent_hash.as_bytes()) != head.hash {
+        if batch.parent_hash != head.hash {
             tracing::warn!("invalid parent hash");
             return BatchStatus::Drop;
         }
 
         // check the inclusion delay
-        if batch.epoch_num + self.config.chain.seq_window_size < batch.l1_inclusion_block {
+        if batch.l1_inclusion_block.is_none() {
+            tracing::warn!("missing inclusion block");
+            return BatchStatus::Drop;
+        }
+        if batch.epoch_num + self.config.chain.seq_window_size < batch.l1_inclusion_block.unwrap_or(0) {
             tracing::warn!("inclusion window elapsed");
             return BatchStatus::Drop;
         }
@@ -226,7 +231,7 @@ where
         };
 
         if let Some(batch_origin) = batch_origin {
-            if alloy_primitives::B256::from_slice(batch.epoch_hash.as_bytes()) != batch_origin.hash
+            if batch.epoch_hash != batch_origin.hash
             {
                 tracing::warn!("invalid epoch hash");
                 return BatchStatus::Drop;
@@ -434,7 +439,8 @@ fn decode_batches(channel: &Channel, chain_id: u64) -> Result<Vec<Batch>> {
                 let rlp = Rlp::new(batch_content);
                 let size = rlp.payload_info()?.total();
 
-                let batch = SingleBatch::decode(&rlp, channel.l1_inclusion_block)?;
+                let mut batch = SingleBatch::decode(&mut batch_content)?;
+                batch.l1_inclusion_block = Some(channel.l1_inclusion_block);
                 batches.push(Batch::Single(batch));
 
                 offset += size + batch_info.header_len + 1;

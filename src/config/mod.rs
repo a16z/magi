@@ -1,6 +1,6 @@
 use std::{fmt, iter, path::PathBuf, process::exit, str::FromStr};
 
-use alloy_primitives::{Address, B256, U256};
+use alloy_primitives::{Address, B256, U64, U256};
 use figment::{
     providers::{Format, Serialized, Toml},
     Figment,
@@ -293,13 +293,13 @@ impl ChainConfig {
     }
 
     /// Returns true if the block is the first block subject to the Ecotone hardfork
-    pub fn is_ecotone_activation_block(&self, l2_block_timestamp: u64) -> bool {
+    pub fn is_ecotone_activation_block(&self, l2_block_timestamp: U64) -> bool {
         l2_block_timestamp == self.ecotone_time
     }
 
     /// Returns true if Ecotone hardfork is active but the block is not the
     /// first block subject to the hardfork. Ecotone activation at genesis does not count.
-    pub fn is_ecotone_but_not_first_block(&self, l2_block_timestamp: u64) -> bool {
+    pub fn is_ecotone_but_not_first_block(&self, l2_block_timestamp: U64) -> bool {
         let is_ecotone = l2_block_timestamp >= self.ecotone_time;
 
         is_ecotone && !self.is_ecotone_activation_block(l2_block_timestamp)

@@ -6,6 +6,7 @@ use ethers::utils::{keccak256, rlp::Encodable, rlp::RlpStream};
 
 use eyre::Result;
 
+use alloy_primitives::U64;
 use crate::common::{Epoch, RawTransaction};
 use crate::config::{Config, SystemAccounts};
 use crate::derive::state::State;
@@ -136,7 +137,7 @@ impl Attributes {
         if self
             .config
             .chain
-            .is_ecotone_activation_block(input.timestamp)
+            .is_ecotone_activation_block(U64::from(input.timestamp))
         {
             tracing::info!("found Ecotone activation block; Upgrade transactions added");
             let mut ecotone_upgrade_txs = get_ecotone_upgrade_transactions();
