@@ -244,8 +244,10 @@ fn should_skip(block: &Block<Transaction>, attributes: &PayloadAttributes) -> Re
 
     let is_same = attributes_hashes == block_hashes
         && attributes.timestamp == alloy_primitives::U64::from(block.timestamp.as_u64())
-        && attributes.prev_randao == alloy_primitives::B256::from_slice(block.mix_hash.unwrap().as_bytes())
-        && attributes.suggested_fee_recipient == alloy_primitives::Address::from_slice(block.author.unwrap().as_bytes())
+        && attributes.prev_randao
+            == alloy_primitives::B256::from_slice(block.mix_hash.unwrap().as_bytes())
+        && attributes.suggested_fee_recipient
+            == alloy_primitives::Address::from_slice(block.author.unwrap().as_bytes())
         && attributes.gas_limit == alloy_primitives::U64::from(block.gas_limit.as_u64());
 
     Ok(is_same)

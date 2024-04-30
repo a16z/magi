@@ -1,8 +1,8 @@
 use alloy_consensus::TxEnvelope;
 use alloy_eips::eip2718::Encodable2718;
+use alloy_primitives::{Address, Bytes, B256, U64};
 use alloy_rpc_types::Block;
 use alloy_rpc_types::BlockTransactions;
-use alloy_primitives::{Bytes, Address, B256, U64};
 use eyre::Result;
 use serde::{Deserialize, Serialize};
 
@@ -80,19 +80,37 @@ impl TryFrom<Block> for ExecutionPayload {
             state_root: value.header.state_root,
             receipts_root: value.header.receipts_root,
             logs_bloom: value.header.logs_bloom.0.to_vec().into(),
-            prev_randao: value.header.mix_hash.ok_or_else(|| eyre::eyre!("Missing mix hash"))?,
-            block_number: value.header.number.ok_or_else(|| eyre::eyre!("Missing block number"))?.try_into()?,
+            prev_randao: value
+                .header
+                .mix_hash
+                .ok_or_else(|| eyre::eyre!("Missing mix hash"))?,
+            block_number: value
+                .header
+                .number
+                .ok_or_else(|| eyre::eyre!("Missing block number"))?
+                .try_into()?,
             gas_limit: (value.header.gas_limit as u64).try_into()?,
             gas_used: (value.header.gas_used as u64).try_into()?,
             timestamp: value.header.timestamp.try_into()?,
             extra_data: Bytes::from(value.header.extra_data.0),
             base_fee_per_gas: (value.header.base_fee_per_gas.unwrap_or_else(|| 0u64.into()) as u64)
                 .try_into()?,
-            block_hash: value.header.hash.ok_or_else(|| eyre::eyre!("Missing block hash"))?,
+            block_hash: value
+                .header
+                .hash
+                .ok_or_else(|| eyre::eyre!("Missing block hash"))?,
             transactions: encoded_txs,
             withdrawals: Some(Vec::new()),
-            blob_gas_used: value.header.blob_gas_used.map(|v| (v as u64).try_into()).transpose()?,
-            excess_blob_gas: value.header.excess_blob_gas.map(|v| (v as u64).try_into()).transpose()?,
+            blob_gas_used: value
+                .header
+                .blob_gas_used
+                .map(|v| (v as u64).try_into())
+                .transpose()?,
+            excess_blob_gas: value
+                .header
+                .excess_blob_gas
+                .map(|v| (v as u64).try_into())
+                .transpose()?,
         })
     }
 }
@@ -175,17 +193,18 @@ pub enum Status {
 
 #[cfg(test)]
 mod tests {
-    use eyre::Result;
-    use alloy_provider::{Provider, ProviderBuilder};
-    use alloy_primitives::{b256, uint};
     use crate::engine::ExecutionPayload;
+    use alloy_primitives::{b256, uint};
+    use alloy_provider::{Provider, ProviderBuilder};
+    use eyre::Result;
 
     #[tokio::test]
     async fn test_from_block_hash_to_execution_paylaod() -> Result<()> {
         let Ok(l2_rpc_url) = std::env::var("L2_TEST_RPC_URL") else {
             return Ok(());
         };
-        let checkpoint_hash = b256!("c2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973");
+        let checkpoint_hash =
+            b256!("c2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973");
         let url = reqwest::Url::parse(&l2_rpc_url)?;
         let l2_provider = ProviderBuilder::new().on_http(url);
 

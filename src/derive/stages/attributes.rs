@@ -93,7 +93,7 @@ impl Attributes {
         let seq_number = Some(self.sequence_number);
         let prev_randao = l1_info.block_info.mix_hash;
         let epoch = Some(input.epoch);
-        let transactions = Some(self.derive_transactions(input, l1_info));
+        let transactions = Some(self.derive_transactions(&input, l1_info));
         let suggested_fee_recipient = SystemAccounts::default().fee_vault;
 
         PayloadAttributes {
@@ -117,7 +117,7 @@ impl Attributes {
     /// Returns a [RawTransaction] vector containing all of the transactions for the L2 block.
     fn derive_transactions(
         &self,
-        input: BlockInput<Epoch>,
+        input: &BlockInput<Epoch>,
         l1_info: &L1Info,
     ) -> Vec<RawTransaction> {
         let mut transactions = Vec::new();
@@ -144,7 +144,7 @@ impl Attributes {
         }
 
         // Remaining transactions
-        let mut rest = input.transactions;
+        let mut rest = input.transactions.clone();
         transactions.append(&mut rest);
 
         transactions

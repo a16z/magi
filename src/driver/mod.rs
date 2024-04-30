@@ -4,8 +4,8 @@ use std::{
     time::Duration,
 };
 
+use alloy_primitives::Address;
 use ethers::providers::{Http, Provider};
-use ethers::types::Address;
 use eyre::Result;
 use reqwest::Url;
 use tokio::{
@@ -100,7 +100,7 @@ impl Driver<EngineApi> {
 
         let _addr = rpc::run_server(config.clone()).await?;
 
-        let signer = Address::from_slice(config.chain.system_config.unsafe_block_signer.as_slice());
+        let signer = config.chain.system_config.unsafe_block_signer;
         let (unsafe_block_signer_sender, unsafe_block_signer_recv) = watch::channel(signer);
 
         let (block_handler, unsafe_block_recv) =
@@ -239,10 +239,10 @@ impl<E: Engine> Driver<E> {
             unsafe_block_num > synced_block_num && unsafe_block_num - synced_block_num < 1024
         });
 
-        let next_unsafe_payload = self.future_unsafe_blocks.iter().find(|p| {
-            p.parent_hash
-                == self.engine_driver.unsafe_head.hash
-        });
+        let next_unsafe_payload = self
+            .future_unsafe_blocks
+            .iter()
+            .find(|p| p.parent_hash == self.engine_driver.unsafe_head.hash);
 
         if let Some(payload) = next_unsafe_payload {
             _ = self.engine_driver.handle_unsafe_payload(payload).await;
