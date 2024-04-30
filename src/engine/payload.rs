@@ -84,7 +84,7 @@ impl TryFrom<AlloyBlock> for ExecutionPayload {
             block_number: value.header.number.unwrap().into(),
             gas_limit: (value.header.gas_limit as u64).into(),
             gas_used: (value.header.gas_used as u64).into(),
-            timestamp: (value.header.timestamp as u64).into(),
+            timestamp: value.header.timestamp,
             extra_data: Bytes::from(value.header.extra_data.0),
             base_fee_per_gas: (value.header.base_fee_per_gas.unwrap_or_else(|| 0u64.into()) as u64)
                 .into(),
