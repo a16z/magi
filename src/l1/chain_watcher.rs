@@ -319,26 +319,17 @@ impl InnerWatcher {
                 let mut config = self.system_config;
                 match update {
                     SystemConfigUpdate::BatchSender(addr) => {
-                        config.batch_sender =
-                            alloy_primitives::Address::from_slice(addr.as_bytes());
+                        config.batch_sender = addr;
                     }
                     SystemConfigUpdate::Fees(overhead, scalar) => {
-                        let overhead_slice: &mut [u8] = &mut [0; 0];
-                        let scalar_slice: &mut [u8] = &mut [0; 0];
-                        overhead.to_big_endian(overhead_slice);
-                        scalar.to_big_endian(scalar_slice);
-                        config.l1_fee_overhead =
-                            alloy_primitives::U256::from_be_slice(overhead_slice);
-                        config.l1_fee_scalar = alloy_primitives::U256::from_be_slice(scalar_slice);
+                        config.l1_fee_overhead = overhead;
+                        config.l1_fee_scalar = scalar;
                     }
                     SystemConfigUpdate::Gas(gas) => {
-                        let gas_slice: &mut [u8] = &mut [0; 0];
-                        gas.to_big_endian(gas_slice);
-                        config.gas_limit = alloy_primitives::U256::from_be_slice(gas_slice);
+                        config.gas_limit = gas; 
                     }
                     SystemConfigUpdate::UnsafeBlockSigner(addr) => {
-                        config.unsafe_block_signer =
-                            alloy_primitives::Address::from_slice(addr.as_bytes());
+                        config.unsafe_block_signer = addr;
                     }
                 }
 
