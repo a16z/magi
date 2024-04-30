@@ -1,9 +1,10 @@
-use std::{process, time::Duration};
+use std::{process, str::FromStr, time::Duration};
 
-use ethers::{
-    providers::{Http, Middleware, Provider},
-    types::{BlockId, BlockNumber, H256},
-};
+use alloy_primitives::B256;
+use alloy_provider::ext::AdminApi;
+use alloy_provider::{Provider, ProviderBuilder, ReqwestProvider};
+use alloy_rpc_types::{BlockId, BlockNumberOrTag, BlockTransactions, RpcBlockHash};
+
 use eyre::Result;
 use tokio::{
     sync::watch::{channel, Receiver},
@@ -100,21 +101,27 @@ impl Runner {
     ///
     /// Note: the `admin` RPC method must be available on the execution client as checkpoint_sync relies on `admin_addPeer`
     pub async fn checkpoint_sync(&self) -> Result<()> {
-        let l2_provider = Provider::try_from(&self.config.l2_rpc_url)?;
-        let checkpoint_sync_url =
-            Provider::try_from(self.config.checkpoint_sync_url.as_ref().ok_or(eyre::eyre!(
-                "a checkpoint sync rpc url is required for checkpoint sync"
-            ))?)?;
+        let l2_rpc_url = reqwest::Url::parse(&self.config.l2_rpc_url)
+            .map_err(|err| eyre::eyre!(format!("unable to parse l2_rpc_url: {err}")))?;
+        let l2_provider = ProviderBuilder::new().on_http(l2_rpc_url);
+
+        let checkpoint_sync_url = self.config.checkpoint_sync_url.as_ref().ok_or(eyre::eyre!(
+            "checkpoint_sync_url is required for checkpoint sync mode"
+        ))?;
+        let checkpoint_sync_url = reqwest::Url::parse(checkpoint_sync_url)
+            .map_err(|err| eyre::eyre!(format!("unable to parse checkpoint_sync_url: {err}")))?;
+        let checkpoint_sync_provider = ProviderBuilder::new().on_http(checkpoint_sync_url);
 
         let checkpoint_block = match self.checkpoint_hash {
             Some(ref checkpoint) => {
-                let block_hash: H256 = checkpoint
-                    .parse()
-                    .expect("invalid checkpoint block hash provided");
+                let hash = B256::from_str(checkpoint)
+                    .map_err(|_| eyre::eyre!("invalid checkpoint block hash provided"))?;
+                let block_hash = RpcBlockHash::from_hash(hash, None);
+                let block_id = BlockId::Hash(block_hash);
 
-                match Self::is_epoch_boundary(block_hash, &checkpoint_sync_url).await? {
-                    true => checkpoint_sync_url
-                        .get_block_with_txs(block_hash)
+                match Self::is_epoch_boundary(block_id, &checkpoint_sync_provider).await? {
+                    true => checkpoint_sync_provider
+                        .get_block(BlockId::Hash(block_hash), true)
                         .await?
                         .expect("could not get checkpoint block"),
                     false => {
@@ -126,25 +133,30 @@ impl Runner {
             None => {
                 tracing::info!("finding the latest epoch boundary to use as checkpoint");
 
-                let mut block_number = checkpoint_sync_url.get_block_number().await?;
-                while !Self::is_epoch_boundary(block_number, &checkpoint_sync_url).await? {
+                let mut block_number = checkpoint_sync_provider.get_block_number().await?;
+                while !Self::is_epoch_boundary(block_number, &checkpoint_sync_provider).await? {
                     self.check_shutdown()?;
-                    block_number -= 1.into();
+                    block_number -= 1u64;
                 }
 
-                let block = checkpoint_sync_url
-                    .get_block(BlockId::Number(BlockNumber::Number(block_number)))
+                let block = checkpoint_sync_provider
+                    .get_block(
+                        BlockId::Number(BlockNumberOrTag::Number(block_number)),
+                        false,
+                    )
                     .await?
                     .expect("could not get block");
 
-                checkpoint_sync_url
-                    .get_block_with_txs(block.hash.expect("block hash is missing"))
+                let block_hash = block.header.hash.expect("block hash is missing");
+                let block_hash = BlockId::Hash(RpcBlockHash::from_hash(block_hash, None));
+                checkpoint_sync_provider
+                    .get_block(block_hash, true)
                     .await?
                     .expect("could not get checkpoint block")
             }
         };
 
-        let checkpoint_hash = checkpoint_block.hash.expect("block hash is missing");
+        let checkpoint_hash = checkpoint_block.header.hash.expect("block hash is missing");
         tracing::info!("using checkpoint block {}", checkpoint_hash);
 
         let engine_api = EngineApi::new(&self.config.l2_engine_url, &self.config.jwt_secret);
@@ -154,7 +166,8 @@ impl Runner {
         }
 
         // if the checkpoint block is already synced, start from the finalized head
-        if l2_provider.get_block(checkpoint_hash).await?.is_some() {
+        let block_hash = BlockId::Hash(RpcBlockHash::from_hash(checkpoint_hash, None));
+        if l2_provider.get_block(block_hash, false).await?.is_some() {
             tracing::warn!("finalized head is above the checkpoint block");
             self.start_driver().await?;
             return Ok(());
@@ -163,7 +176,7 @@ impl Runner {
         // this is a temporary fix to allow execution layer peering to work
         // TODO: use a list of whitelisted bootnodes instead
         tracing::info!("adding trusted peer to the execution layer");
-        l2_provider.add_peer(TRUSTED_PEER_ENODE.to_string()).await?;
+        l2_provider.add_peer(TRUSTED_PEER_ENODE).await?;
 
         // build the execution payload from the checkpoint block and send it to the execution client
         let checkpoint_payload = ExecutionPayload::try_from(checkpoint_block)?;
@@ -186,7 +199,11 @@ impl Runner {
 
         tracing::info!("syncing execution client to the checkpoint block...",);
 
-        while l2_provider.get_block_number().await? < checkpoint_payload.block_number {
+        let checkpoint_block_num: u64 = checkpoint_payload
+            .block_number
+            .try_into()
+            .map_err(|_| eyre::eyre!("could not convert checkpoint block number to u64"))?;
+        while l2_provider.get_block_number().await? < checkpoint_block_num {
             self.check_shutdown()?;
             sleep(Duration::from_secs(3)).await;
         }
@@ -223,18 +240,21 @@ impl Runner {
     /// Returns `true` if the L2 block is the first in an epoch (sequence number 0)
     async fn is_epoch_boundary<T: Into<BlockId> + Send + Sync>(
         block: T,
-        checkpoint_sync_url: &Provider<Http>,
+        checkpoint_sync_provider: &ReqwestProvider,
     ) -> Result<bool> {
-        let l2_block = checkpoint_sync_url
-            .get_block_with_txs(block)
+        let l2_block = checkpoint_sync_provider
+            .get_block(block.into(), true)
             .await?
             .ok_or_else(|| eyre::eyre!("could not find block"))?;
 
-        let predeploy = ethers::types::Address::from_slice(
-            SystemAccounts::default().attributes_predeploy.as_slice(),
-        );
-        let sequence_number = &l2_block
-            .transactions
+        let predeploy = SystemAccounts::default().attributes_predeploy;
+        let full_txs = if let BlockTransactions::Full(txs) = l2_block.transactions {
+            txs
+        } else {
+            tracing::error!("could not get full transactions from block");
+            return Ok(false);
+        };
+        let sequence_number = &full_txs
             .iter()
             .find(|tx| tx.to.map_or(false, |to| to == predeploy))
             .expect("could not find setL1BlockValues tx in the epoch boundary search")
