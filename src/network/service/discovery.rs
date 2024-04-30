@@ -1,16 +1,17 @@
+//! Module handles Discv5 discovery
+
 use std::{str::FromStr, time::Duration};
 
+use super::enr::OpStackEnrData;
 use discv5::{
     enr::{CombinedKey, Enr, EnrBuilder, NodeId},
     Discv5, Discv5Config,
 };
-use ethers::utils::rlp;
 use eyre::Result;
 use tokio::{
     sync::mpsc::{self, Receiver},
     time::sleep,
 };
-use unsigned_varint::{decode, encode};
 
 use super::types::{NetworkAddress, Peer};
 
@@ -79,43 +80,6 @@ fn create_disc(chain_id: u64) -> Result<Discv5> {
     let config = Discv5Config::default();
 
     Discv5::new(enr, key, config).map_err(|_| eyre::eyre!("could not create disc service"))
-}
-
-/// The unique L2 network identifier
-#[derive(Debug)]
-struct OpStackEnrData {
-    /// Chain ID
-    chain_id: u64,
-    /// The version. Always set to 0.
-    version: u64,
-}
-
-impl TryFrom<&[u8]> for OpStackEnrData {
-    type Error = eyre::Report;
-
-    /// Converts a slice of RLP encoded bytes to [OpStackEnrData]
-    fn try_from(value: &[u8]) -> Result<Self> {
-        let bytes: Vec<u8> = rlp::decode(value)?;
-        let (chain_id, rest) = decode::u64(&bytes)?;
-        let (version, _) = decode::u64(rest)?;
-
-        Ok(Self { chain_id, version })
-    }
-}
-
-impl From<OpStackEnrData> for Vec<u8> {
-    /// Converts [OpStackEnrData] to a vector of bytes.
-    fn from(value: OpStackEnrData) -> Vec<u8> {
-        let mut chain_id_buf = encode::u128_buffer();
-        let chain_id_slice = encode::u128(value.chain_id as u128, &mut chain_id_buf);
-
-        let mut version_buf = encode::u128_buffer();
-        let version_slice = encode::u128(value.version as u128, &mut version_buf);
-
-        let opstack = [chain_id_slice, version_slice].concat();
-
-        rlp::encode(&opstack).to_vec()
-    }
 }
 
 /// Default bootnodes to use. Currently consists of 2 Base bootnodes & 1 Optimism bootnode.

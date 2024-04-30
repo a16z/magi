@@ -1,3 +1,4 @@
+/// Module contains commonly used types in the p2p system.
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
 use discv5::enr::{CombinedKey, Enr};
