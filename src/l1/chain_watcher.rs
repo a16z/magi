@@ -330,8 +330,6 @@ impl InnerWatcher {
                         config.unsafe_block_signer = addr;
                     }
                 }
-
-                let update_block: u64 = update_block;
                 self.system_config_update = (update_block, Some(config));
             } else {
                 self.system_config_update = (to_block, None);
@@ -480,8 +478,10 @@ impl InnerWatcher {
             return Ok(batcher_transactions_data);
         }
 
-        let timestamp: u64 = block.header.timestamp;
-        let slot = self.blob_fetcher.get_slot_from_time(timestamp).await?;
+        let slot = self
+            .blob_fetcher
+            .get_slot_from_time(block.header.timestamp)
+            .await?;
 
         // perf: fetch only the required indexes instead of all
         let blobs = self.blob_fetcher.fetch_blob_sidecars(slot).await?;
