@@ -13,7 +13,7 @@ use tokio::{
 
 use crate::{
     config::{Config, SyncMode, SystemAccounts},
-    driver::Driver,
+    driver::NodeDriver,
     engine::{Engine, EngineApi, ExecutionPayload, ForkchoiceState, Status},
 };
 
@@ -217,7 +217,7 @@ impl Runner {
     /// Creates and starts the [Driver] which handles the derivation sync process.
     async fn start_driver(&self) -> Result<()> {
         let mut driver =
-            Driver::from_config(self.config.clone(), self.shutdown_recv.clone()).await?;
+            NodeDriver::from_config(self.config.clone(), self.shutdown_recv.clone()).await?;
 
         if let Err(err) = driver.start().await {
             tracing::error!("driver failure: {}", err);

@@ -1,12 +1,14 @@
+//! A module to handle the payload attributes derivation stage.
+
 use std::sync::{Arc, RwLock};
 
+use alloy_rlp::Encodable;
+use alloy_primitives::{Address, B256, keccak256, U64, U256};
+
 use ethers::abi::{decode, encode, ParamType, Token};
-use ethers::types::{Address, H256, U256};
-use ethers::utils::{keccak256, rlp::Encodable, rlp::RlpStream};
 
 use eyre::Result;
 
-use alloy_primitives::U64;
 use crate::common::{Epoch, RawTransaction};
 use crate::config::{Config, SystemAccounts};
 use crate::derive::state::State;
@@ -25,7 +27,7 @@ pub struct Attributes {
     /// The sequence number of the block being processed
     sequence_number: u64,
     /// The block hash of the corresponding L1 epoch block.
-    epoch_hash: H256,
+    epoch_hash: B256,
     /// The global Magi [Config]
     config: Arc<Config>,
 }
@@ -48,7 +50,7 @@ impl PurgeableIterator for Attributes {
         self.block_input_iter.purge();
         self.sequence_number = 0;
         self.epoch_hash =
-            ethers::types::H256::from_slice(self.state.read().unwrap().safe_epoch.hash.as_slice());
+            self.state.read().unwrap().safe_epoch.hash;
     }
 }
 
@@ -66,7 +68,7 @@ impl Attributes {
             block_input_iter,
             state,
             sequence_number: seq,
-            epoch_hash: H256::from_slice(epoch_hash.as_slice()),
+            epoch_hash,
             config,
         }
     }
@@ -78,11 +80,10 @@ impl Attributes {
         tracing::debug!("deriving attributes from block: {}", input.epoch.number);
         tracing::debug!("batch epoch hash: {:?}", input.epoch.hash);
 
-        let epoch_hash = H256::from_slice(input.epoch.hash.as_slice());
-        self.update_sequence_number(epoch_hash);
+        self.update_sequence_number(input.epoch.hash);
 
         let state = self.state.read().unwrap();
-        let l1_info = state.l1_info_by_hash(epoch_hash).unwrap();
+        let l1_info = state.l1_info_by_hash(input.epoch.hash).unwrap();
 
         let withdrawals = if input.timestamp >= self.config.chain.canyon_time {
             Some(Vec::new())
@@ -98,12 +99,12 @@ impl Attributes {
         let suggested_fee_recipient = SystemAccounts::default().fee_vault;
 
         PayloadAttributes {
-            timestamp: alloy_primitives::U64::from(input.timestamp),
+            timestamp: U64::from(input.timestamp),
             prev_randao,
             suggested_fee_recipient,
             transactions,
             no_tx_pool: true,
-            gas_limit: alloy_primitives::U64::from(l1_info.system_config.gas_limit),
+            gas_limit: U64::from(l1_info.system_config.gas_limit),
             withdrawals,
             epoch,
             l1_inclusion_block,
@@ -185,7 +186,7 @@ impl Attributes {
     /// Sets the current sequence number. If `self.epoch_hash` != `batch_epoch_hash` this is set to 0; otherwise it increments by 1.
     ///
     /// Also sets `self.epoch_hash` to `batch_epoch_hash`
-    fn update_sequence_number(&mut self, batch_epoch_hash: H256) {
+    fn update_sequence_number(&mut self, batch_epoch_hash: B256) {
         if self.epoch_hash != batch_epoch_hash {
             self.sequence_number = 0;
         } else {
@@ -197,10 +198,10 @@ impl Attributes {
 }
 
 /// Represents a deposited transaction
-#[derive(Debug)]
-struct DepositedTransaction {
+#[derive(Debug, Clone)]
+pub struct DepositedTransaction {
     /// Unique identifier to identify the origin of the deposit
-    source_hash: H256,
+    source_hash: B256,
     /// Address of the sender
     from: Address,
     /// Address of the recipient, or None if the transaction is a contract creation
@@ -220,12 +221,12 @@ struct DepositedTransaction {
 impl From<AttributesDeposited> for DepositedTransaction {
     /// Converts [AttributesDeposited] to a [DepositedTransaction]
     fn from(attributes_deposited: AttributesDeposited) -> Self {
-        let hash = attributes_deposited.hash.to_fixed_bytes();
-        let seq = H256::from_low_u64_be(attributes_deposited.sequence_number).to_fixed_bytes();
+        let hash = attributes_deposited.hash;
+        let seq = B256::from_slice(&attributes_deposited.sequence_number.to_be_bytes());
         let h = keccak256([hash, seq].concat());
 
-        let domain = H256::from_low_u64_be(1).to_fixed_bytes();
-        let source_hash = H256::from_slice(&keccak256([domain, h].concat()));
+        let domain = B256::from_slice(&1u64.to_be_bytes());
+        let source_hash = keccak256([domain, h].concat());
 
         let system_accounts = SystemAccounts::default();
         let from = system_accounts.attributes_depositor;
@@ -235,10 +236,10 @@ impl From<AttributesDeposited> for DepositedTransaction {
 
         Self {
             source_hash,
-            from: Address::from_slice(from.as_slice()),
-            to: to.map(|t| Address::from_slice(t.as_slice())),
-            mint: U256::zero(),
-            value: U256::zero(),
+            from,
+            to,
+            mint: U256::ZERO,
+            value: U256::ZERO,
             gas: attributes_deposited.gas,
             is_system_tx: attributes_deposited.is_system_tx,
             data,
@@ -249,12 +250,12 @@ impl From<AttributesDeposited> for DepositedTransaction {
 impl From<UserDeposited> for DepositedTransaction {
     /// Converts [UserDeposited] to a [DepositedTransaction]
     fn from(user_deposited: UserDeposited) -> Self {
-        let hash = user_deposited.l1_block_hash.to_fixed_bytes();
+        let hash = user_deposited.l1_block_hash;
         let log_index = user_deposited.log_index.into();
         let h = keccak256([hash, log_index].concat());
 
-        let domain = H256::from_low_u64_be(0).to_fixed_bytes();
-        let source_hash = H256::from_slice(&keccak256([domain, h].concat()));
+        let domain = B256::ZERO;
+        let source_hash = keccak256([domain, h].concat());
 
         let to = if user_deposited.is_creation {
             None
@@ -276,6 +277,16 @@ impl From<UserDeposited> for DepositedTransaction {
 }
 
 impl Encodable for DepositedTransaction {
+    fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
+        out.put(&[0x7E]);
+        out.put_u8(8); // Start the list
+        
+        out.put(&self.source_hash);
+        
+    }
+}
+
+impl Encodable for  {
     /// Converts a [DepositedTransaction] to RLP bytes and appends to the stream.
     fn rlp_append(&self, s: &mut RlpStream) {
         s.append_raw(&[0x7E], 1);
@@ -299,7 +310,7 @@ impl Encodable for DepositedTransaction {
 
 /// Represents the attributes provided as calldata in an attributes deposited transaction.
 #[derive(Debug)]
-struct AttributesDeposited {
+pub struct AttributesDeposited {
     /// The L1 epoch block number
     number: u64,
     /// The L1 epoch block timestamp
@@ -307,11 +318,11 @@ struct AttributesDeposited {
     /// The L1 epoch base fee
     base_fee: U256,
     /// The L1 epoch block hash
-    hash: H256,
+    hash: B256,
     /// The L2 block's position in the epoch
     sequence_number: u64,
     /// A versioned hash of the current authorized batcher sender.
-    batcher_hash: H256,
+    batcher_hash: B256,
     /// The current L1 fee overhead to apply to L2 transactions cost computation. Unused after Ecotone hard fork.
     fee_overhead: U256,
     /// The current L1 fee scalar to apply to L2 transactions cost computation. Unused after Ecotone hard fork.
@@ -330,14 +341,14 @@ impl AttributesDeposited {
 
         let gas = if is_regolith { 1_000_000 } else { 150_000_000 };
 
-        let batcher_hash = H256::from_slice(l1_info.system_config.batcher_hash().as_slice());
-        let fee_overhead = U256::from(l1_info.system_config.l1_fee_overhead.to_be_bytes());
-        let fee_scalar = U256::from(l1_info.system_config.l1_fee_scalar.to_be_bytes());
+        let batcher_hash = l1_info.system_config.batcher_hash();
+        let fee_overhead = l1_info.system_config.l1_fee_overhead;
+        let fee_scalar = l1_info.system_config.l1_fee_scalar;
         Self {
             number: l1_info.block_info.number,
             timestamp: l1_info.block_info.timestamp,
-            base_fee: U256::from_big_endian(&l1_info.block_info.base_fee.to_be_bytes::<32>()),
-            hash: H256::from_slice(l1_info.block_info.hash.as_slice()),
+            base_fee: l1_info.block_info.base_fee,
+            hash: l1_info.block_info.hash,
             sequence_number: seq,
             batcher_hash,
             fee_overhead,
@@ -353,9 +364,9 @@ impl AttributesDeposited {
             Token::Uint(self.number.into()),
             Token::Uint(self.timestamp.into()),
             Token::Uint(self.base_fee),
-            Token::FixedBytes(self.hash.as_fixed_bytes().to_vec()),
+            Token::FixedBytes(self.hash.to_vec()),
             Token::Uint(self.sequence_number.into()),
-            Token::FixedBytes(self.batcher_hash.as_fixed_bytes().to_vec()),
+            Token::FixedBytes(self.batcher_hash.to_vec()),
             Token::Uint(self.fee_overhead),
             Token::Uint(self.fee_scalar),
         ];
@@ -387,7 +398,7 @@ pub struct UserDeposited {
     /// The L1 block number this was submitted in.
     pub l1_block_num: u64,
     /// The L1 block hash this was submitted in.
-    pub l1_block_hash: H256,
+    pub l1_block_hash: B256,
     /// The index of the emitted deposit event log in the L1 block.
     pub log_index: U256,
 }
@@ -411,8 +422,8 @@ impl TryFrom<alloy_rpc_types::Log> for UserDeposited {
 
         let from = Address::from_slice(log.topics()[1].as_slice());
         let to = Address::from_slice(log.topics()[2].as_slice());
-        let mint = U256::from_big_endian(&opaque_data[0..32]);
-        let value = U256::from_big_endian(&opaque_data[32..64]);
+        let mint = U256::from_be_slice(&opaque_data[0..32]);
+        let value = U256::from_be_slice(&opaque_data[32..64]);
         let gas = u64::from_be_bytes(opaque_data[64..72].try_into()?);
         let is_creation = opaque_data[72] != 0;
         let data = opaque_data[73..].to_vec();
@@ -420,7 +431,7 @@ impl TryFrom<alloy_rpc_types::Log> for UserDeposited {
         let l1_block_num = log.block_number.ok_or(eyre::eyre!("block num not found"))?;
 
         let l1_block_hash = log.block_hash.ok_or(eyre::eyre!("block hash not found"))?;
-        let log_index = log.log_index.unwrap();
+        let log_index = U256::from(log.log_index.unwrap());
 
         Ok(Self {
             from,
@@ -431,8 +442,8 @@ impl TryFrom<alloy_rpc_types::Log> for UserDeposited {
             is_creation,
             data,
             l1_block_num,
-            l1_block_hash: H256::from_slice(l1_block_hash.as_slice()),
-            log_index: log_index.into(),
+            l1_block_hash,
+            log_index,
         })
     }
 }

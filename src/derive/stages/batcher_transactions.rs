@@ -1,14 +1,17 @@
+//! A module to handle batcher transactions and frames
+
 use std::sync::mpsc;
 
 use eyre::Result;
 use std::collections::VecDeque;
+use alloy_primitives::Bytes;
 
 use crate::derive::PurgeableIterator;
 
 /// Represents a transaction sent to the `Batch Inbox` on L1.
 pub struct BatcherTransactionMessage {
     /// The L2 transactions included in this batch
-    pub txs: Vec<bytes::Bytes>,
+    pub txs: Vec<Bytes>,
     /// The L1 block number this transaction was included in
     pub l1_origin: u64,
 }
@@ -178,7 +181,7 @@ mod tests {
 
     #[test]
     fn test_push_tx() {
-        let data = bytes::Bytes::from(hex::decode(TX_DATA).unwrap());
+        let data = Bytes::from(hex::decode(TX_DATA).unwrap());
         let txs = vec![data];
 
         let (tx, rx) = mpsc::channel();

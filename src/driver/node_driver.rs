@@ -8,7 +8,7 @@ use std::{
 };
 
 use alloy_primitives::Address;
-use alloy_provider::{ProviderBuilder, Provider};
+use alloy_provider::ProviderBuilder;
 use eyre::Result;
 use reqwest::Url;
 use tokio::{
@@ -27,7 +27,7 @@ use crate::{
     telemetry::metrics,
 };
 
-use crate::driver::{HeadInfoFetcher, HeadInfoQuery, EngineDriver};
+use crate::driver::{EngineDriver, HeadInfoFetcher, HeadInfoQuery};
 
 /// NodeDriver is responsible for advancing the execution node by feeding
 /// the derived chain into the engine API
@@ -64,9 +64,7 @@ impl NodeDriver<EngineApi> {
         let url = Url::parse(&config.l2_rpc_url)?;
         let provider = ProviderBuilder::new().on_http(url);
 
-        let head =
-            HeadInfoQuery::get_head_info(&HeadInfoFetcher::from(&provider), &config)
-                .await;
+        let head = HeadInfoQuery::get_head_info(&HeadInfoFetcher::from(&provider), &config).await;
 
         let finalized_head = head.l2_block_info;
         let finalized_epoch = head.l1_epoch;
@@ -361,7 +359,8 @@ fn get_l1_start_block(epoch_number: u64, channel_timeout: u64) -> u64 {
 mod tests {
     use std::{path::PathBuf, str::FromStr};
 
-    use alloy_rpc_types::{BlockId, BlockNumberOrTag}; 
+    use alloy_provider::Provider;
+    use alloy_rpc_types::{BlockId, BlockNumberOrTag};
     use eyre::Result;
     use tokio::sync::watch::channel;
 

@@ -1,11 +1,13 @@
-/// A module to handle the payload attributes derivation stage
+//! A module defining the stages of the derivation pipeline.
+
 pub mod attributes;
+pub use attributes::{Attributes, DepositedTransaction, AttributesDeposited, UserDeposited};
 
-/// A module to handle batcher transactions and frames
 pub mod batcher_transactions;
+pub use batcher_transactions::{BatcherTransactions, BatcherTransactionMessage, BatcherTransaction, Frame};
 
-/// A module to handle processing of a [Batch](crate::derive::stages::batches::Batch)
 pub mod batches;
+pub use batches::Batches;
 
 /// A module to handle building a [BlockInput](crate::derive::stages::block_input::BlockInput)
 mod block_input;

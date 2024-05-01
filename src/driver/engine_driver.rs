@@ -3,8 +3,8 @@
 use std::sync::Arc;
 
 use alloy_primitives::keccak256;
-use alloy_rpc_types::{BlockTransactions, Block};
 use alloy_provider::{Provider, ReqwestProvider};
+use alloy_rpc_types::{Block, BlockTransactions};
 use eyre::Result;
 
 use crate::{
@@ -113,11 +113,7 @@ impl<E: Engine> EngineDriver<E> {
     }
 
     /// Updates the forkchoice by sending `engine_forkchoiceUpdatedV2` (v3 post Ecotone) to the engine with no payload.
-    async fn skip_attributes(
-        &mut self,
-        attributes: PayloadAttributes,
-        block: Block,
-    ) -> Result<()> {
+    async fn skip_attributes(&mut self, attributes: PayloadAttributes, block: Block) -> Result<()> {
         let new_epoch = *attributes.epoch.as_ref().unwrap();
         let new_head = BlockInfo::try_from(block)?;
         self.update_safe_head(new_head, new_epoch, false)?;
@@ -236,19 +232,18 @@ fn should_skip(block: &Block, attributes: &PayloadAttributes) -> Result<bool> {
         return Ok(true);
     };
 
-    let block_hashes = txs
-        .iter()
-        .map(|tx| tx.hash())
-        .collect::<Vec<_>>();
+    let block_hashes = txs.iter().map(|tx| tx.hash()).collect::<Vec<_>>();
 
     tracing::debug!("attribute hashes: {:?}", attributes_hashes);
     tracing::debug!("block hashes: {:?}", block_hashes);
 
     let is_same = attributes_hashes == block_hashes
         && attributes.timestamp == block.header.timestamp
-        && block.header.mix_hash.map_or(false, |m| m == attributes.prev_randao)
-        && attributes.suggested_fee_recipient
-            == block.header.miner
+        && block
+            .header
+            .mix_hash
+            .map_or(false, |m| m == attributes.prev_randao)
+        && attributes.suggested_fee_recipient == block.header.miner
         && attributes.gas_limit == block.header.gas_limit;
 
     Ok(is_same)

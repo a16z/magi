@@ -1,7 +1,7 @@
 //! A module to handle conversions to a [HeadInfo] struct.
 
+use alloy_rpc_types::{Block, BlockTransactions};
 use eyre::Result;
-use alloy_rpc_types::{BlockTransactions, Block};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -88,10 +88,10 @@ impl HeadInfo {
 mod tests {
     mod head_info_bedrock {
         use crate::driver::HeadInfo;
-        use eyre::Result;
-        use alloy_provider::{Provider, ProviderBuilder};
         use alloy_primitives::b256;
+        use alloy_provider::{Provider, ProviderBuilder};
         use alloy_rpc_types::Block;
+        use eyre::Result;
 
         #[test]
         fn should_fail_conversion_from_a_block_to_head_info_if_missing_l1_deposited_tx(
@@ -227,7 +227,8 @@ mod tests {
                 eyre::bail!("L2_TEST_RPC_URL is not set");
             };
 
-            let l2_block_hash = b256!("75d4a658d7b6430c874c5518752a8d90fb1503eccd6ae4cfc97fd4aedeebb939");
+            let l2_block_hash =
+                b256!("75d4a658d7b6430c874c5518752a8d90fb1503eccd6ae4cfc97fd4aedeebb939");
 
             let expected_l2_block_number = 8428108;
             let expected_l2_block_timestamp = 1682284284;
@@ -240,7 +241,10 @@ mod tests {
             let l2_rpc_url = reqwest::Url::parse(&l2_rpc_url)?;
             let l2_provider = ProviderBuilder::new().on_http(l2_rpc_url);
 
-            let l2_block = l2_provider.get_block(l2_block_hash.into(), true).await?.unwrap();
+            let l2_block = l2_provider
+                .get_block(l2_block_hash.into(), true)
+                .await?
+                .unwrap();
             let head = HeadInfo::try_from_bedrock_block(l2_block)?;
 
             let HeadInfo {
@@ -264,9 +268,9 @@ mod tests {
 
     mod head_info_ecotone {
         use crate::driver::HeadInfo;
-        use eyre::Result;
-        use alloy_provider::{Provider, ProviderBuilder};
         use alloy_primitives::b256;
+        use alloy_provider::{Provider, ProviderBuilder};
+        use eyre::Result;
 
         #[tokio::test]
         async fn test_head_info_from_l2_block_hash() -> Result<()> {
@@ -277,7 +281,8 @@ mod tests {
                 eyre::bail!("L2_TEST_RPC_URL is not set");
             };
 
-            let l2_block_hash = b256!("bdd36f0c7ec8e17647dac2780130a842c47dba0025387e80408c161fdb115412");
+            let l2_block_hash =
+                b256!("bdd36f0c7ec8e17647dac2780130a842c47dba0025387e80408c161fdb115412");
 
             let expected_l2_block_number = 21564471;
             let expected_l2_block_timestamp = 1708557010;
@@ -290,7 +295,10 @@ mod tests {
             let l2_rpc_url = reqwest::Url::parse(&l2_rpc_url)?;
             let l2_provider = ProviderBuilder::new().on_http(l2_rpc_url);
 
-            let l2_block = l2_provider.get_block(l2_block_hash.into(), true).await?.unwrap();
+            let l2_block = l2_provider
+                .get_block(l2_block_hash.into(), true)
+                .await?
+                .unwrap();
             let head = HeadInfo::try_from_ecotone_block(l2_block)?;
 
             let HeadInfo {

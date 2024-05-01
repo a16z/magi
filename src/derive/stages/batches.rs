@@ -1,11 +1,13 @@
+//! A module to handle processing of a [Batch].
+
+use alloy_rlp::Rlp;
+use alloy_rlp::Decodable;
 use core::fmt::Debug;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::io::Read;
 use std::sync::{Arc, RwLock};
-use alloy_rlp::Decodable;
 
-use ethers::utils::rlp::Rlp;
 use eyre::Result;
 use libflate::zlib::Decoder;
 
@@ -215,7 +217,9 @@ where
             tracing::warn!("missing inclusion block");
             return BatchStatus::Drop;
         }
-        if batch.epoch_num + self.config.chain.seq_window_size < batch.l1_inclusion_block.unwrap_or(0) {
+        if batch.epoch_num + self.config.chain.seq_window_size
+            < batch.l1_inclusion_block.unwrap_or(0)
+        {
             tracing::warn!("inclusion window elapsed");
             return BatchStatus::Drop;
         }
@@ -231,8 +235,7 @@ where
         };
 
         if let Some(batch_origin) = batch_origin {
-            if batch.epoch_hash != batch_origin.hash
-            {
+            if batch.epoch_hash != batch_origin.hash {
                 tracing::warn!("invalid epoch hash");
                 return BatchStatus::Drop;
             }
@@ -426,10 +429,7 @@ fn decode_batches(channel: &Channel, chain_id: u64) -> Result<Vec<Batch>> {
     let mut offset = 0;
 
     while offset < channel_data.len() {
-        let batch_rlp = Rlp::new(&channel_data[offset..]);
-        let batch_info = batch_rlp.payload_info()?;
-
-        let batch_data: Vec<u8> = batch_rlp.as_val()?;
+        let batch_data = &channel_data[offset..];
 
         let version = batch_data[0];
         let batch_content = &batch_data[1..];
@@ -437,13 +437,13 @@ fn decode_batches(channel: &Channel, chain_id: u64) -> Result<Vec<Batch>> {
         match version {
             0 => {
                 let rlp = Rlp::new(batch_content);
-                let size = rlp.payload_info()?.total();
+                let size = rlp.get_next::<alloy_rlp::Header>()?.ok_or_else(|| eyre::eyre!("failed to get header"))?.len();
 
                 let mut batch = SingleBatch::decode(&mut batch_content)?;
                 batch.l1_inclusion_block = Some(channel.l1_inclusion_block);
                 batches.push(Batch::Single(batch));
 
-                offset += size + batch_info.header_len + 1;
+                offset += size + 1;
             }
             1 => {
                 let batch = SpanBatch::decode(batch_content, channel.l1_inclusion_block, chain_id)?;

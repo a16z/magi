@@ -7,7 +7,7 @@ pub mod engine_driver;
 pub use engine_driver::EngineDriver;
 
 pub mod info;
-pub use info::{InnerProvider, HeadInfoFetcher, HeadInfoQuery}; 
+pub use info::{HeadInfoFetcher, HeadInfoQuery, InnerProvider};
 
 pub mod types;
 pub use types::HeadInfo;
