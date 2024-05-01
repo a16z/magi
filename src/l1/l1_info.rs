@@ -1,4 +1,5 @@
-use ethers::types::{Block, Transaction, H256, U256};
+use alloy_primitives::{B256, U256};
+use alloy_rpc_types::Block;
 
 use crate::{config::SystemConfig, derive::stages::attributes::UserDeposited};
 
@@ -25,43 +26,47 @@ pub struct L1BlockInfo {
     /// L1 block number
     pub number: u64,
     /// L1 block hash
-    pub hash: H256,
+    pub hash: B256,
     /// L1 block timestamp
     pub timestamp: u64,
     /// L1 base fee per gas
     pub base_fee: U256,
     /// L1 mix hash (prevrandao)
-    pub mix_hash: H256,
+    pub mix_hash: B256,
     /// Post-Ecotone beacon block root
-    pub parent_beacon_block_root: Option<H256>,
+    pub parent_beacon_block_root: Option<B256>,
 }
 
-impl TryFrom<&Block<Transaction>> for L1BlockInfo {
+impl TryFrom<&Block> for L1BlockInfo {
     type Error = eyre::Error;
 
-    fn try_from(value: &Block<Transaction>) -> std::result::Result<Self, Self::Error> {
+    fn try_from(value: &alloy_rpc_types::Block) -> std::result::Result<Self, Self::Error> {
         let number = value
+            .header
             .number
-            .ok_or(eyre::eyre!("block not included"))?
-            .as_u64();
+            .ok_or(eyre::eyre!("block not included"))?;
 
-        let hash = value.hash.ok_or(eyre::eyre!("block not included"))?;
+        let hash = value.header.hash.ok_or(eyre::eyre!("block not included"))?;
 
-        let timestamp = value.timestamp.as_u64();
+        let timestamp = value.header.timestamp;
 
         let base_fee = value
+            .header
             .base_fee_per_gas
             .ok_or(eyre::eyre!("block is pre london"))?;
 
-        let mix_hash = value.mix_hash.ok_or(eyre::eyre!("block not included"))?;
+        let mix_hash = value
+            .header
+            .mix_hash
+            .ok_or(eyre::eyre!("block not included"))?;
 
-        let parent_beacon_block_root = value.parent_beacon_block_root;
+        let parent_beacon_block_root = value.header.parent_beacon_block_root;
 
         Ok(L1BlockInfo {
             number,
             hash,
             timestamp,
-            base_fee,
+            base_fee: U256::from(base_fee),
             mix_hash,
             parent_beacon_block_root,
         })

@@ -1,4 +1,4 @@
-use bytes::Bytes;
+use alloy_primitives::Bytes;
 use eyre::Result;
 
 const MAX_BLOB_DATA_SIZE: usize = (4 * 31 + 3) * 1024 - 4;
