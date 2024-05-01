@@ -1,8 +1,7 @@
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::SystemTime;
 
-use ethers::types::{Address, Bytes, Signature, H256};
-use ethers::utils::keccak256;
+use alloy_primitives::{keccak256, Address, Bytes, Signature, B256, U64};
 use eyre::Result;
 use libp2p::gossipsub::{IdentTopic, Message, MessageAcceptance, TopicHash};
 use ssz_rs::{prelude::*, List, Vector, U256};
@@ -32,7 +31,7 @@ struct ExecutionPayloadEnvelope {
     signature: Signature,
     hash: PayloadHash,
     #[allow(unused)]
-    parent_beacon_block_root: Option<H256>,
+    parent_beacon_block_root: Option<B256>,
 }
 
 impl Handler for BlockHandler {
@@ -102,13 +101,17 @@ impl BlockHandler {
             .unwrap()
             .as_secs();
 
-        let is_future = envelope.payload.timestamp.as_u64() > current_timestamp + 5;
-        let is_past = envelope.payload.timestamp.as_u64() < current_timestamp - 60;
+        let timestamp: u64 = envelope.payload.timestamp.try_into().unwrap_or_default();
+        let is_future = timestamp > current_timestamp + 5;
+        let is_past = timestamp < current_timestamp - 60;
         let time_valid = !(is_future || is_past);
 
         let msg = envelope.hash.signature_message(self.chain_id);
         let block_signer = *self.unsafe_signer_recv.borrow();
-        let sig_valid = envelope.signature.verify(msg, block_signer).is_ok();
+        let sig_valid = envelope
+            .signature
+            .recover_address_from_prehash(&msg)
+            .map_or(false, |addr| addr == block_signer);
 
         time_valid && sig_valid
     }
@@ -153,7 +156,7 @@ fn decode_post_ecotone_block_msg(data: Vec<u8>) -> Result<ExecutionPayloadEnvelo
 
     let signature = Signature::try_from(sig_data)?;
 
-    let parent_beacon_block_root = Some(H256::from_slice(parent_beacon_block_root));
+    let parent_beacon_block_root = Some(B256::from_slice(parent_beacon_block_root));
 
     let payload: ExecutionPayloadV3SSZ = deserialize(block_data)?;
     let payload = ExecutionPayload::from(payload);
@@ -169,30 +172,30 @@ fn decode_post_ecotone_block_msg(data: Vec<u8>) -> Result<ExecutionPayloadEnvelo
 }
 
 /// Represents the Keccak256 hash of the block
-struct PayloadHash(H256);
+struct PayloadHash(B256);
 
 impl From<&[u8]> for PayloadHash {
     /// Returns the Keccak256 hash of a sequence of bytes
     fn from(value: &[u8]) -> Self {
-        Self(keccak256(value).into())
+        Self(keccak256(value))
     }
 }
 
 impl PayloadHash {
     /// The expected message that should be signed by the unsafe block signer.
-    fn signature_message(&self, chain_id: u64) -> H256 {
-        let domain = H256::zero();
-        let chain_id = H256::from_low_u64_be(chain_id);
+    fn signature_message(&self, chain_id: u64) -> B256 {
+        let domain = B256::ZERO;
+        let chain_id = B256::from_slice(&chain_id.to_be_bytes());
         let payload_hash = self.0;
 
         let data: Vec<u8> = [
-            domain.as_bytes(),
-            chain_id.as_bytes(),
-            payload_hash.as_bytes(),
+            domain.as_slice(),
+            chain_id.as_slice(),
+            payload_hash.as_slice(),
         ]
         .concat();
 
-        keccak256(data).into()
+        keccak256(data)
     }
 }
 
@@ -245,10 +248,10 @@ impl From<ExecutionPayloadV1SSZ> for ExecutionPayload {
             receipts_root: convert_hash(value.receipts_root),
             logs_bloom: convert_byte_vector(value.logs_bloom),
             prev_randao: convert_hash(value.prev_randao),
-            block_number: value.block_number.into(),
-            gas_limit: value.gas_limit.into(),
-            gas_used: value.gas_used.into(),
-            timestamp: value.timestamp.into(),
+            block_number: value.block_number.try_into().unwrap_or_default(),
+            gas_limit: value.gas_limit.try_into().unwrap_or_default(),
+            gas_used: value.gas_used.try_into().unwrap_or_default(),
+            timestamp: value.timestamp.try_into().unwrap_or_default(),
             extra_data: convert_byte_list(value.extra_data),
             base_fee_per_gas: convert_uint(value.base_fee_per_gas),
             block_hash: convert_hash(value.block_hash),
@@ -319,10 +322,10 @@ impl From<ExecutionPayloadV2SSZ> for ExecutionPayload {
             receipts_root: convert_hash(value.receipts_root),
             logs_bloom: convert_byte_vector(value.logs_bloom),
             prev_randao: convert_hash(value.prev_randao),
-            block_number: value.block_number.into(),
-            gas_limit: value.gas_limit.into(),
-            gas_used: value.gas_used.into(),
-            timestamp: value.timestamp.into(),
+            block_number: value.block_number.try_into().unwrap_or_default(),
+            gas_limit: value.gas_limit.try_into().unwrap_or_default(),
+            gas_used: value.gas_used.try_into().unwrap_or_default(),
+            timestamp: value.timestamp.try_into().unwrap_or_default(),
             extra_data: convert_byte_list(value.extra_data),
             base_fee_per_gas: convert_uint(value.base_fee_per_gas),
             block_hash: convert_hash(value.block_hash),
@@ -364,24 +367,24 @@ impl From<ExecutionPayloadV3SSZ> for ExecutionPayload {
             receipts_root: convert_hash(value.receipts_root),
             logs_bloom: convert_byte_vector(value.logs_bloom),
             prev_randao: convert_hash(value.prev_randao),
-            block_number: value.block_number.into(),
-            gas_limit: value.gas_limit.into(),
-            gas_used: value.gas_used.into(),
-            timestamp: value.timestamp.into(),
+            block_number: value.block_number.try_into().unwrap_or_default(),
+            gas_limit: value.gas_limit.try_into().unwrap_or_default(),
+            gas_used: value.gas_used.try_into().unwrap_or_default(),
+            timestamp: value.timestamp.try_into().unwrap_or_default(),
             extra_data: convert_byte_list(value.extra_data),
             base_fee_per_gas: convert_uint(value.base_fee_per_gas),
             block_hash: convert_hash(value.block_hash),
             transactions: convert_tx_list(value.transactions),
             withdrawals: Some(Vec::new()),
-            blob_gas_used: Some(value.blob_gas_used.into()),
-            excess_blob_gas: Some(value.excess_blob_gas.into()),
+            blob_gas_used: Some(value.blob_gas_used.try_into().unwrap_or_default()),
+            excess_blob_gas: Some(value.excess_blob_gas.try_into().unwrap_or_default()),
         }
     }
 }
 
-/// Converts [Bytes32] into [H256]
-fn convert_hash(bytes: Bytes32) -> H256 {
-    H256::from_slice(bytes.as_slice())
+/// Converts [Bytes32] into [B256]
+fn convert_hash(bytes: Bytes32) -> B256 {
+    B256::from_slice(bytes.as_slice())
 }
 
 /// Converts [VecAddress] into [Address]
@@ -399,12 +402,10 @@ fn convert_byte_list<const N: usize>(list: List<u8, N>) -> Bytes {
     Bytes::from(list.to_vec())
 }
 
-/// Converts a [U256] into [ethers::types::U64]
-fn convert_uint(value: U256) -> ethers::types::U64 {
+/// Converts a [U256] into [U64]
+fn convert_uint(value: U256) -> U64 {
     let bytes = value.to_bytes_le();
-    ethers::types::U256::from_little_endian(&bytes)
-        .as_u64()
-        .into()
+    U64::from_le_slice(&bytes)
 }
 
 /// Converts [ssz_rs::List] of [Transaction] into a vector of [RawTransaction]

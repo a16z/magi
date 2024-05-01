@@ -1,6 +1,4 @@
-use std::str::FromStr;
-
-use ethers::types::Address;
+use alloy_primitives::address;
 use eyre::Result;
 
 use magi::{
@@ -15,9 +13,7 @@ async fn main() -> Result<()> {
 
     let addr = "0.0.0.0:9876".parse()?;
     let chain_id = 420;
-    let (_, recv) = watch::channel(Address::from_str(
-        "0x715b7219d986641df9efd9c7ef01218d528e19ec",
-    )?);
+    let (_, recv) = watch::channel(address!("715b7219d986641df9efd9c7ef01218d528e19ec"));
     let (block_handler, block_recv) = BlockHandler::new(chain_id, recv);
 
     Service::new(addr, chain_id)

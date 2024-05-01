@@ -4,7 +4,7 @@ use eyre::Result;
 use once_cell::sync::Lazy;
 use tokio::{spawn, sync::mpsc, task::JoinHandle, time::sleep};
 
-use alloy_primitives::{keccak256, Address, Bytes, B256, U256};
+use alloy_primitives::{keccak256, Address, Bytes, B256};
 use alloy_provider::{Provider, ProviderBuilder, ReqwestProvider};
 use alloy_rpc_types::{Block, BlockId, BlockNumberOrTag, BlockTransactions, Filter, Transaction};
 
@@ -330,8 +330,6 @@ impl InnerWatcher {
                         config.unsafe_block_signer = addr;
                     }
                 }
-
-                let update_block: u64 = update_block;
                 self.system_config_update = (update_block, Some(config));
             } else {
                 self.system_config_update = (to_block, None);
@@ -399,33 +397,26 @@ impl InnerWatcher {
             Some(deposits) => Ok(deposits),
             None => {
                 let end_block = self.head_block.min(block_num + 1000);
+                let deposit_filter = Filter::new()
+                    .address(self.config.chain.deposit_contract)
+                    .event_signature(*TRANSACTION_DEPOSITED_TOPIC)
+                    .from_block(block_num)
+                    .to_block(end_block);
 
-                // TODO: Optimize this to batch requests.
-                //       Right now we need to do this since logs don't contain the block data.
+                let deposit_logs = self
+                    .provider
+                    .get_logs(&deposit_filter)
+                    .await?
+                    .into_iter()
+                    .map(|log| UserDeposited::try_from(log).unwrap())
+                    .collect::<Vec<UserDeposited>>();
+
                 for num in block_num..=end_block {
-                    let deposit_filter = Filter::new()
-                        .address(self.config.chain.deposit_contract)
-                        .event_signature(*TRANSACTION_DEPOSITED_TOPIC)
-                        .select(num);
-
-                    let block = self
-                        .provider
-                        .get_block(BlockId::Number(BlockNumberOrTag::Number(block_num)), false)
-                        .await?
-                        .ok_or(eyre::eyre!("block not found"))?;
-                    let block_hash = block
-                        .header
-                        .hash
-                        .ok_or(eyre::eyre!("block hash not found"))?;
-
-                    let deposits = self
-                        .provider
-                        .get_logs(&deposit_filter)
-                        .await?
-                        .into_iter()
-                        .enumerate()
-                        .map(|(i, log)| UserDeposited::new(log, num, block_hash, U256::from(i)))
-                        .collect::<Result<Vec<UserDeposited>>>()?;
+                    let deposits = deposit_logs
+                        .iter()
+                        .filter(|d| d.l1_block_num == num)
+                        .cloned()
+                        .collect();
 
                     self.deposits.insert(num, deposits);
                 }
@@ -480,8 +471,10 @@ impl InnerWatcher {
             return Ok(batcher_transactions_data);
         }
 
-        let timestamp: u64 = block.header.timestamp;
-        let slot = self.blob_fetcher.get_slot_from_time(timestamp).await?;
+        let slot = self
+            .blob_fetcher
+            .get_slot_from_time(block.header.timestamp)
+            .await?;
 
         // perf: fetch only the required indexes instead of all
         let blobs = self.blob_fetcher.fetch_blob_sidecars(slot).await?;

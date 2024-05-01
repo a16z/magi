@@ -1,7 +1,7 @@
 use std::sync::{Arc, RwLock};
 
 use ethers::abi::{decode, encode, ParamType, Token};
-use ethers::types::{Address, Log, H256, U256, U64};
+use ethers::types::{Address, H256, U256};
 use ethers::utils::{keccak256, rlp::Encodable, rlp::RlpStream};
 
 use eyre::Result;
@@ -89,21 +89,20 @@ impl Attributes {
             None
         };
 
-        let timestamp = U64([input.timestamp]);
         let l1_inclusion_block = Some(input.l1_inclusion_block);
         let seq_number = Some(self.sequence_number);
         let prev_randao = l1_info.block_info.mix_hash;
         let epoch = Some(input.epoch);
-        let transactions = Some(self.derive_transactions(input, l1_info));
+        let transactions = Some(self.derive_transactions(&input, l1_info));
         let suggested_fee_recipient = SystemAccounts::default().fee_vault;
 
         PayloadAttributes {
-            timestamp,
-            prev_randao: H256::from_slice(prev_randao.as_slice()),
-            suggested_fee_recipient: Address::from_slice(suggested_fee_recipient.as_slice()),
+            timestamp: alloy_primitives::U64::from(input.timestamp),
+            prev_randao,
+            suggested_fee_recipient,
             transactions,
             no_tx_pool: true,
-            gas_limit: U64([l1_info.system_config.gas_limit.try_into().unwrap()]),
+            gas_limit: alloy_primitives::U64::from(l1_info.system_config.gas_limit),
             withdrawals,
             epoch,
             l1_inclusion_block,
@@ -118,7 +117,7 @@ impl Attributes {
     /// Returns a [RawTransaction] vector containing all of the transactions for the L2 block.
     fn derive_transactions(
         &self,
-        input: BlockInput<Epoch>,
+        input: &BlockInput<Epoch>,
         l1_info: &L1Info,
     ) -> Vec<RawTransaction> {
         let mut transactions = Vec::new();
@@ -145,7 +144,7 @@ impl Attributes {
         }
 
         // Remaining transactions
-        let mut rest = input.transactions;
+        let mut rest = input.transactions.clone();
         transactions.append(&mut rest);
 
         transactions
@@ -428,28 +427,25 @@ impl UserDeposited {
     }
 }
 
-impl TryFrom<Log> for UserDeposited {
+impl TryFrom<alloy_rpc_types::Log> for UserDeposited {
     type Error = eyre::Report;
 
     /// Converts the emitted L1 deposit event log into [UserDeposited]
-    fn try_from(log: Log) -> Result<Self, Self::Error> {
-        let opaque_data = decode(&[ParamType::Bytes], &log.data)?[0]
+    fn try_from(log: alloy_rpc_types::Log) -> Result<Self, Self::Error> {
+        let opaque_data = decode(&[ParamType::Bytes], &log.data().data)?[0]
             .clone()
             .into_bytes()
             .unwrap();
 
-        let from = Address::from(log.topics[1]);
-        let to = Address::from(log.topics[2]);
+        let from = Address::from_slice(log.topics()[1].as_slice());
+        let to = Address::from_slice(log.topics()[2].as_slice());
         let mint = U256::from_big_endian(&opaque_data[0..32]);
         let value = U256::from_big_endian(&opaque_data[32..64]);
         let gas = u64::from_be_bytes(opaque_data[64..72].try_into()?);
         let is_creation = opaque_data[72] != 0;
         let data = opaque_data[73..].to_vec();
 
-        let l1_block_num = log
-            .block_number
-            .ok_or(eyre::eyre!("block num not found"))?
-            .as_u64();
+        let l1_block_num = log.block_number.ok_or(eyre::eyre!("block num not found"))?;
 
         let l1_block_hash = log.block_hash.ok_or(eyre::eyre!("block hash not found"))?;
         let log_index = log.log_index.unwrap();
@@ -463,8 +459,8 @@ impl TryFrom<Log> for UserDeposited {
             is_creation,
             data,
             l1_block_num,
-            l1_block_hash,
-            log_index,
+            l1_block_hash: H256::from_slice(l1_block_hash.as_slice()),
+            log_index: log_index.into(),
         })
     }
 }
