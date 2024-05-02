@@ -1,4 +1,4 @@
-//! Contains Drivers for interfacing with the rollup node.
+//! Contains drivers that drive the execution client using the **L2** Engine API.
 
 pub mod node_driver;
 pub use node_driver::NodeDriver;

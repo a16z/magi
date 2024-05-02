@@ -1,4 +1,4 @@
-//! The `derive` module contains the stages and orchestration for the derivation pipeline.
+//! This module contains the stages and orchestration for the derivation pipeline.
 
 pub mod stages;
 

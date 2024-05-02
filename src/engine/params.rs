@@ -1,3 +1,5 @@
+//! Engine Parameters.
+
 use std::time::Duration;
 
 /// The default engine api authentication port.

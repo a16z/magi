@@ -1,3 +1,5 @@
+//! Blob fetching and extraction module.
+
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use eyre::Result;

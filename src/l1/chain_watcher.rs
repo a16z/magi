@@ -1,3 +1,5 @@
+//! Contains the [ChainWatcher] which monitors L1 for new blocks and events.
+
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use eyre::Result;
@@ -15,17 +17,17 @@ use crate::{
     l1::decode_blob_data,
 };
 
-use super::{l1_info::L1BlockInfo, BlobFetcher, L1Info, SystemConfigUpdate};
+use super::{BlobFetcher, L1BlockInfo, L1Info, SystemConfigUpdate};
 
-static CONFIG_UPDATE_TOPIC: Lazy<B256> =
+pub static CONFIG_UPDATE_TOPIC: Lazy<B256> =
     Lazy::new(|| keccak256("ConfigUpdate(uint256,uint8,bytes)"));
 
-static TRANSACTION_DEPOSITED_TOPIC: Lazy<B256> =
+pub static TRANSACTION_DEPOSITED_TOPIC: Lazy<B256> =
     Lazy::new(|| keccak256("TransactionDeposited(address,address,uint256,bytes)"));
 
 /// The transaction type used to identify transactions that carry blobs
 /// according to EIP 4844.
-const BLOB_CARRYING_TRANSACTION_TYPE: u64 = 3;
+pub const BLOB_CARRYING_TRANSACTION_TYPE: u64 = 3;
 
 /// The data contained in a batcher transaction.
 /// The actual source of this data can be either calldata or blobs.

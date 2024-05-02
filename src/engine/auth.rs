@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 //! Authentication module for the Engine API.
 //!
 //! This module was built using [reth](https://github.com/paradigmxyz/reth).

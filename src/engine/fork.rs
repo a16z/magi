@@ -1,3 +1,5 @@
+//! Forkchoice types.
+
 use alloy_primitives::B256;
 use serde::{Deserialize, Serialize};
 

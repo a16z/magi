@@ -1,3 +1,5 @@
+//! Module handles channel bank derivation stage.
+
 use std::sync::Arc;
 
 use super::batcher_transactions::{BatcherTransaction, Frame};

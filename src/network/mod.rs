@@ -1,4 +1,9 @@
-/// A module for managing incoming p2p gossip messages
+//! Network Module
+//!
+//! Contains [handlers] and [service] peer to peer networking components.
+
 pub mod handlers;
-/// A module for managing the Discv5 discovery & libp2p services
+pub use handlers::{BlockHandler, Handler};
+
 pub mod service;
+pub use service::Service;

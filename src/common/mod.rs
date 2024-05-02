@@ -1,3 +1,5 @@
+//! Module containing common types and functions used throughout the crate.
+
 use std::fmt::Debug;
 
 use alloy_primitives::B256;

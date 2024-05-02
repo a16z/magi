@@ -2,9 +2,9 @@
 
 use std::sync::mpsc;
 
+use alloy_primitives::Bytes;
 use eyre::Result;
 use std::collections::VecDeque;
-use alloy_primitives::Bytes;
 
 use crate::derive::PurgeableIterator;
 

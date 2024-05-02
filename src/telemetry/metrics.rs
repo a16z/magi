@@ -1,3 +1,5 @@
+//! Prometheus Metrics Module.
+
 use eyre::{Result, WrapErr};
 use lazy_static::lazy_static;
 use prometheus_exporter::{

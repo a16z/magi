@@ -1,3 +1,5 @@
+//! Module to handle [SingleBatch] processing.
+
 use alloy_primitives::B256;
 use alloy_rlp::{RlpDecodable, RlpEncodable};
 

@@ -1,7 +1,7 @@
 //! A module to handle processing of a [Batch].
 
-use alloy_rlp::Rlp;
 use alloy_rlp::Decodable;
+use alloy_rlp::Rlp;
 use core::fmt::Debug;
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -437,7 +437,10 @@ fn decode_batches(channel: &Channel, chain_id: u64) -> Result<Vec<Batch>> {
         match version {
             0 => {
                 let rlp = Rlp::new(batch_content);
-                let size = rlp.get_next::<alloy_rlp::Header>()?.ok_or_else(|| eyre::eyre!("failed to get header"))?.len();
+                let size = rlp
+                    .get_next::<alloy_rlp::Header>()?
+                    .ok_or_else(|| eyre::eyre!("failed to get header"))?
+                    .len();
 
                 let mut batch = SingleBatch::decode(&mut batch_content)?;
                 batch.l1_inclusion_block = Some(channel.l1_inclusion_block);

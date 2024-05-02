@@ -3,7 +3,7 @@
 use crate::config::Config;
 use crate::driver::types::HeadInfo;
 
-use alloy_provider::{Provider, ReqwestProvider};
+use alloy_provider::Provider;
 use alloy_rpc_types::{Block, BlockId, BlockNumberOrTag};
 use eyre::Result;
 
@@ -16,12 +16,12 @@ pub trait InnerProvider {
 
 /// Wrapper around a [ReqwestProvider].
 pub struct HeadInfoFetcher<'a> {
-    inner: &'a ReqwestProvider,
+    inner: &'a dyn Provider,
 }
 
-impl<'a> From<&'a ReqwestProvider> for HeadInfoFetcher<'a> {
+impl<'a> From<&'a dyn Provider> for HeadInfoFetcher<'a> {
     /// Converts a [ReqwestProvider] to a [HeadInfoFetcher].
-    fn from(inner: &'a ReqwestProvider) -> Self {
+    fn from(inner: &'a dyn Provider) -> Self {
         Self { inner }
     }
 }
@@ -42,7 +42,7 @@ pub struct HeadInfoQuery {}
 
 impl HeadInfoQuery {
     /// Fetches the latest finalized L2 block
-    pub async fn get_head_info<P: InnerProvider>(p: &ReqwestProvider, config: &Config) -> HeadInfo {
+    pub async fn get_head_info<P: InnerProvider>(p: impl Provider, config: &Config) -> HeadInfo {
         let parsed_head_info = match p
             .get_block(BlockId::Number(BlockNumberOrTag::Finalized), true)
             .await

@@ -1,3 +1,5 @@
+//! Module handles running the Magi node.
+
 use std::{process, str::FromStr, time::Duration};
 
 use alloy_primitives::B256;

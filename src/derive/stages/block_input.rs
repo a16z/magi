@@ -1,3 +1,5 @@
+//! Module handles building [BlockInput] from a batch of transactions.
+
 use std::sync::{Arc, RwLock};
 
 use eyre::Result;
@@ -7,9 +9,11 @@ use crate::{
     derive::state::State,
 };
 
-/// A marker trait to allow representing an epoch as either a block number or an [Epoch]
+/// A marker trait to allow representing an epoch as either a block number or an [Epoch].
 pub trait EpochType {}
+
 impl EpochType for u64 {}
+
 impl EpochType for Epoch {}
 
 /// A single L2 block derived from a batch.

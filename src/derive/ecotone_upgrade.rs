@@ -3,7 +3,7 @@
 use std::str::FromStr;
 
 use alloy_consensus::TxEnvelope;
-use alloy_primitives::{Address, b256, address, uint, Bytes, U256, U64};
+use alloy_primitives::{address, b256, uint, Address, Bytes, U256, U64};
 
 use crate::common::RawTransaction;
 
@@ -60,7 +60,7 @@ pub fn get_ecotone_upgrade_transactions() -> Vec<RawTransaction> {
     let update_l1_block_proxy = Transaction {
         transaction_type: Some(U64::from(0x7E)),
         source_hash: b256!("18acb38c5ff1c238a7460ebc1b421fa49ec4874bdf1e0a530d234104e5e67dbc")
-        .unwrap(),
+            .unwrap(),
         from: address!("0000000000000000000000000000000000000000"),
         to: Some(address!("4200000000000000000000000000000000000015")),
         mint: None,

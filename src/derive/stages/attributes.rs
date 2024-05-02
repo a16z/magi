@@ -2,10 +2,9 @@
 
 use std::sync::{Arc, RwLock};
 
+use alloy_primitives::{keccak256, Address, Bytes, B256, U256, U64};
+use alloy_rlp::encode;
 use alloy_rlp::Encodable;
-use alloy_primitives::{Address, B256, keccak256, U64, U256};
-
-use ethers::abi::{decode, encode, ParamType, Token};
 
 use eyre::Result;
 
@@ -19,6 +18,7 @@ use crate::l1::L1Info;
 use super::block_input::BlockInput;
 
 /// Represents the `Payload Attributes Derivation` stage.
+#[derive(Debug)]
 pub struct Attributes {
     /// An iterator over [BlockInput]: used to derive [PayloadAttributes]
     block_input_iter: Box<dyn PurgeableIterator<Item = BlockInput<u64>>>,
@@ -49,8 +49,7 @@ impl PurgeableIterator for Attributes {
     fn purge(&mut self) {
         self.block_input_iter.purge();
         self.sequence_number = 0;
-        self.epoch_hash =
-            self.state.read().unwrap().safe_epoch.hash;
+        self.epoch_hash = self.state.read().unwrap().safe_epoch.hash;
     }
 }
 
@@ -276,37 +275,37 @@ impl From<UserDeposited> for DepositedTransaction {
     }
 }
 
-impl Encodable for DepositedTransaction {
-    fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
-        out.put(&[0x7E]);
-        out.put_u8(8); // Start the list
-        
-        out.put(&self.source_hash);
-        
-    }
-}
+// impl Encodable for DepositedTransaction {
+//     fn encode(&self, out: &mut dyn alloy_rlp::BufMut) {
+//         out.put(&[0x7E]);
+//         out.put_u8(8); // Start the list
+//
+//         out.put(&self.source_hash);
+//
+//     }
+// }
 
-impl Encodable for  {
-    /// Converts a [DepositedTransaction] to RLP bytes and appends to the stream.
-    fn rlp_append(&self, s: &mut RlpStream) {
-        s.append_raw(&[0x7E], 1);
-        s.begin_list(8);
-        s.append(&self.source_hash);
-        s.append(&self.from);
-
-        if let Some(to) = self.to {
-            s.append(&to);
-        } else {
-            s.append(&"");
-        }
-
-        s.append(&self.mint);
-        s.append(&self.value);
-        s.append(&self.gas);
-        s.append(&self.is_system_tx);
-        s.append(&self.data);
-    }
-}
+// impl Encodable for  {
+//     /// Converts a [DepositedTransaction] to RLP bytes and appends to the stream.
+//     fn rlp_append(&self, s: &mut RlpStream) {
+//         s.append_raw(&[0x7E], 1);
+//         s.begin_list(8);
+//         s.append(&self.source_hash);
+//         s.append(&self.from);
+//
+//         if let Some(to) = self.to {
+//             s.append(&to);
+//         } else {
+//             s.append(&"");
+//         }
+//
+//         s.append(&self.mint);
+//         s.append(&self.value);
+//         s.append(&self.gas);
+//         s.append(&self.is_system_tx);
+//         s.append(&self.data);
+//     }
+// }
 
 /// Represents the attributes provided as calldata in an attributes deposited transaction.
 #[derive(Debug)]
@@ -358,24 +357,24 @@ impl AttributesDeposited {
         }
     }
 
-    /// Encodes [AttributesDeposited] into `setL1BlockValues` transaction calldata, including the selector.
-    fn encode(&self) -> Vec<u8> {
-        let tokens = vec![
-            Token::Uint(self.number.into()),
-            Token::Uint(self.timestamp.into()),
-            Token::Uint(self.base_fee),
-            Token::FixedBytes(self.hash.to_vec()),
-            Token::Uint(self.sequence_number.into()),
-            Token::FixedBytes(self.batcher_hash.to_vec()),
-            Token::Uint(self.fee_overhead),
-            Token::Uint(self.fee_scalar),
-        ];
-
-        let selector = hex::decode("015d8eb9").unwrap();
-        let data = encode(&tokens);
-
-        [selector, data].concat()
-    }
+    // /// Encodes [AttributesDeposited] into `setL1BlockValues` transaction calldata, including the selector.
+    // fn encode(&self) -> Vec<u8> {
+    //     let tokens = vec![
+    //         Token::Uint(self.number.into()),
+    //         Token::Uint(self.timestamp.into()),
+    //         Token::Uint(self.base_fee),
+    //         Token::FixedBytes(self.hash.to_vec()),
+    //         Token::Uint(self.sequence_number.into()),
+    //         Token::FixedBytes(self.batcher_hash.to_vec()),
+    //         Token::Uint(self.fee_overhead),
+    //         Token::Uint(self.fee_scalar),
+    //     ];
+    //
+    //     let selector = hex::decode("015d8eb9").unwrap();
+    //     let data = encode(&tokens);
+    //
+    //     [selector, data].concat()
+    // }
 }
 
 /// Represents a user deposited transaction.
@@ -415,10 +414,59 @@ impl TryFrom<alloy_rpc_types::Log> for UserDeposited {
 
     /// Converts the emitted L1 deposit event log into [UserDeposited]
     fn try_from(log: alloy_rpc_types::Log) -> Result<Self, Self::Error> {
-        let opaque_data = decode(&[ParamType::Bytes], &log.data().data)?[0]
-            .clone()
-            .into_bytes()
-            .unwrap();
+        // Solidity serializes the event's Data field as follows:
+        //
+        // ```solidity
+        // abi.encode(abi.encodPacked(uint256 mint, uint256 value, uint64 gasLimit, uint8 isCreation, bytes data))
+        // ```
+        //
+        // The the opaqueData will be packed as shown below:
+        //
+        // ------------------------------------------------------------
+        // | offset | 256 byte content                                |
+        // ------------------------------------------------------------
+        // | 0      | [0; 24] . {U64 big endian, hex encoded offset}  |
+        // ------------------------------------------------------------
+        // | 32     | [0; 24] . {U64 big endian, hex encoded length}  |
+        // ------------------------------------------------------------
+
+        let opaque_content_offset: U64 =
+            U64::try_from_be_slice(&log.data.data[24..32]).ok_or(eyre::eyre!(
+                "Invalid opaque data offset: {}:",
+                Bytes::copy_from_slice(&log.data.data[24..32])
+            ))?;
+        if opaque_content_offset != U64::from(32) {
+            eyre::bail!("Invalid opaque data offset: {}", opaque_content_offset);
+        }
+
+        // The next 32 bytes indicate the length of the opaqueData content.
+        let opaque_content_len =
+            u64::from_be_bytes(log.data.data[56..64].try_into().map_err(|_| {
+                eyre::eyre!(
+                    "Invalid opaque data length: {}",
+                    Bytes::copy_from_slice(&log.data.data[56..64])
+                )
+            })?);
+        if opaque_content_len as usize > log.data.data.len() - 64 {
+            eyre::bail!(
+                "Invalid opaque data length: {} exceeds log data length: {}",
+                opaque_content_len,
+                log.data.data.len() - 64
+            );
+        }
+        let padded_len = opaque_content_len
+            .checked_add(32)
+            .ok_or(eyre::eyre!("Opaque data overflow: {}", opaque_content_len))?;
+        if padded_len as usize <= log.data.data.len() - 64 {
+            eyre::bail!(
+                "Opaque data with len {} overflows padded length {}",
+                log.data.data.len() - 64,
+                opaque_content_len
+            );
+        }
+
+        // The remaining data is the tightly packed and padded to 32 bytes opaqueData
+        let opaque_data = &log.data.data[64..64 + opaque_content_len as usize];
 
         let from = Address::from_slice(log.topics()[1].as_slice());
         let to = Address::from_slice(log.topics()[2].as_slice());

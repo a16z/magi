@@ -1,3 +1,5 @@
+//! A module for handling blocks received via p2p gossip.
+
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::SystemTime;
 

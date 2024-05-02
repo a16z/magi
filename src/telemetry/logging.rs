@@ -1,3 +1,5 @@
+//! Logging Module.
+
 use std::{
     env::current_dir,
     path::{Path, PathBuf},
@@ -14,10 +16,10 @@ use ansi_term::Colour::{Blue, Cyan, Purple, Red, Yellow};
 
 /// Standard log file name prefix. This will be optionally appended with a timestamp
 /// depending on the rotation strategy.
-const LOG_FILE_NAME_PREFIX: &str = "magi.log";
+pub const LOG_FILE_NAME_PREFIX: &str = "magi.log";
 
 /// Default log file rotation strategy. This can be overridden by the `logs_rotation` config.
-const DEFAULT_ROTATION: &str = "daily";
+pub const DEFAULT_ROTATION: &str = "daily";
 
 /// Configure logging telemetry with a global handler.
 pub fn init(
@@ -217,7 +219,7 @@ where
 
 /// Get the rotation strategy from the given string.
 /// Defaults to rotating daily.
-fn get_rotation_strategy(val: &str) -> Rotation {
+pub fn get_rotation_strategy(val: &str) -> Rotation {
     match val {
         "never" => Rotation::NEVER,
         "daily" => Rotation::DAILY,
@@ -232,7 +234,7 @@ fn get_rotation_strategy(val: &str) -> Rotation {
 }
 
 /// Get a rolling file appender for the given directory, rotation and file name prefix.
-fn get_rolling_file_appender(
+pub fn get_rolling_file_appender(
     directory: PathBuf,
     rotation: Rotation,
     file_name_prefix: &str,

@@ -1,3 +1,5 @@
+//! Blob decoding module.
+
 use alloy_primitives::Bytes;
 use eyre::Result;
 

@@ -39,36 +39,24 @@
 //!
 //! Then, refer to the individual modules for specific functionality.
 //!
-#![warn(missing_docs)]
-/// A module for ingesting L1 chain data
-pub mod l1;
+#![doc = include_str!("../README.md")]
+#![warn(
+    missing_debug_implementations,
+    missing_docs,
+    unreachable_pub,
+    rustdoc::all
+)]
+#![deny(unused_must_use, rust_2018_idioms)]
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
-/// Common types and functions
 pub mod common;
-
-/// Configuration management
 pub mod config;
-
-/// The derivation pipeline module for deriving the canonical L2 chain
 pub mod derive;
-
-/// A module for driving op-geth via the L2 Engine API
 pub mod driver;
-
-/// A module for the L2 Engine API
 pub mod engine;
-
-/// Peer to peer networking
+pub mod l1;
 pub mod network;
-
-/// Application telemetry and logging
-pub mod telemetry;
-
-/// RPC module to host rpc server
 pub mod rpc;
-
-/// A module to handle running Magi in different sync modes
 pub mod runner;
-
-/// A module to get current Magi version.
+pub mod telemetry;
 pub mod version;

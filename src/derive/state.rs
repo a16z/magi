@@ -37,7 +37,7 @@ impl State {
     pub async fn new(
         finalized_head: BlockInfo,
         finalized_epoch: Epoch,
-        provider: &dyn Provider,
+        provider: &impl Provider,
         config: Arc<Config>,
     ) -> Self {
         let l2_refs = l2_refs(finalized_head.number, provider, &config).await;
@@ -97,10 +97,8 @@ impl State {
     /// This also updates ``current_epoch_num`` to the block number of the given ``l1_info``.
     pub fn update_l1_info(&mut self, l1_info: L1Info) {
         self.current_epoch_num = l1_info.block_info.number;
-        self.l1_hashes.insert(
-            l1_info.block_info.number,
-            l1_info.block_info.hash,
-        );
+        self.l1_hashes
+            .insert(l1_info.block_info.number, l1_info.block_info.hash);
         self.l1_info.insert(l1_info.block_info.hash, l1_info);
         self.prune();
     }
@@ -165,7 +163,7 @@ impl State {
 /// If the lookback period is before the genesis block, it will return L2 blocks starting from genesis.
 async fn l2_refs(
     head_num: u64,
-    provider: &dyn Provider,
+    provider: &impl Provider,
     config: &Config,
 ) -> BTreeMap<u64, (BlockInfo, Epoch)> {
     let lookback = config.chain.max_seq_drift / config.chain.blocktime;

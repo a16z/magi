@@ -1,3 +1,5 @@
+//! Contains the L1 info types.
+
 use alloy_primitives::{B256, U256};
 use alloy_rpc_types::Block;
 

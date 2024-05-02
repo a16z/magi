@@ -1,4 +1,4 @@
-use std::{fmt, iter, path::PathBuf, process::exit, str::FromStr};
+//! Module contains Configuration types.
 
 use alloy_primitives::{Address, B256, U256, U64};
 use figment::{
@@ -6,10 +6,11 @@ use figment::{
     Figment,
 };
 use serde::{Deserialize, Serialize};
+use std::{fmt, iter, path::PathBuf, process::exit, str::FromStr};
 
 use crate::common::{BlockInfo, Epoch};
 
-/// Sync Mode Specifies how `magi` should sync the L2 chain
+/// Sync Mode Specifies how to sync the L2 chain
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SyncMode {
     /// Fast sync mode
@@ -47,7 +48,7 @@ impl fmt::Display for SyncMode {
     }
 }
 
-/// The global `Magi` configuration.
+/// The global configuration.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct Config {
     /// The L1 chain RPC URL

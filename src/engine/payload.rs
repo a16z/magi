@@ -1,3 +1,5 @@
+//! Payload types for the L2 execution engine.
+
 use alloy_consensus::TxEnvelope;
 use alloy_eips::eip2718::Encodable2718;
 use alloy_primitives::{Address, Bytes, B256, U64};

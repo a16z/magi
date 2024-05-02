@@ -1,3 +1,5 @@
+//! Parses logs and extracts system config updates.
+
 use alloy_primitives::{Address, U256, U64};
 use alloy_rpc_types::Log;
 use eyre::Result;

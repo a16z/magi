@@ -1,3 +1,5 @@
+//! RPC module to host the RPC server.
+
 use std::{fmt::Display, net::SocketAddr, sync::Arc};
 
 use crate::{

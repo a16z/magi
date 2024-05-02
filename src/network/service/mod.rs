@@ -1,3 +1,5 @@
+//! Module contains the Discv5 discovery & libp2p services.
+
 use std::{net::SocketAddr, time::Duration};
 
 use eyre::Result;

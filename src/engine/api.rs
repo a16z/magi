@@ -1,3 +1,5 @@
+//! Module contains the [EngineApi] client.
+
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
@@ -20,7 +22,7 @@ use super::{
 
 use super::{JSONRPC_VERSION, STATIC_ID};
 
-/// An external op-geth engine api client
+/// An external engine api client
 #[derive(Debug, Clone)]
 pub struct EngineApi {
     /// Base request url

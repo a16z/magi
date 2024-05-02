@@ -1,4 +1,6 @@
-/// Represents the Magi version
+//! Module containing the parsed crate [Version].
+
+/// Represents the version
 #[derive(Debug)]
 pub struct Version {
     /// The package name specified in `Cargo.toml`
