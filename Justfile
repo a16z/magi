@@ -24,23 +24,23 @@ pull:
 
 # Cleans all docker images
 clean:
-	cd docker && docker compose down -v --remove-orphans
+  cd docker && docker compose down -v --remove-orphans
 
 # Composes docker
 run:
-	cd docker && docker compose up
+  cd docker && docker compose up
 
 # Composes docker with local images
 run-local:
-	just build-local && cd docker && docker compose up
+  just build-local && cd docker && docker compose up
 
 # Runs op-geth with docker
 run-geth:
-	cd docker && COMPOSE_PROFILES=op-geth docker compose up
+  cd docker && COMPOSE_PROFILES=op-geth docker compose up
 
 # Runs op-erigon with docker
 run-erigon:
-	cd docker && COMPOSE_PROFILES=op-erigon docker compose up
+  cd docker && COMPOSE_PROFILES=op-erigon docker compose up
 
 # Run all tests
 tests: test test-docs
