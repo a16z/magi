@@ -2,6 +2,8 @@
 
 use std::sync::{Arc, RwLock};
 
+use kona_derive::types::ecotone::EcotoneTransactionBuilder;
+
 use alloy_primitives::{keccak256, Address, Bytes, B256, U256, U64};
 use alloy_rlp::encode;
 use alloy_rlp::Encodable;
@@ -11,7 +13,7 @@ use anyhow::Result;
 use crate::common::{Epoch, RawTransaction};
 use crate::config::{Config, SystemAccounts};
 use crate::derive::state::State;
-use crate::derive::{EcotoneTransactionBuilder, PurgeableIterator};
+use crate::derive::PurgeableIterator;
 use crate::engine::PayloadAttributes;
 use crate::l1::L1Info;
 
