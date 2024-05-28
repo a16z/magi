@@ -1,3 +1,5 @@
+//! Contains the L1 info types.
+
 use alloy_primitives::{B256, U256};
 use alloy_rpc_types::Block;
 
@@ -38,27 +40,27 @@ pub struct L1BlockInfo {
 }
 
 impl TryFrom<&Block> for L1BlockInfo {
-    type Error = eyre::Error;
+    type Error = anyhow::Error;
 
     fn try_from(value: &alloy_rpc_types::Block) -> std::result::Result<Self, Self::Error> {
         let number = value
             .header
             .number
-            .ok_or(eyre::eyre!("block not included"))?;
+            .ok_or(anyhow::anyhow!("block not included"))?;
 
-        let hash = value.header.hash.ok_or(eyre::eyre!("block not included"))?;
+        let hash = value.header.hash.ok_or(anyhow::anyhow!("block not included"))?;
 
         let timestamp = value.header.timestamp;
 
         let base_fee = value
             .header
             .base_fee_per_gas
-            .ok_or(eyre::eyre!("block is pre london"))?;
+            .ok_or(anyhow::anyhow!("block is pre london"))?;
 
         let mix_hash = value
             .header
             .mix_hash
-            .ok_or(eyre::eyre!("block not included"))?;
+            .ok_or(anyhow::anyhow!("block not included"))?;
 
         let parent_beacon_block_root = value.header.parent_beacon_block_root;
 

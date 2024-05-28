@@ -1,51 +1,50 @@
+//! A module to handle fetching blocks.
+
 use crate::config::Config;
 use crate::driver::types::HeadInfo;
-use ethers::middleware::Middleware;
-use ethers::providers::{JsonRpcClient, Provider, ProviderError};
-use ethers::types::{Block, BlockId, BlockNumber, Transaction};
+
+use alloy_provider::Provider;
+use alloy_rpc_types::{Block, BlockId, BlockNumberOrTag};
+use anyhow::Result;
 
 /// An asynchronous trait for fetching blocks along with their transactions.
 #[async_trait::async_trait]
 pub trait InnerProvider {
     /// Retrieves a block and its transactions
-    async fn get_block_with_txs(
-        &self,
-        block_id: BlockId,
-    ) -> Result<Option<Block<Transaction>>, ProviderError>;
+    async fn get_block_with_txs(&self, block_id: BlockId) -> Result<Option<Block>>;
 }
 
-/// Wrapper around a [Provider]
-pub struct HeadInfoFetcher<'a, P: JsonRpcClient> {
-    /// An ethers [Provider] implementing the [JsonRpcClient] trait
-    inner: &'a Provider<P>,
+/// Wrapper around a [ReqwestProvider].
+pub struct HeadInfoFetcher<'a> {
+    inner: &'a dyn Provider,
 }
 
-impl<'a, P: JsonRpcClient> From<&'a Provider<P>> for HeadInfoFetcher<'a, P> {
-    /// Converts a [Provider] to a [HeadInfoFetcher]
-    fn from(inner: &'a Provider<P>) -> Self {
+impl<'a> From<&'a dyn Provider> for HeadInfoFetcher<'a> {
+    /// Converts a [ReqwestProvider] to a [HeadInfoFetcher].
+    fn from(inner: &'a dyn Provider) -> Self {
         Self { inner }
     }
 }
 
 #[async_trait::async_trait]
-impl<'a, P: JsonRpcClient> InnerProvider for HeadInfoFetcher<'a, P> {
-    /// Fetches a block with transactions
-    async fn get_block_with_txs(
-        &self,
-        block_id: BlockId,
-    ) -> Result<Option<Block<Transaction>>, ProviderError> {
-        self.inner.get_block_with_txs(block_id).await
+impl<'a> InnerProvider for HeadInfoFetcher<'a> {
+    /// Fetches a [Block] with transactions.
+    async fn get_block_with_txs(&self, block_id: BlockId) -> Result<Option<Block>> {
+        self.inner
+            .get_block(block_id, true)
+            .await
+            .map_err(Into::into)
     }
 }
 
-/// Provides a method to fetch the latest finalized block
+/// Provides a method to fetch the latest finalized [Block].
 pub struct HeadInfoQuery {}
 
 impl HeadInfoQuery {
     /// Fetches the latest finalized L2 block
-    pub async fn get_head_info<P: InnerProvider>(p: &P, config: &Config) -> HeadInfo {
+    pub async fn get_head_info<P: InnerProvider>(p: impl Provider, config: &Config) -> HeadInfo {
         let parsed_head_info = match p
-            .get_block_with_txs(BlockId::Number(BlockNumber::Finalized))
+            .get_block(BlockId::Number(BlockNumberOrTag::Finalized), true)
             .await
         {
             Ok(Some(block)) => match HeadInfo::try_from_l2_block(config, block) {
@@ -82,10 +81,10 @@ mod test_utils {
     use alloy_primitives::b256;
 
     pub struct MockProvider {
-        pub block: Option<Block<Transaction>>,
+        pub block: Option<Block>,
     }
 
-    pub fn mock_provider(block: Option<Block<Transaction>>) -> MockProvider {
+    pub fn mock_provider(block: Option<Block>) -> MockProvider {
         MockProvider { block }
     }
 
@@ -108,7 +107,7 @@ mod test_utils {
         }
     }
 
-    pub fn valid_block() -> Option<Block<Transaction>> {
+    pub fn valid_block() -> Option<Block> {
         let raw_block = r#"{
             "hash": "0x2e4f4aff36bb7951be9742ad349fb1db84643c6bbac5014f3d196fd88fe333eb",
             "parentHash": "0xeccf4c06ad0d27be1cadee5720a509d31a9de0462b52f2cf6045d9a73c9aa504",
@@ -154,10 +153,7 @@ mod test_utils {
 
     #[async_trait::async_trait]
     impl InnerProvider for MockProvider {
-        async fn get_block_with_txs(
-            &self,
-            _: BlockId,
-        ) -> Result<Option<Block<Transaction>>, ProviderError> {
+        async fn get_block_with_txs(&self, _: BlockId) -> Result<Option<Block>> {
             Ok(self.block.clone())
         }
     }

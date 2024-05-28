@@ -1,6 +1,8 @@
+//! Blob fetching and extraction module.
+
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use eyre::Result;
+use anyhow::Result;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -60,13 +62,13 @@ impl BlobFetcher {
             let spec = self.fetch_beacon_spec().await?;
             seconds_per_slot = spec
                 .get("SECONDS_PER_SLOT")
-                .ok_or(eyre::eyre!("No seconds per slot in beacon spec"))?
+                .ok_or(anyhow::anyhow!("No seconds per slot in beacon spec"))?
                 .as_str()
-                .ok_or(eyre::eyre!("Seconds per slot: expected string"))?
+                .ok_or(anyhow::anyhow!("Seconds per slot: expected string"))?
                 .parse::<u64>()?;
 
             if seconds_per_slot == 0 {
-                eyre::bail!("Seconds per slot is 0; cannot calculate slot number");
+                anyhow::bail!("Seconds per slot is 0; cannot calculate slot number");
             }
 
             self.seconds_per_slot
@@ -74,7 +76,7 @@ impl BlobFetcher {
         }
 
         if time < genesis_timestamp {
-            eyre::bail!("Time is before genesis; cannot calculate slot number");
+            anyhow::bail!("Time is before genesis; cannot calculate slot number");
         }
 
         Ok((time - genesis_timestamp) / seconds_per_slot)
@@ -87,7 +89,7 @@ impl BlobFetcher {
 
         let res = self.client.get(full_url).send().await?.error_for_status()?;
         let res = serde_json::from_slice::<Value>(&res.bytes().await?)?;
-        let res = res.get("data").ok_or(eyre::eyre!("No data in response"))?;
+        let res = res.get("data").ok_or(anyhow::anyhow!("No data in response"))?;
 
         let blobs = serde_json::from_value::<Vec<BlobSidecar>>(res.clone())?;
 
@@ -100,10 +102,10 @@ impl BlobFetcher {
 
         let res = self.client.get(base_url).send().await?.error_for_status()?;
         let res = serde_json::from_slice::<Value>(&res.bytes().await?)?;
-        let res = res.get("data").ok_or(eyre::eyre!("No data in response"))?;
-        let res = res.get("genesis_time").ok_or(eyre::eyre!("No time"))?;
+        let res = res.get("data").ok_or(anyhow::anyhow!("No data in response"))?;
+        let res = res.get("genesis_time").ok_or(anyhow::anyhow!("No time"))?;
 
-        let genesis_time = res.as_str().ok_or(eyre::eyre!("Expected string"))?;
+        let genesis_time = res.as_str().ok_or(anyhow::anyhow!("Expected string"))?;
         let genesis_time = genesis_time.parse::<u64>()?;
 
         Ok(genesis_time)
@@ -115,7 +117,7 @@ impl BlobFetcher {
 
         let res = self.client.get(base_url).send().await?.error_for_status()?;
         let res = serde_json::from_slice::<Value>(&res.bytes().await?)?;
-        let res = res.get("data").ok_or(eyre::eyre!("No data in response"))?;
+        let res = res.get("data").ok_or(anyhow::anyhow!("No data in response"))?;
 
         Ok(res.clone())
     }

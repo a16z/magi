@@ -1,7 +1,7 @@
 //! Contains the [OpStackEnrData] struct.
 
 use alloy_rlp::{Buf, Decodable, Encodable, Error};
-use eyre::Result;
+use anyhow::Result;
 
 #[derive(Debug, Copy, Default, PartialEq, Clone)]
 pub struct OpStackEnrData {
@@ -34,7 +34,7 @@ impl Encodable for OpStackEnrData {
 }
 
 impl TryFrom<&[u8]> for OpStackEnrData {
-    type Error = eyre::Report;
+    type Error = anyhow::Error;
 
     /// Converts a slice of RLP encoded bytes to [OpStackEnrData]
     fn try_from(mut value: &[u8]) -> Result<Self> {

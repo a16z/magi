@@ -1,5 +1,7 @@
+//! Blob decoding module.
+
 use alloy_primitives::Bytes;
-use eyre::Result;
+use anyhow::Result;
 
 const MAX_BLOB_DATA_SIZE: usize = (4 * 31 + 3) * 1024 - 4;
 const ENCODING_VERSION: u8 = 0;
@@ -11,7 +13,7 @@ pub fn decode_blob_data(blob: &[u8]) -> Result<Bytes> {
     let mut output = vec![0; MAX_BLOB_DATA_SIZE];
 
     if blob[VERSION_OFFSET] != ENCODING_VERSION {
-        eyre::bail!(
+        anyhow::bail!(
             "Blob decoding: Invalid encoding version: want {}, got {}",
             ENCODING_VERSION,
             blob[VERSION_OFFSET]
@@ -21,7 +23,7 @@ pub fn decode_blob_data(blob: &[u8]) -> Result<Bytes> {
     // decode the 3-byte big-endian length value into a 4-byte integer
     let output_len = u32::from_be_bytes([0, blob[2], blob[3], blob[4]]) as usize;
     if output_len > MAX_BLOB_DATA_SIZE {
-        eyre::bail!(
+        anyhow::bail!(
             "Blob decoding: Invalid length: {} exceeds maximum {}",
             output_len,
             MAX_BLOB_DATA_SIZE
@@ -55,7 +57,7 @@ pub fn decode_blob_data(blob: &[u8]) -> Result<Bytes> {
 
     for output_byte in output.iter().take(MAX_BLOB_DATA_SIZE).skip(output_len) {
         if output_byte != &0 {
-            eyre::bail!(
+            anyhow::bail!(
                 "Blob decoding: Extraneous data in field element {}",
                 output_pos / 32
             );
@@ -66,7 +68,7 @@ pub fn decode_blob_data(blob: &[u8]) -> Result<Bytes> {
 
     for byte in blob.iter().skip(input_pos) {
         if byte != &0 {
-            eyre::bail!(
+            anyhow::bail!(
                 "Blob decoding: Extraneous data in input position {}",
                 input_pos
             );
@@ -86,7 +88,7 @@ fn decode_field_element(
 
     // two highest order bits of the first byte of each field element should always be 0
     if result & 0b1100_0000 != 0 {
-        eyre::bail!("Blob decoding: Invalid field element");
+        anyhow::bail!("Blob decoding: Invalid field element");
     }
 
     output[*output_pos..*output_pos + 31].copy_from_slice(&blob[*input_pos + 1..*input_pos + 32]);

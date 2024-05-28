@@ -1,8 +1,9 @@
-use ethers::{
-    types::{transaction::eip2930::AccessList, Address, Bytes, U256},
-    utils::rlp::{Rlp, RlpStream},
-};
-use eyre::Result;
+//! Module to handle [SpanBatch] decoding and processing.
+
+use alloy_rlp::Rlp;
+use alloy_primitives::{Address, Bytes, U256};
+use alloy_rpc_types::transaction::AccessList;
+use anyhow::Result;
 
 use crate::{common::RawTransaction, config::Config};
 
@@ -448,7 +449,7 @@ fn decode_signatures(data: &[u8], tx_count: u64) -> (Vec<(U256, U256)>, &[u8]) {
 /// Decodes a U256 from an arbitrary slice of bytes
 fn decode_u256(data: &[u8]) -> (U256, &[u8]) {
     let (bytes, data) = take_data(data, 32);
-    let value = U256::from_big_endian(bytes);
+    let value = U256::from_be_slice(bytes);
     (value, data)
 }
 
@@ -456,10 +457,8 @@ fn decode_u256(data: &[u8]) -> (U256, &[u8]) {
 mod test {
     use std::io::Read;
 
-    use ethers::{
-        types::H256,
-        utils::{keccak256, rlp::Rlp},
-    };
+    use alloy_rlp::Rlp;
+    use alloy_primitives::keccak256;
     use libflate::zlib::Decoder;
 
     use crate::{
@@ -515,17 +514,13 @@ mod test {
 
         assert_eq!(batch.l1_inclusion_block, 0);
 
-        println!("starting epoch: {}", batch.start_epoch_num());
-
         let inputs = batch.block_inputs(&config);
         inputs.iter().for_each(|input| {
             let block_number = (input.timestamp - config.chain.l2_genesis.timestamp) / 2;
             println!("block: {}, epoch: {}", block_number, input.epoch);
             input.transactions.iter().for_each(|tx| {
-                println!("{:?}", H256::from(keccak256(&tx.0)));
+                println!("{:?}", keccak256(&tx.0));
             });
         });
-
-        // println!("{:?}", batch.block_inputs(&config))
     }
 }

@@ -1,8 +1,10 @@
+//! Module contains the [EngineApi] client.
+
 use std::collections::HashMap;
 use std::time::{Duration, SystemTime};
 
 use again::RetryPolicy;
-use eyre::Result;
+use anyhow::Result;
 use futures::prelude::*;
 use futures_timer::TryFutureExt;
 use reqwest::{header, Client};
@@ -20,7 +22,7 @@ use super::{
 
 use super::{JSONRPC_VERSION, STATIC_ID};
 
-/// An external op-geth engine api client
+/// An external engine api client
 #[derive(Debug, Clone)]
 pub struct EngineApi {
     /// Base request url
@@ -128,7 +130,7 @@ impl EngineApi {
         let client = self
             .client
             .as_ref()
-            .ok_or(eyre::eyre!("Driver missing http client"))?;
+            .ok_or(anyhow::anyhow!("Driver missing http client"))?;
 
         // Clone the secret so we can use it in the retry policy.
         let secret_clone = self.secret.clone();
@@ -142,7 +144,7 @@ impl EngineApi {
                 let claims = secret_clone.generate_claims(Some(SystemTime::now()));
                 let jwt = secret_clone
                     .encode(&claims)
-                    .map_err(|_| eyre::eyre!("EngineApi failed to encode jwt with claims!"))?;
+                    .map_err(|_| anyhow::anyhow!("EngineApi failed to encode jwt with claims!"))?;
 
                 // Send the request
                 client
@@ -150,13 +152,13 @@ impl EngineApi {
                     .header(header::AUTHORIZATION, format!("Bearer {}", jwt))
                     .json(&body)
                     .send()
-                    .map_err(|e| eyre::eyre!(e))
+                    .map_err(|e| anyhow::anyhow!(e))
                     .timeout(Duration::from_secs(2))
                     .await?
                     .json::<EngineApiResponse<P>>()
-                    .map_err(|e| eyre::eyre!(e))
+                    .map_err(|e| anyhow::anyhow!(e))
                     .timeout(Duration::from_secs(2))
-                    .map_err(|e| eyre::eyre!(e))
+                    .map_err(|e| anyhow::anyhow!(e))
                     .await
             })
             .await?;
@@ -166,11 +168,11 @@ impl EngineApi {
         }
 
         if let Some(err) = res.error {
-            eyre::bail!("Engine API POST error: {}", err.message);
+            anyhow::bail!("Engine API POST error: {}", err.message);
         }
 
         // This scenario shouldn't occur as the response should always have either data or an error
-        eyre::bail!("Failed to parse Engine API response")
+        anyhow::bail!("Failed to parse Engine API response")
     }
 
     /// Calls the engine to verify it's available to receive requests

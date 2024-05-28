@@ -1,6 +1,9 @@
+//! A module to handle batcher transactions and frames
+
 use std::sync::mpsc;
 
-use eyre::Result;
+use alloy_primitives::Bytes;
+use anyhow::Result;
 use std::collections::VecDeque;
 
 use crate::derive::PurgeableIterator;
@@ -8,7 +11,7 @@ use crate::derive::PurgeableIterator;
 /// Represents a transaction sent to the `Batch Inbox` on L1.
 pub struct BatcherTransactionMessage {
     /// The L2 transactions included in this batch
-    pub txs: Vec<bytes::Bytes>,
+    pub txs: Vec<Bytes>,
     /// The L1 block number this transaction was included in
     pub l1_origin: u64,
 }
@@ -79,7 +82,7 @@ impl BatcherTransaction {
     /// Creates a new [BatcherTransaction]
     pub fn new(data: &[u8], l1_origin: u64) -> Result<Self> {
         let version = data[0];
-        let frame_data = data.get(1..).ok_or(eyre::eyre!("No frame data"))?;
+        let frame_data = data.get(1..).ok_or(anyhow::anyhow!("No frame data"))?;
 
         let mut offset = 0;
         let mut frames = Vec::new();
@@ -116,7 +119,7 @@ impl Frame {
         let data = &data[offset..];
 
         if data.len() < 23 {
-            eyre::bail!("invalid frame size");
+            anyhow::bail!("invalid frame size");
         }
 
         let channel_id = u128::from_be_bytes(data[0..16].try_into()?);
@@ -125,13 +128,13 @@ impl Frame {
 
         let frame_data_end = 22 + frame_data_len as usize;
         if data.len() < frame_data_end {
-            eyre::bail!("invalid frame size");
+            anyhow::bail!("invalid frame size");
         }
 
         let frame_data = data[22..frame_data_end].to_vec();
 
         let is_last = if data[frame_data_end] > 1 {
-            eyre::bail!("invalid is_last flag");
+            anyhow::bail!("invalid is_last flag");
         } else {
             data[frame_data_end] != 0
         };
@@ -178,7 +181,7 @@ mod tests {
 
     #[test]
     fn test_push_tx() {
-        let data = bytes::Bytes::from(hex::decode(TX_DATA).unwrap());
+        let data = Bytes::from(hex::decode(TX_DATA).unwrap());
         let txs = vec![data];
 
         let (tx, rx) = mpsc::channel();

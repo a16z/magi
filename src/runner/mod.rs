@@ -1,3 +1,5 @@
+//! Module handles running the Magi node.
+
 use std::{process, str::FromStr, time::Duration};
 
 use alloy_primitives::B256;
@@ -5,7 +7,7 @@ use alloy_provider::ext::AdminApi;
 use alloy_provider::{Provider, ProviderBuilder, ReqwestProvider};
 use alloy_rpc_types::{BlockId, BlockNumberOrTag, BlockTransactions, RpcBlockHash};
 
-use eyre::Result;
+use anyhow::Result;
 use tokio::{
     sync::watch::{channel, Receiver},
     time::sleep,
@@ -13,7 +15,7 @@ use tokio::{
 
 use crate::{
     config::{Config, SyncMode, SystemAccounts},
-    driver::Driver,
+    driver::NodeDriver,
     engine::{Engine, EngineApi, ExecutionPayload, ForkchoiceState, Status},
 };
 
@@ -102,20 +104,20 @@ impl Runner {
     /// Note: the `admin` RPC method must be available on the execution client as checkpoint_sync relies on `admin_addPeer`
     pub async fn checkpoint_sync(&self) -> Result<()> {
         let l2_rpc_url = reqwest::Url::parse(&self.config.l2_rpc_url)
-            .map_err(|err| eyre::eyre!(format!("unable to parse l2_rpc_url: {err}")))?;
+            .map_err(|err| anyhow::anyhow!(format!("unable to parse l2_rpc_url: {err}")))?;
         let l2_provider = ProviderBuilder::new().on_http(l2_rpc_url);
 
-        let checkpoint_sync_url = self.config.checkpoint_sync_url.as_ref().ok_or(eyre::eyre!(
+        let checkpoint_sync_url = self.config.checkpoint_sync_url.as_ref().ok_or(anyhow::anyhow!(
             "checkpoint_sync_url is required for checkpoint sync mode"
         ))?;
         let checkpoint_sync_url = reqwest::Url::parse(checkpoint_sync_url)
-            .map_err(|err| eyre::eyre!(format!("unable to parse checkpoint_sync_url: {err}")))?;
+            .map_err(|err| anyhow::anyhow!(format!("unable to parse checkpoint_sync_url: {err}")))?;
         let checkpoint_sync_provider = ProviderBuilder::new().on_http(checkpoint_sync_url);
 
         let checkpoint_block = match self.checkpoint_hash {
             Some(ref checkpoint) => {
                 let hash = B256::from_str(checkpoint)
-                    .map_err(|_| eyre::eyre!("invalid checkpoint block hash provided"))?;
+                    .map_err(|_| anyhow::anyhow!("invalid checkpoint block hash provided"))?;
                 let block_hash = RpcBlockHash::from_hash(hash, None);
                 let block_id = BlockId::Hash(block_hash);
 
@@ -202,7 +204,7 @@ impl Runner {
         let checkpoint_block_num: u64 = checkpoint_payload
             .block_number
             .try_into()
-            .map_err(|_| eyre::eyre!("could not convert checkpoint block number to u64"))?;
+            .map_err(|_| anyhow::anyhow!("could not convert checkpoint block number to u64"))?;
         while l2_provider.get_block_number().await? < checkpoint_block_num {
             self.check_shutdown()?;
             sleep(Duration::from_secs(3)).await;
@@ -217,7 +219,7 @@ impl Runner {
     /// Creates and starts the [Driver] which handles the derivation sync process.
     async fn start_driver(&self) -> Result<()> {
         let mut driver =
-            Driver::from_config(self.config.clone(), self.shutdown_recv.clone()).await?;
+            NodeDriver::from_config(self.config.clone(), self.shutdown_recv.clone()).await?;
 
         if let Err(err) = driver.start().await {
             tracing::error!("driver failure: {}", err);
@@ -245,7 +247,7 @@ impl Runner {
         let l2_block = checkpoint_sync_provider
             .get_block(block.into(), true)
             .await?
-            .ok_or_else(|| eyre::eyre!("could not find block"))?;
+            .ok_or_else(|| anyhow::anyhow!("could not find block"))?;
 
         let predeploy = SystemAccounts::default().attributes_predeploy;
         let full_txs = if let BlockTransactions::Full(txs) = l2_block.transactions {

@@ -1,5 +1,7 @@
+//! Core [Engine] trait for the Engine API.
+
 use async_trait::async_trait;
-use eyre::Result;
+use anyhow::Result;
 
 use super::{
     ExecutionPayload, ForkChoiceUpdate, ForkchoiceState, PayloadAttributes, PayloadId,

@@ -1,3 +1,5 @@
+//! RPC module to host the RPC server.
+
 use std::{fmt::Display, net::SocketAddr, sync::Arc};
 
 use crate::{
@@ -5,7 +7,7 @@ use crate::{
     version::Version,
 };
 
-use eyre::Result;
+use anyhow::Result;
 
 use alloy_primitives::{keccak256, B256};
 use alloy_provider::{Provider, ProviderBuilder};

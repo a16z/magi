@@ -1,6 +1,8 @@
+//! Module contains the Discv5 discovery & libp2p services.
+
 use std::{net::SocketAddr, time::Duration};
 
-use eyre::Result;
+use anyhow::Result;
 use futures::{prelude::*, select};
 use libp2p::{
     gossipsub::{self, IdentTopic, Message, MessageId},
@@ -65,7 +67,7 @@ impl Service {
         let multiaddr = Multiaddr::from(addr);
         swarm
             .listen_on(multiaddr)
-            .map_err(|_| eyre::eyre!("swarm listen failed"))?;
+            .map_err(|_| anyhow::anyhow!("swarm listen failed"))?;
 
         let mut handlers = Vec::new();
         handlers.append(&mut self.handlers);
@@ -164,11 +166,11 @@ impl Behaviour {
             .validate_messages()
             .message_id_fn(compute_message_id)
             .build()
-            .map_err(|_| eyre::eyre!("gossipsub config creation failed"))?;
+            .map_err(|_| anyhow::anyhow!("gossipsub config creation failed"))?;
 
         let mut gossipsub =
             gossipsub::Behaviour::new(gossipsub::MessageAuthenticity::Anonymous, gossipsub_config)
-                .map_err(|_| eyre::eyre!("gossipsub behaviour creation failed"))?;
+                .map_err(|_| anyhow::anyhow!("gossipsub behaviour creation failed"))?;
 
         handlers
             .iter()
@@ -180,7 +182,7 @@ impl Behaviour {
                         let topic = IdentTopic::new(topic.to_string());
                         gossipsub
                             .subscribe(&topic)
-                            .map_err(|_| eyre::eyre!("subscription failed"))
+                            .map_err(|_| anyhow::anyhow!("subscription failed"))
                     })
                     .collect::<Vec<_>>()
             })

@@ -1,33 +1,29 @@
-#![warn(unreachable_pub)]
-#![deny(missing_docs, missing_debug_implementations)]
+//! L2 Engine API module.
 
-/// Payload Types
-mod payload;
-pub use payload::*;
+pub mod payload;
+pub use payload::{ExecutionPayload, PayloadAttributes, PayloadId, PayloadStatus, Status};
 
-/// Forkchoice Types
-mod fork;
-pub use fork::*;
+pub mod fork;
+pub use fork::{ForkChoiceUpdate, ForkchoiceState};
 
-/// The Engine Drive
-mod api;
-pub use api::*;
+pub mod api;
+pub use api::{EngineApi, EngineApiErrorPayload, EngineApiResponse};
 
-/// Auth module
-mod auth;
-pub use auth::*;
+pub mod auth;
+pub use auth::JwtSecret;
 
-/// Common Types
-mod types;
-pub use types::*;
+pub mod params;
+pub use params::{
+    DEFAULT_AUTH_PORT, ENGINE_FORKCHOICE_UPDATED_TIMEOUT, ENGINE_FORKCHOICE_UPDATED_V2,
+    ENGINE_GET_PAYLOAD_TIMEOUT, ENGINE_GET_PAYLOAD_V2, ENGINE_NEW_PAYLOAD_TIMEOUT,
+    ENGINE_NEW_PAYLOAD_V2, JSONRPC_VERSION, STATIC_ID,
+};
 
-/// Core Trait
-mod traits;
-pub use traits::*;
+pub mod traits;
+pub use traits::Engine;
 
-/// Mock Engine
-mod mock_engine;
-pub use mock_engine::*;
+pub mod mock_engine;
+pub use mock_engine::MockEngine;
 
 #[cfg(test)]
 mod tests {

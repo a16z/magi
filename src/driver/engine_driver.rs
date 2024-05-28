@@ -1,12 +1,11 @@
+//! A module to handle block production & validation
+
 use std::sync::Arc;
 
-use ethers::providers::{Http, Middleware, Provider};
-use ethers::types::Transaction;
-use ethers::{
-    types::{Block, H256},
-    utils::keccak256,
-};
-use eyre::Result;
+use alloy_primitives::keccak256;
+use alloy_provider::{Provider, ReqwestProvider};
+use alloy_rpc_types::{Block, BlockTransactions};
+use anyhow::Result;
 
 use crate::{
     common::{BlockInfo, Epoch},
@@ -19,7 +18,7 @@ pub struct EngineDriver<E: Engine> {
     /// The L2 execution engine
     engine: Arc<E>,
     /// Provider for the local L2 execution RPC
-    provider: Provider<Http>,
+    provider: ReqwestProvider,
     /// Blocktime of the L2 chain
     blocktime: u64,
     /// Most recent block found on the p2p network
@@ -38,7 +37,7 @@ impl<E: Engine> EngineDriver<E> {
     /// Initiates validation & production of a new L2 block from the given [PayloadAttributes] and updates the forkchoice
     pub async fn handle_attributes(&mut self, attributes: PayloadAttributes) -> Result<()> {
         let timestamp: u64 = attributes.timestamp.try_into()?;
-        let block: Option<Block<Transaction>> = self.block_at(timestamp).await;
+        let block: Option<Block> = self.block_at(timestamp).await;
 
         if let Some(block) = block {
             if should_skip(&block, &attributes)? {
@@ -114,11 +113,7 @@ impl<E: Engine> EngineDriver<E> {
     }
 
     /// Updates the forkchoice by sending `engine_forkchoiceUpdatedV2` (v3 post Ecotone) to the engine with no payload.
-    async fn skip_attributes(
-        &mut self,
-        attributes: PayloadAttributes,
-        block: Block<Transaction>,
-    ) -> Result<()> {
+    async fn skip_attributes(&mut self, attributes: PayloadAttributes, block: Block) -> Result<()> {
         let new_epoch = *attributes.epoch.as_ref().unwrap();
         let new_head = BlockInfo::try_from(block)?;
         self.update_safe_head(new_head, new_epoch, false)?;
@@ -137,12 +132,12 @@ impl<E: Engine> EngineDriver<E> {
             .await?;
 
         if update.payload_status.status != Status::Valid {
-            eyre::bail!("invalid payload attributes");
+            anyhow::bail!("invalid payload attributes");
         }
 
         let id = update
             .payload_id
-            .ok_or(eyre::eyre!("engine did not return payload id"))?;
+            .ok_or(anyhow::anyhow!("engine did not return payload id"))?;
 
         self.engine.get_payload(id).await
     }
@@ -151,7 +146,7 @@ impl<E: Engine> EngineDriver<E> {
     async fn push_payload(&self, payload: ExecutionPayload) -> Result<()> {
         let status = self.engine.new_payload(payload).await?;
         if status.status != Status::Valid && status.status != Status::Accepted {
-            eyre::bail!("invalid execution payload");
+            anyhow::bail!("invalid execution payload");
         }
 
         Ok(())
@@ -163,7 +158,7 @@ impl<E: Engine> EngineDriver<E> {
 
         let update = self.engine.forkchoice_updated(forkchoice, None).await?;
         if update.payload_status.status != Status::Valid {
-            eyre::bail!(
+            anyhow::bail!(
                 "could not accept new forkchoice: {:?}",
                 update.payload_status.validation_error
             );
@@ -206,22 +201,22 @@ impl<E: Engine> EngineDriver<E> {
     }
 
     /// Fetches the L2 block for a given timestamp from the L2 Execution Client
-    async fn block_at(&self, timestamp: u64) -> Option<Block<Transaction>> {
+    async fn block_at(&self, timestamp: u64) -> Option<Block> {
         let time_diff = timestamp as i64 - self.finalized_head.timestamp as i64;
         let blocks = time_diff / self.blocktime as i64;
         let block_num = self.finalized_head.number as i64 + blocks;
         self.provider
-            .get_block_with_txs(block_num as u64)
+            .get_block((block_num as u64).into(), true)
             .await
             .ok()?
     }
 }
 
 /// True if transactions in [PayloadAttributes] are not the same as those in a fetched L2 [Block]
-fn should_skip(block: &Block<Transaction>, attributes: &PayloadAttributes) -> Result<bool> {
+fn should_skip(block: &Block, attributes: &PayloadAttributes) -> Result<bool> {
     tracing::debug!(
         "comparing block at {} with attributes at {}",
-        block.timestamp,
+        block.header.timestamp,
         attributes.timestamp
     );
 
@@ -230,25 +225,26 @@ fn should_skip(block: &Block<Transaction>, attributes: &PayloadAttributes) -> Re
         .as_ref()
         .unwrap()
         .iter()
-        .map(|tx| H256(keccak256(&tx.0)))
+        .map(|tx| keccak256(&tx.0))
         .collect::<Vec<_>>();
 
-    let block_hashes = block
-        .transactions
-        .iter()
-        .map(|tx| tx.hash())
-        .collect::<Vec<_>>();
+    let BlockTransactions::Full(txs) = &block.transactions else {
+        return Ok(true);
+    };
+
+    let block_hashes = txs.iter().map(|tx| tx.hash()).collect::<Vec<_>>();
 
     tracing::debug!("attribute hashes: {:?}", attributes_hashes);
     tracing::debug!("block hashes: {:?}", block_hashes);
 
     let is_same = attributes_hashes == block_hashes
-        && attributes.timestamp == alloy_primitives::U64::from(block.timestamp.as_u64())
-        && attributes.prev_randao
-            == alloy_primitives::B256::from_slice(block.mix_hash.unwrap().as_bytes())
-        && attributes.suggested_fee_recipient
-            == alloy_primitives::Address::from_slice(block.author.unwrap().as_bytes())
-        && attributes.gas_limit == alloy_primitives::U64::from(block.gas_limit.as_u64());
+        && attributes.timestamp == block.header.timestamp
+        && block
+            .header
+            .mix_hash
+            .map_or(false, |m| m == attributes.prev_randao)
+        && attributes.suggested_fee_recipient == block.header.miner
+        && attributes.gas_limit == block.header.gas_limit;
 
     Ok(is_same)
 }
@@ -258,7 +254,7 @@ impl EngineDriver<EngineApi> {
     pub fn new(
         finalized_head: BlockInfo,
         finalized_epoch: Epoch,
-        provider: Provider<Http>,
+        provider: ReqwestProvider,
         config: &Arc<Config>,
     ) -> Result<Self> {
         let engine = Arc::new(EngineApi::new(&config.l2_engine_url, &config.jwt_secret));

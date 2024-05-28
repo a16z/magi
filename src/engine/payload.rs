@@ -1,9 +1,11 @@
-use alloy_consensus::TxEnvelope;
+//! Payload types for the L2 execution engine.
+
+use op_alloy_consensus::OpTxEnvelope;
 use alloy_eips::eip2718::Encodable2718;
 use alloy_primitives::{Address, Bytes, B256, U64};
 use alloy_rpc_types::Block;
 use alloy_rpc_types::BlockTransactions;
-use eyre::Result;
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -55,19 +57,19 @@ pub struct ExecutionPayload {
 }
 
 impl TryFrom<Block> for ExecutionPayload {
-    type Error = eyre::Report;
+    type Error = anyhow::Error;
 
     /// Converts a [Block] to an [ExecutionPayload]
     fn try_from(value: Block) -> Result<Self> {
         let txs = if let BlockTransactions::Full(txs) = value.transactions {
             txs
         } else {
-            return Err(eyre::eyre!("Expected full transactions"));
+            return Err(anyhow::anyhow!("Expected full transactions"));
         };
         let encoded_txs = (txs
             .into_iter()
             .map(|tx| {
-                let envelope: TxEnvelope = tx.try_into().unwrap();
+                let envelope: OpTxEnvelope = tx.try_into().unwrap();
                 let encoded = envelope.encoded_2718();
                 RawTransaction(encoded.to_vec())
             })
@@ -83,11 +85,11 @@ impl TryFrom<Block> for ExecutionPayload {
             prev_randao: value
                 .header
                 .mix_hash
-                .ok_or_else(|| eyre::eyre!("Missing mix hash"))?,
+                .ok_or_else(|| anyhow::anyhow!("Missing mix hash"))?,
             block_number: value
                 .header
                 .number
-                .ok_or_else(|| eyre::eyre!("Missing block number"))?
+                .ok_or_else(|| anyhow::anyhow!("Missing block number"))?
                 .try_into()?,
             gas_limit: (value.header.gas_limit as u64).try_into()?,
             gas_used: (value.header.gas_used as u64).try_into()?,
@@ -98,7 +100,7 @@ impl TryFrom<Block> for ExecutionPayload {
             block_hash: value
                 .header
                 .hash
-                .ok_or_else(|| eyre::eyre!("Missing block hash"))?,
+                .ok_or_else(|| anyhow::anyhow!("Missing block hash"))?,
             transactions: encoded_txs,
             withdrawals: Some(Vec::new()),
             blob_gas_used: value
@@ -196,7 +198,7 @@ mod tests {
     use crate::engine::ExecutionPayload;
     use alloy_primitives::{b256, uint};
     use alloy_provider::{Provider, ProviderBuilder};
-    use eyre::Result;
+    use anyhow::Result;
 
     #[tokio::test]
     async fn test_from_block_hash_to_execution_paylaod() -> Result<()> {

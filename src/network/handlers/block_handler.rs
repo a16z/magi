@@ -1,8 +1,10 @@
+//! A module for handling blocks received via p2p gossip.
+
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::SystemTime;
 
 use alloy_primitives::{keccak256, Address, Bytes, Signature, B256, U64};
-use eyre::Result;
+use anyhow::Result;
 use libp2p::gossipsub::{IdentTopic, Message, MessageAcceptance, TopicHash};
 use ssz_rs::{prelude::*, List, Vector, U256};
 use tokio::sync::watch;

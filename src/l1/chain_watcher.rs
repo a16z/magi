@@ -1,10 +1,12 @@
+//! Contains the [ChainWatcher] which monitors L1 for new blocks and events.
+
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use eyre::Result;
+use anyhow::Result;
 use once_cell::sync::Lazy;
 use tokio::{spawn, sync::mpsc, task::JoinHandle, time::sleep};
 
-use alloy_primitives::{keccak256, Address, Bytes, B256};
+use alloy_primitives::{keccak256, U256, Address, Bytes, B256};
 use alloy_provider::{Provider, ProviderBuilder, ReqwestProvider};
 use alloy_rpc_types::{Block, BlockId, BlockNumberOrTag, BlockTransactions, Filter, Transaction};
 
@@ -15,17 +17,17 @@ use crate::{
     l1::decode_blob_data,
 };
 
-use super::{l1_info::L1BlockInfo, BlobFetcher, L1Info, SystemConfigUpdate};
+use super::{BlobFetcher, L1BlockInfo, L1Info, SystemConfigUpdate};
 
-static CONFIG_UPDATE_TOPIC: Lazy<B256> =
+pub static CONFIG_UPDATE_TOPIC: Lazy<B256> =
     Lazy::new(|| keccak256("ConfigUpdate(uint256,uint8,bytes)"));
 
-static TRANSACTION_DEPOSITED_TOPIC: Lazy<B256> =
+pub static TRANSACTION_DEPOSITED_TOPIC: Lazy<B256> =
     Lazy::new(|| keccak256("TransactionDeposited(address,address,uint256,bytes)"));
 
 /// The transaction type used to identify transactions that carry blobs
 /// according to EIP 4844.
-const BLOB_CARRYING_TRANSACTION_TYPE: u64 = 3;
+pub const BLOB_CARRYING_TRANSACTION_TYPE: u64 = 3;
 
 /// The data contained in a batcher transaction.
 /// The actual source of this data can be either calldata or blobs.
@@ -147,9 +149,9 @@ impl ChainWatcher {
         let receiver = self
             .block_update_receiver
             .as_mut()
-            .ok_or(eyre::eyre!("the watcher hasn't started"))?;
+            .ok_or(anyhow::anyhow!("the watcher hasn't started"))?;
 
-        receiver.try_recv().map_err(eyre::Report::from)
+        receiver.try_recv().map_err(anyhow::Error::from)
     }
 
     /// Asynchronously receives from the block update channel.
@@ -200,7 +202,7 @@ impl InnerWatcher {
             let batch_sender = alloy_primitives::Address::from_slice(&input[176..196]);
             let l1_fee_overhead = alloy_primitives::U256::from_be_slice(&input[196..228]);
             let l1_fee_scalar = alloy_primitives::U256::from_be_slice(&input[228..260]);
-            let gas_lim_slice = block.header.gas_limit.to_be_bytes();
+            let gas_lim_slice: [u8; 32] = block.header.gas_limit.to_be_bytes();
             let gas_limit = alloy_primitives::U256::from_be_slice(&gas_lim_slice);
 
             SystemConfig {
@@ -360,7 +362,7 @@ impl InnerWatcher {
         }
     }
 
-    async fn get_finalized(&self) -> Result<u64> {
+    async fn get_finalized(&self) -> Result<U256> {
         let block_number = match self.config.devnet {
             false => BlockNumberOrTag::Finalized,
             true => BlockNumberOrTag::Latest,
@@ -369,27 +371,27 @@ impl InnerWatcher {
         self.provider
             .get_block(BlockId::Number(block_number), false)
             .await?
-            .ok_or(eyre::eyre!("block not found"))?
+            .ok_or(anyhow::anyhow!("block not found"))?
             .header
             .number
-            .ok_or(eyre::eyre!("block pending"))
+            .ok_or(anyhow::anyhow!("block pending"))
     }
 
-    async fn get_head(&self) -> Result<u64> {
+    async fn get_head(&self) -> Result<U256> {
         self.provider
             .get_block(BlockId::Number(BlockNumberOrTag::Latest), false)
             .await?
-            .ok_or(eyre::eyre!("block not found"))?
+            .ok_or(anyhow::anyhow!("block not found"))?
             .header
             .number
-            .ok_or(eyre::eyre!("block pending"))
+            .ok_or(anyhow::anyhow!("block pending"))
     }
 
     async fn get_block(&self, block_num: u64) -> Result<Block> {
         self.provider
             .get_block(BlockId::Number(BlockNumberOrTag::Number(block_num)), true)
             .await?
-            .ok_or(eyre::eyre!("block not found"))
+            .ok_or(anyhow::anyhow!("block not found"))
     }
 
     async fn get_deposits(&mut self, block_num: u64) -> Result<Vec<UserDeposited>> {
@@ -439,7 +441,7 @@ impl InnerWatcher {
         let full_txs = if let BlockTransactions::Full(txs) = &block.transactions {
             txs
         } else {
-            eyre::bail!("expected full transactions");
+            anyhow::bail!("expected full transactions");
         };
 
         for tx in full_txs.iter() {
@@ -484,7 +486,7 @@ impl InnerWatcher {
             let Some(blob_sidecar) = blobs.iter().find(|b| b.index == blob_index as u64) else {
                 // This can happen in the case the blob retention window has expired
                 // and the data is no longer available. This case is not handled yet.
-                eyre::bail!("blob index {} not found in fetched sidecars", blob_index);
+                anyhow::bail!("blob index {} not found in fetched sidecars", blob_index);
             };
 
             // decode the full blob
@@ -511,7 +513,9 @@ fn generate_http_provider(url: &str) -> Arc<ReqwestProvider> {
     let Ok(url) = reqwest::Url::parse(url) else {
         panic!("unable to parse url: {}", url);
     };
-    let provider = ProviderBuilder::new().on_http(url);
+    let Ok(provider) = ProviderBuilder::new().on_http(url) else {
+        panic!("unable to create provider for url: {}", url);
+    };
     Arc::new(provider)
 }
 

@@ -1,7 +1,9 @@
+//! Module contains the network handlers for processing incoming p2p gossip messages.
+
 use libp2p::gossipsub::{Message, MessageAcceptance, TopicHash};
 
-/// A module for managing incoming p2p gossip messages
 pub mod block_handler;
+pub use block_handler::BlockHandler;
 
 /// This trait defines the functionality required to process incoming messages
 /// and determine their acceptance within the network. Implementors of this trait

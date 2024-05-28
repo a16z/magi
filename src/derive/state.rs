@@ -1,9 +1,10 @@
+//! A module that keeps track of the current derivation state.
+//! The [State] caches previous L1 and L2 blocks.
+
 use std::{collections::BTreeMap, sync::Arc};
 
-use ethers::{
-    providers::{Http, Middleware, Provider},
-    types::H256,
-};
+use alloy_primitives::B256;
+use alloy_provider::Provider;
 
 use crate::{
     common::{BlockInfo, Epoch},
@@ -12,12 +13,14 @@ use crate::{
     l1::L1Info,
 };
 
-/// Represents the current derivation state. Consists of cached L1 & L2 blocks, and details of the current safe head & safe epoch.
+/// Represents the current derivation state.
+/// Consists of cached L1 & L2 blocks, and details of the current safe head & safe epoch.
+#[derive(Debug)]
 pub struct State {
     /// Map of L1 blocks from the current L1 safe epoch - ``seq_window_size``
-    l1_info: BTreeMap<H256, L1Info>,
+    l1_info: BTreeMap<B256, L1Info>,
     /// Map of L1 block hashes from the current L1 safe epoch - ``seq_window_size``
-    l1_hashes: BTreeMap<u64, H256>,
+    l1_hashes: BTreeMap<u64, B256>,
     /// Map of L2 blocks from the current L2 safe head - (``max_seq_drift`` / ``blocktime``)
     l2_refs: BTreeMap<u64, (BlockInfo, Epoch)>,
     /// The current safe head
@@ -35,7 +38,7 @@ impl State {
     pub async fn new(
         finalized_head: BlockInfo,
         finalized_epoch: Epoch,
-        provider: &Provider<Http>,
+        provider: &impl Provider,
         config: Arc<Config>,
     ) -> Self {
         let l2_refs = l2_refs(finalized_head.number, provider, &config).await;
@@ -52,7 +55,7 @@ impl State {
     }
 
     /// Returns a cached L1 block by block hash
-    pub fn l1_info_by_hash(&self, hash: H256) -> Option<&L1Info> {
+    pub fn l1_info_by_hash(&self, hash: B256) -> Option<&L1Info> {
         self.l1_info.get(&hash)
     }
 
@@ -73,7 +76,7 @@ impl State {
     }
 
     /// Returns an epoch from an L1 block hash
-    pub fn epoch_by_hash(&self, hash: H256) -> Option<Epoch> {
+    pub fn epoch_by_hash(&self, hash: B256) -> Option<Epoch> {
         self.l1_info_by_hash(hash).map(|info| Epoch {
             number: info.block_info.number,
             hash: info.block_info.hash,
@@ -95,16 +98,9 @@ impl State {
     /// This also updates ``current_epoch_num`` to the block number of the given ``l1_info``.
     pub fn update_l1_info(&mut self, l1_info: L1Info) {
         self.current_epoch_num = l1_info.block_info.number;
-
-        self.l1_hashes.insert(
-            l1_info.block_info.number,
-            H256::from_slice(l1_info.block_info.hash.as_slice()),
-        );
-        self.l1_info.insert(
-            H256::from_slice(l1_info.block_info.hash.as_slice()),
-            l1_info,
-        );
-
+        self.l1_hashes
+            .insert(l1_info.block_info.number, l1_info.block_info.hash);
+        self.l1_info.insert(l1_info.block_info.hash, l1_info);
         self.prune();
     }
 
@@ -168,7 +164,7 @@ impl State {
 /// If the lookback period is before the genesis block, it will return L2 blocks starting from genesis.
 async fn l2_refs(
     head_num: u64,
-    provider: &Provider<Http>,
+    provider: &impl Provider,
     config: &Config,
 ) -> BTreeMap<u64, (BlockInfo, Epoch)> {
     let lookback = config.chain.max_seq_drift / config.chain.blocktime;
@@ -178,7 +174,7 @@ async fn l2_refs(
 
     let mut refs = BTreeMap::new();
     for i in start..=head_num {
-        let l2_block = provider.get_block_with_txs(i).await;
+        let l2_block = provider.get_block(i.into(), true).await;
         if let Ok(Some(l2_block)) = l2_block {
             match HeadInfo::try_from_l2_block(config, l2_block) {
                 Ok(head_info) => {
