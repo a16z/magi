@@ -3,21 +3,6 @@ set -e
 
 DATADIR=/data/erigon
 
-if [ $NETWORK = "optimism-goerli" ]
-then
-    if [ ! -d $DATADIR ]
-    then
-        # apk update && apk install tar
-        mkdir $DATADIR
-        wget "https://backup.goerli.op-erigon.testinprod.io" -O erigon.tar.gz
-        tar -zxvf erigon.tar.gz -C /tmp
-        mv /tmp/chaindata $DATADIR
-    fi
-else
-    echo "Network not recognized. Available option is optimism-goerli. Use op-geth for base-goerli"
-    exit 1
-fi
-
 echo $JWT_SECRET > jwtsecret.txt
 
 exec erigon \
@@ -31,4 +16,4 @@ exec erigon \
     --authrpc.port=8551 \
     --authrpc.vhosts="*" \
     --authrpc.jwtsecret=/jwtsecret.txt \
-    --rollup.sequencerhttp="https://goerli.optimism.io" \
+    --rollup.sequencerhttp="https://sepolia.optimism.io" \

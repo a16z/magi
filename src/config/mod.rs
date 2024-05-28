@@ -278,15 +278,13 @@ impl ChainConfig {
     pub fn from_network_name(network: &str) -> Self {
         match network.to_lowercase().as_str() {
             "optimism" => Self::optimism(),
-            "optimism-goerli" => Self::optimism_goerli(),
             "optimism-sepolia" => Self::optimism_sepolia(),
             "base" => Self::base(),
-            "base-goerli" => Self::base_goerli(),
             "base-sepolia" => Self::base_sepolia(),
             file if file.ends_with(".json") => Self::from_json(file),
             _ => panic!(
                 "Invalid network name. \\
-            Please use one of the following: 'optimism', 'optimism-goerli', 'optimism-sepolia', 'base-goerli', 'base-sepolia', 'base'. \\
+            Please use one of the following: 'optimism', 'optimism-sepolia', 'base-sepolia', 'base'. \\
             You can also use a JSON file path for custom configuration."
             ),
         }
@@ -344,48 +342,6 @@ impl ChainConfig {
             canyon_time: 170499240,
             delta_time: 1708560000,
             ecotone_time: 1710781201,
-        }
-    }
-
-    /// [ChainConfig] for Optimism Goerli
-    pub fn optimism_goerli() -> Self {
-        Self {
-            network: "optimism-goerli".to_string(),
-            l1_chain_id: 5,
-            l2_chain_id: 420,
-            l1_start_epoch: Epoch {
-                hash: hash("0x6ffc1bf3754c01f6bb9fe057c1578b87a8571ce2e9be5ca14bace6eccfd336c7"),
-                number: 8300214,
-                timestamp: 1673550516,
-            },
-            l2_genesis: BlockInfo {
-                hash: hash("0x0f783549ea4313b784eadd9b8e8a69913b368b7366363ea814d7707ac505175f"),
-                number: 4061224,
-                parent_hash: hash(
-                    "0x31267a44f1422f4cab59b076548c075e79bd59e691a23fbce027f572a2a49dc9",
-                ),
-                timestamp: 1673550516,
-            },
-            system_config: SystemConfig {
-                batch_sender: addr("0x7431310e026b69bfc676c0013e12a1a11411eec9"),
-                gas_limit: U256::from(25_000_000),
-                l1_fee_overhead: U256::from(2100),
-                l1_fee_scalar: U256::from(1000000),
-                unsafe_block_signer: addr("0x715b7219D986641DF9eFd9C7Ef01218D528e19ec"),
-            },
-            system_config_contract: addr("0xAe851f927Ee40dE99aaBb7461C00f9622ab91d60"),
-            batch_inbox: addr("0xff00000000000000000000000000000000000420"),
-            deposit_contract: addr("0x5b47E1A08Ea6d985D6649300584e6722Ec4B1383"),
-            l2_to_l1_message_passer: addr("0xEF2ec5A5465f075E010BE70966a8667c94BCe15a"),
-            max_channel_size: 100_000_000,
-            channel_timeout: 300,
-            seq_window_size: 3600,
-            max_seq_drift: 600,
-            regolith_time: 1679079600,
-            canyon_time: 1699981200,
-            delta_time: 1703116800,
-            ecotone_time: 1707238800,
-            blocktime: 2,
         }
     }
 
@@ -468,46 +424,6 @@ impl ChainConfig {
             canyon_time: 1704992401,
             delta_time: 1708560000,
             ecotone_time: 1710781201,
-        }
-    }
-
-    /// [ChainConfig] for Base Goerli
-    pub fn base_goerli() -> Self {
-        Self {
-            network: "base-goerli".to_string(),
-            l1_chain_id: 5,
-            l2_chain_id: 84531,
-            l1_start_epoch: Epoch {
-                number: 8410981,
-                hash: hash("0x73d89754a1e0387b89520d989d3be9c37c1f32495a88faf1ea05c61121ab0d19"),
-                timestamp: 1675193616,
-            },
-            l2_genesis: BlockInfo {
-                hash: hash("0xa3ab140f15ea7f7443a4702da64c10314eb04d488e72974e02e2d728096b4f76"),
-                number: 0,
-                parent_hash: H256::zero(),
-                timestamp: 1675193616,
-            },
-            system_config: SystemConfig {
-                batch_sender: addr("0x2d679b567db6187c0c8323fa982cfb88b74dbcc7"),
-                gas_limit: U256::from(25_000_000),
-                l1_fee_overhead: U256::from(2100),
-                l1_fee_scalar: U256::from(1000000),
-                unsafe_block_signer: addr("0x32a4e99A72c11E9DD3dC159909a2D7BD86C1Bc51"),
-            },
-            system_config_contract: addr("0xb15eea247ece011c68a614e4a77ad648ff495bc1"),
-            batch_inbox: addr("0x8453100000000000000000000000000000000000"),
-            deposit_contract: addr("0xe93c8cd0d409341205a592f8c4ac1a5fe5585cfa"),
-            l2_to_l1_message_passer: addr("0x4200000000000000000000000000000000000016"),
-            max_channel_size: 100_000_000,
-            channel_timeout: 300,
-            seq_window_size: 3600,
-            max_seq_drift: 600,
-            regolith_time: 1683219600,
-            canyon_time: 1699981200,
-            delta_time: 1703116800,
-            ecotone_time: 1707238800,
-            blocktime: 2,
         }
     }
 

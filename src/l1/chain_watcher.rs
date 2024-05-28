@@ -554,8 +554,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_get_batcher_transactions() {
-        let Ok(l1_beacon_url) = std::env::var("L1_GOERLI_BEACON_RPC_URL") else {
-            println!("L1_GOERLI_BEACON_RPC_URL not set; skipping test");
+        let Ok(l1_beacon_url) = std::env::var("L1_TEST_BEACON_RPC_URL") else {
+            println!("L1_TEST_BEACON_RPC_URL not set; skipping test");
             return;
         };
         let Ok(l1_rpc_url) = std::env::var("L1_TEST_RPC_URL") else {
@@ -565,7 +565,7 @@ mod tests {
 
         let config = Arc::new(Config {
             l1_beacon_url,
-            chain: ChainConfig::optimism_goerli(),
+            chain: ChainConfig::optimism_sepolia(),
             ..Default::default()
         });
 

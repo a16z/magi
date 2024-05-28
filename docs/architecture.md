@@ -118,4 +118,4 @@ The [Config](../src/config/mod.rs) object contains the system configuration for 
 - `regolith_time`: Timestamp of the regolith hardfork.
 - `blocktime`: The L2 blocktime.
 
-The [ChainConfig](../src/config/mod.rs) contains default implementations for certain chains. For example, an `optimism-goerli` [ChainConfig](../src/config/mod.rs) instance can be created by calling `ChainConfig::optimism_goerli()`, and a `base-goerli` instance can be created by calling `ChainConfig::base_goerli()`.
+The [ChainConfig](../src/config/mod.rs) contains default implementations for certain chains. For example, an `optimism` [ChainConfig](../src/config/mod.rs) instance can be created by calling `ChainConfig::optimism()`, and a `base` instance can be created by calling `ChainConfig::base()`.
