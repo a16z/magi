@@ -1,7 +1,7 @@
 //! A module to handle conversions to a [HeadInfo] struct.
 
 use alloy_rpc_types::{Block, BlockTransactions};
-use eyre::Result;
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -39,12 +39,12 @@ impl HeadInfo {
     /// This function is used when the L2 block is from the Bedrock hardfork or earlier.
     pub fn try_from_bedrock_block(block: Block) -> Result<Self> {
         let BlockTransactions::Full(txs) = block.transactions else {
-            return Err(eyre::eyre!(
+            return Err(anyhow::anyhow!(
                 "Could not find the L1 attributes deposited transaction"
             ));
         };
         let Some(first_tx) = txs.first() else {
-            return Err(eyre::eyre!(
+            return Err(anyhow::anyhow!(
                 "Could not find the L1 attributes deposited transaction"
             ));
         };
@@ -63,12 +63,12 @@ impl HeadInfo {
     /// This function is used when the L2 block is from the Ecotone hardfork or later.
     pub fn try_from_ecotone_block(block: Block) -> Result<Self> {
         let BlockTransactions::Full(txs) = block.transactions else {
-            return Err(eyre::eyre!(
+            return Err(anyhow::anyhow!(
                 "Could not find the L1 attributes deposited transaction"
             ));
         };
         let Some(first_tx) = txs.first() else {
-            return Err(eyre::eyre!(
+            return Err(anyhow::anyhow!(
                 "Could not find the L1 attributes deposited transaction"
             ));
         };
@@ -91,7 +91,7 @@ mod tests {
         use alloy_primitives::b256;
         use alloy_provider::{Provider, ProviderBuilder};
         use alloy_rpc_types::Block;
-        use eyre::Result;
+        use anyhow::Result;
 
         #[test]
         fn should_fail_conversion_from_a_block_to_head_info_if_missing_l1_deposited_tx(
@@ -221,10 +221,10 @@ mod tests {
         #[tokio::test]
         async fn test_head_info_from_l2_block_hash() -> Result<()> {
             let Ok(l1_rpc_url) = std::env::var("L1_TEST_RPC_URL") else {
-                eyre::bail!("L1_TEST_RPC_URL is not set");
+                anyhow::bail!("L1_TEST_RPC_URL is not set");
             };
             let Ok(l2_rpc_url) = std::env::var("L2_TEST_RPC_URL") else {
-                eyre::bail!("L2_TEST_RPC_URL is not set");
+                anyhow::bail!("L2_TEST_RPC_URL is not set");
             };
 
             let l2_block_hash =
@@ -270,15 +270,15 @@ mod tests {
         use crate::driver::HeadInfo;
         use alloy_primitives::b256;
         use alloy_provider::{Provider, ProviderBuilder};
-        use eyre::Result;
+        use anyhow::Result;
 
         #[tokio::test]
         async fn test_head_info_from_l2_block_hash() -> Result<()> {
             let Ok(l1_rpc_url) = std::env::var("L1_TEST_RPC_URL") else {
-                eyre::bail!("L1_TEST_RPC_URL is not set");
+                anyhow::bail!("L1_TEST_RPC_URL is not set");
             };
             let Ok(l2_rpc_url) = std::env::var("L2_TEST_RPC_URL") else {
-                eyre::bail!("L2_TEST_RPC_URL is not set");
+                anyhow::bail!("L2_TEST_RPC_URL is not set");
             };
 
             let l2_block_hash =

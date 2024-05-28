@@ -6,7 +6,7 @@ pub mod state;
 pub use state::State;
 
 pub mod ecotone_upgrade;
-pub use ecotone_upgrade::get_ecotone_upgrade_transactions;
+pub use ecotone_upgrade::EcotoneTransactionBuilder;
 
 pub mod purgeable;
 pub use purgeable::PurgeableIterator;

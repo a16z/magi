@@ -2,7 +2,7 @@
 //!
 //! This module was built using [reth](https://github.com/paradigmxyz/reth).
 
-use eyre::Result;
+use anyhow::Result;
 use jsonwebtoken::Algorithm;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -29,7 +29,7 @@ impl JwtSecret {
     pub fn from_hex<S: AsRef<str>>(hex: S) -> Result<Self> {
         let hex: &str = hex.as_ref().trim();
         if hex.len() != JWT_SECRET_LEN {
-            Err(eyre::eyre!("Invalid JWT secret key length."))
+            Err(anyhow::anyhow!("Invalid JWT secret key length."))
         } else {
             let hex_bytes = hex::decode(hex)?;
             let bytes = hex_bytes.try_into().expect("is expected len");

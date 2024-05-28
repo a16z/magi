@@ -15,6 +15,7 @@ use crate::{
 
 /// Represents the current derivation state.
 /// Consists of cached L1 & L2 blocks, and details of the current safe head & safe epoch.
+#[derive(Debug)]
 pub struct State {
     /// Map of L1 blocks from the current L1 safe epoch - ``seq_window_size``
     l1_info: BTreeMap<B256, L1Info>,

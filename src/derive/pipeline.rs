@@ -1,7 +1,7 @@
 //! Contains the pipeline implementation.
 
 use alloy_primitives::Bytes;
-use eyre::Result;
+use anyhow::Result;
 use std::sync::{mpsc, Arc, RwLock};
 
 use crate::{config::Config, engine::PayloadAttributes};

@@ -1,8 +1,9 @@
 //! Module to handle [SpanBatch] decoding and processing.
 
+use alloy_rlp::Rlp;
 use alloy_primitives::{Address, Bytes, U256};
 use alloy_rpc_types::transaction::AccessList;
-use eyre::Result;
+use anyhow::Result;
 
 use crate::{common::RawTransaction, config::Config};
 
@@ -456,6 +457,7 @@ fn decode_u256(data: &[u8]) -> (U256, &[u8]) {
 mod test {
     use std::io::Read;
 
+    use alloy_rlp::Rlp;
     use alloy_primitives::keccak256;
     use libflate::zlib::Decoder;
 
@@ -512,8 +514,6 @@ mod test {
 
         assert_eq!(batch.l1_inclusion_block, 0);
 
-        println!("starting epoch: {}", batch.start_epoch_num());
-
         let inputs = batch.block_inputs(&config);
         inputs.iter().for_each(|input| {
             let block_number = (input.timestamp - config.chain.l2_genesis.timestamp) / 2;
@@ -522,7 +522,5 @@ mod test {
                 println!("{:?}", keccak256(&tx.0));
             });
         });
-
-        // println!("{:?}", batch.block_inputs(&config))
     }
 }

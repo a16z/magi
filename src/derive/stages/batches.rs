@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::io::Read;
 use std::sync::{Arc, RwLock};
 
-use eyre::Result;
+use anyhow::Result;
 use libflate::zlib::Decoder;
 
 use crate::config::Config;
@@ -439,7 +439,7 @@ fn decode_batches(channel: &Channel, chain_id: u64) -> Result<Vec<Batch>> {
                 let rlp = Rlp::new(batch_content);
                 let size = rlp
                     .get_next::<alloy_rlp::Header>()?
-                    .ok_or_else(|| eyre::eyre!("failed to get header"))?
+                    .ok_or_else(|| anyhow::anyhow!("failed to get header"))?
                     .len();
 
                 let mut batch = SingleBatch::decode(&mut batch_content)?;
@@ -453,7 +453,7 @@ fn decode_batches(channel: &Channel, chain_id: u64) -> Result<Vec<Batch>> {
                 batches.push(Batch::Span(batch));
                 break;
             }
-            _ => eyre::bail!("invalid batch version"),
+            _ => anyhow::bail!("invalid batch version"),
         };
     }
 

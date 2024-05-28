@@ -5,7 +5,7 @@ use std::sync::Arc;
 use alloy_primitives::keccak256;
 use alloy_provider::{Provider, ReqwestProvider};
 use alloy_rpc_types::{Block, BlockTransactions};
-use eyre::Result;
+use anyhow::Result;
 
 use crate::{
     common::{BlockInfo, Epoch},
@@ -132,12 +132,12 @@ impl<E: Engine> EngineDriver<E> {
             .await?;
 
         if update.payload_status.status != Status::Valid {
-            eyre::bail!("invalid payload attributes");
+            anyhow::bail!("invalid payload attributes");
         }
 
         let id = update
             .payload_id
-            .ok_or(eyre::eyre!("engine did not return payload id"))?;
+            .ok_or(anyhow::anyhow!("engine did not return payload id"))?;
 
         self.engine.get_payload(id).await
     }
@@ -146,7 +146,7 @@ impl<E: Engine> EngineDriver<E> {
     async fn push_payload(&self, payload: ExecutionPayload) -> Result<()> {
         let status = self.engine.new_payload(payload).await?;
         if status.status != Status::Valid && status.status != Status::Accepted {
-            eyre::bail!("invalid execution payload");
+            anyhow::bail!("invalid execution payload");
         }
 
         Ok(())
@@ -158,7 +158,7 @@ impl<E: Engine> EngineDriver<E> {
 
         let update = self.engine.forkchoice_updated(forkchoice, None).await?;
         if update.payload_status.status != Status::Valid {
-            eyre::bail!(
+            anyhow::bail!(
                 "could not accept new forkchoice: {:?}",
                 update.payload_status.validation_error
             );

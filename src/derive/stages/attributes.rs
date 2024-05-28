@@ -6,12 +6,12 @@ use alloy_primitives::{keccak256, Address, Bytes, B256, U256, U64};
 use alloy_rlp::encode;
 use alloy_rlp::Encodable;
 
-use eyre::Result;
+use anyhow::Result;
 
 use crate::common::{Epoch, RawTransaction};
 use crate::config::{Config, SystemAccounts};
 use crate::derive::state::State;
-use crate::derive::{get_ecotone_upgrade_transactions, PurgeableIterator};
+use crate::derive::{EcotoneTransactionBuilder, PurgeableIterator};
 use crate::engine::PayloadAttributes;
 use crate::l1::L1Info;
 
@@ -137,10 +137,10 @@ impl Attributes {
         if self
             .config
             .chain
-            .is_ecotone_activation_block(U64::from(input.timestamp))
+            .is_ecotone_activation_block(&U64::from(input.timestamp))
         {
             tracing::info!("found Ecotone activation block; Upgrade transactions added");
-            let mut ecotone_upgrade_txs = get_ecotone_upgrade_transactions();
+            let mut ecotone_upgrade_txs = EcotoneTransactionBuilder::build_txs().expect("Failed to build Ecotone upgrade transactions");
             transactions.append(&mut ecotone_upgrade_txs);
         }
 
@@ -410,7 +410,7 @@ impl UserDeposited {
 }
 
 impl TryFrom<alloy_rpc_types::Log> for UserDeposited {
-    type Error = eyre::Report;
+    type Error = anyhow::Report;
 
     /// Converts the emitted L1 deposit event log into [UserDeposited]
     fn try_from(log: alloy_rpc_types::Log) -> Result<Self, Self::Error> {
@@ -431,24 +431,24 @@ impl TryFrom<alloy_rpc_types::Log> for UserDeposited {
         // ------------------------------------------------------------
 
         let opaque_content_offset: U64 =
-            U64::try_from_be_slice(&log.data.data[24..32]).ok_or(eyre::eyre!(
+            U64::try_from_be_slice(&log.data.data[24..32]).ok_or(anyhow::anyhow!(
                 "Invalid opaque data offset: {}:",
                 Bytes::copy_from_slice(&log.data.data[24..32])
             ))?;
         if opaque_content_offset != U64::from(32) {
-            eyre::bail!("Invalid opaque data offset: {}", opaque_content_offset);
+            anyhow::bail!("Invalid opaque data offset: {}", opaque_content_offset);
         }
 
         // The next 32 bytes indicate the length of the opaqueData content.
         let opaque_content_len =
             u64::from_be_bytes(log.data.data[56..64].try_into().map_err(|_| {
-                eyre::eyre!(
+                anyhow::anyhow!(
                     "Invalid opaque data length: {}",
                     Bytes::copy_from_slice(&log.data.data[56..64])
                 )
             })?);
         if opaque_content_len as usize > log.data.data.len() - 64 {
-            eyre::bail!(
+            anyhow::bail!(
                 "Invalid opaque data length: {} exceeds log data length: {}",
                 opaque_content_len,
                 log.data.data.len() - 64
@@ -456,9 +456,9 @@ impl TryFrom<alloy_rpc_types::Log> for UserDeposited {
         }
         let padded_len = opaque_content_len
             .checked_add(32)
-            .ok_or(eyre::eyre!("Opaque data overflow: {}", opaque_content_len))?;
+            .ok_or(anyhow::anyhow!("Opaque data overflow: {}", opaque_content_len))?;
         if padded_len as usize <= log.data.data.len() - 64 {
-            eyre::bail!(
+            anyhow::bail!(
                 "Opaque data with len {} overflows padded length {}",
                 log.data.data.len() - 64,
                 opaque_content_len
@@ -476,9 +476,9 @@ impl TryFrom<alloy_rpc_types::Log> for UserDeposited {
         let is_creation = opaque_data[72] != 0;
         let data = opaque_data[73..].to_vec();
 
-        let l1_block_num = log.block_number.ok_or(eyre::eyre!("block num not found"))?;
+        let l1_block_num = log.block_number.ok_or(anyhow::anyhow!("block num not found"))?;
 
-        let l1_block_hash = log.block_hash.ok_or(eyre::eyre!("block hash not found"))?;
+        let l1_block_hash = log.block_hash.ok_or(anyhow::anyhow!("block hash not found"))?;
         let log_index = U256::from(log.log_index.unwrap());
 
         Ok(Self {

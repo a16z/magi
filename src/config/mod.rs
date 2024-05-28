@@ -294,16 +294,17 @@ impl ChainConfig {
     }
 
     /// Returns true if the block is the first block subject to the Ecotone hardfork
-    pub fn is_ecotone_activation_block(&self, l2_block_timestamp: impl Into<U64>) -> bool {
-        l2_block_timestamp.into() == U64::from(self.ecotone_time)
+    pub fn is_ecotone_activation_block(&self, l2_block_timestamp: &U64) -> bool {
+        *l2_block_timestamp == U64::from(self.ecotone_time)
     }
 
     /// Returns true if Ecotone hardfork is active but the block is not the
     /// first block subject to the hardfork. Ecotone activation at genesis does not count.
     pub fn is_ecotone_but_not_first_block(&self, l2_block_timestamp: impl Into<U64>) -> bool {
-        let is_ecotone = l2_block_timestamp.into() >= U64::from(self.ecotone_time);
-
-        is_ecotone && !self.is_ecotone_activation_block(l2_block_timestamp)
+        let l2_block_timestamp = l2_block_timestamp.into();
+        let is_activation_block = self.is_ecotone_activation_block(&l2_block_timestamp);
+        let is_ecotone = l2_block_timestamp >= U64::from(self.ecotone_time);
+        is_ecotone && !is_activation_block
     }
 
     /// [ChainConfig] for Optimism

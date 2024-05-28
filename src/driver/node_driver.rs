@@ -9,7 +9,7 @@ use std::{
 
 use alloy_primitives::Address;
 use alloy_provider::ProviderBuilder;
-use eyre::Result;
+use anyhow::Result;
 use reqwest::Url;
 use tokio::{
     sync::watch::{self, Sender},
@@ -172,16 +172,16 @@ impl<E: Engine> NodeDriver<E> {
         for next_attributes in self.pipeline.by_ref() {
             let l1_inclusion_block = next_attributes
                 .l1_inclusion_block
-                .ok_or(eyre::eyre!("attributes without inclusion block"))?;
+                .ok_or(anyhow::anyhow!("attributes without inclusion block"))?;
 
             let seq_number = next_attributes
                 .seq_number
-                .ok_or(eyre::eyre!("attributes without seq number"))?;
+                .ok_or(anyhow::anyhow!("attributes without seq number"))?;
 
             self.engine_driver
                 .handle_attributes(next_attributes)
                 .await
-                .map_err(|e| eyre::eyre!("failed to handle attributes: {}", e))?;
+                .map_err(|e| anyhow::anyhow!("failed to handle attributes: {}", e))?;
 
             tracing::info!(
                 "safe head updated: {} {:?}",
@@ -194,7 +194,7 @@ impl<E: Engine> NodeDriver<E> {
 
             self.state
                 .write()
-                .map_err(|_| eyre::eyre!("lock poisoned"))?
+                .map_err(|_| anyhow::anyhow!("lock poisoned"))?
                 .update_safe_head(new_safe_head, new_safe_epoch);
 
             let unfinalized_entry = (
@@ -243,7 +243,7 @@ impl<E: Engine> NodeDriver<E> {
         let mut state = self
             .state
             .write()
-            .map_err(|_| eyre::eyre!("lock poisoned"))?;
+            .map_err(|_| anyhow::anyhow!("lock poisoned"))?;
 
         state.update_safe_head(self.engine_driver.safe_head, self.engine_driver.safe_epoch);
 
@@ -271,7 +271,7 @@ impl<E: Engine> NodeDriver<E> {
 
                     self.state
                         .write()
-                        .map_err(|_| eyre::eyre!("lock poisoned"))?
+                        .map_err(|_| anyhow::anyhow!("lock poisoned"))?
                         .update_l1_info(*l1_info);
                 }
                 BlockUpdate::Reorg => {
@@ -289,7 +289,7 @@ impl<E: Engine> NodeDriver<E> {
 
                     self.state
                         .write()
-                        .map_err(|_| eyre::eyre!("lock poisoned"))?
+                        .map_err(|_| anyhow::anyhow!("lock poisoned"))?
                         .purge(
                             self.engine_driver.finalized_head,
                             self.engine_driver.finalized_epoch,
@@ -361,7 +361,7 @@ mod tests {
 
     use alloy_provider::Provider;
     use alloy_rpc_types::{BlockId, BlockNumberOrTag};
-    use eyre::Result;
+    use anyhow::Result;
     use tokio::sync::watch::channel;
 
     use crate::config::{ChainConfig, CliConfig};

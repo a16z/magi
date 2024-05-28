@@ -7,7 +7,7 @@ use crate::{
     version::Version,
 };
 
-use eyre::Result;
+use anyhow::Result;
 
 use alloy_primitives::{keccak256, B256};
 use alloy_provider::{Provider, ProviderBuilder};

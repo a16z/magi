@@ -1,5 +1,5 @@
 use alloy_primitives::address;
-use eyre::Result;
+use anyhow::Result;
 
 use magi::{
     network::{handlers::block_handler::BlockHandler, service::Service},

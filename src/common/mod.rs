@@ -2,9 +2,9 @@
 
 use std::fmt::Debug;
 
-use alloy_primitives::B256;
+use alloy_primitives::{Bytes, B256};
 use alloy_rpc_types::Block;
-use eyre::Result;
+use anyhow::Result;
 use figment::value::{Dict, Tag, Value};
 use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
 
@@ -30,6 +30,12 @@ pub struct BlockInfo {
 /// A raw transaction
 #[derive(Clone, alloy_rlp::RlpDecodable, alloy_rlp::RlpEncodable, PartialEq, Eq)]
 pub struct RawTransaction(pub Vec<u8>);
+
+impl<T: Into<Bytes>> From<T> for RawTransaction {
+    fn from(bytes: T) -> Self {
+        Self(bytes.into().to_vec())
+    }
+}
 
 /// L1 epoch block
 #[derive(Copy, Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -57,17 +63,17 @@ impl From<BlockInfo> for Value {
 }
 
 impl TryFrom<Block> for BlockInfo {
-    type Error = eyre::Report;
+    type Error = anyhow::Error;
 
     /// Converts a [Block] to [BlockInfo]
     fn try_from(block: Block) -> Result<Self> {
         let number = block
             .header
             .number
-            .ok_or(eyre::eyre!("block not included"))?
+            .ok_or(anyhow::anyhow!("block not included"))?
             .try_into()?;
 
-        let hash = block.header.hash.ok_or(eyre::eyre!("block not included"))?;
+        let hash = block.header.hash.ok_or(anyhow::anyhow!("block not included"))?;
         let timestamp = block.header.timestamp.try_into()?;
 
         Ok(BlockInfo {

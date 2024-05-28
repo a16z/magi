@@ -7,7 +7,7 @@ use discv5::{
     enr::{CombinedKey, Enr, EnrBuilder, NodeId},
     Discv5, Discv5Config,
 };
-use eyre::Result;
+use anyhow::Result;
 use tokio::{
     sync::mpsc::{self, Receiver},
     time::sleep,
@@ -79,7 +79,7 @@ fn create_disc(chain_id: u64) -> Result<Discv5> {
         .build(&key)?;
     let config = Discv5Config::default();
 
-    Discv5::new(enr, key, config).map_err(|_| eyre::eyre!("could not create disc service"))
+    Discv5::new(enr, key, config).map_err(|_| anyhow::anyhow!("could not create disc service"))
 }
 
 /// Default bootnodes to use. Currently consists of 2 Base bootnodes & 1 Optimism bootnode.

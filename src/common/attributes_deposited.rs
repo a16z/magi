@@ -1,4 +1,4 @@
-use eyre::Result;
+use anyhow::Result;
 use lazy_static::lazy_static;
 
 use alloy_primitives::{keccak256, Bytes, B256, U256};
@@ -67,12 +67,12 @@ impl AttributesDepositedCall {
         let mut cursor = 0;
 
         if calldata.len() != L1_INFO_BEDROCK_LEN {
-            eyre::bail!("invalid calldata length");
+            anyhow::bail!("invalid calldata length");
         }
 
         let selector = &calldata[cursor..cursor + 4];
         if selector != *SET_L1_BLOCK_VALUES_BEDROCK_SELECTOR {
-            eyre::bail!("invalid selector");
+            anyhow::bail!("invalid selector");
         }
         cursor += 4;
 
@@ -80,14 +80,14 @@ impl AttributesDepositedCall {
         // down-casting to u64 is safe for the block number
         let number = number
             .try_into()
-            .map_err(|_| eyre::eyre!("invalid block number"))?;
+            .map_err(|_| anyhow::anyhow!("invalid block number"))?;
         cursor += 32;
 
         let timestamp = U256::from_be_slice(calldata[cursor..cursor + 32].try_into()?);
         // down-casting to u64 is safe for UNIX timestamp
         let timestamp = timestamp
             .try_into()
-            .map_err(|_| eyre::eyre!("invalid timestamp"))?;
+            .map_err(|_| anyhow::anyhow!("invalid timestamp"))?;
         cursor += 32;
 
         let basefee = U256::from_be_slice(&calldata[cursor..cursor + 32]);
@@ -100,7 +100,7 @@ impl AttributesDepositedCall {
         // down-casting to u64 is safe for the sequence number
         let sequence_number = sequence_number
             .try_into()
-            .map_err(|_| eyre::eyre!("invalid sequence number"))?;
+            .map_err(|_| anyhow::anyhow!("invalid sequence number"))?;
         cursor += 32;
 
         let batcher_hash = B256::from_slice(&calldata[cursor..cursor + 32]);
@@ -148,12 +148,12 @@ impl AttributesDepositedCall {
         let mut cursor = 0;
 
         if calldata.len() != L1_INFO_ECOTONE_LEN {
-            eyre::bail!("invalid calldata length");
+            anyhow::bail!("invalid calldata length");
         }
 
         let selector = &calldata[cursor..cursor + 4];
         if selector != *SET_L1_BLOCK_VALUES_ECOTONE_SELECTOR {
-            eyre::bail!("invalid selector");
+            anyhow::bail!("invalid selector");
         }
         cursor += 4;
 
@@ -206,13 +206,14 @@ impl AttributesDepositedCall {
 mod tests {
     mod attributed_deposited_call {
         use std::str::FromStr;
+        use anyhow::Result;
 
         use alloy_primitives::{Bytes, B256, U256};
 
         use crate::common::AttributesDepositedCall;
 
         #[test]
-        fn decode_from_bytes_bedrock() -> eyre::Result<()> {
+        fn decode_from_bytes_bedrock() -> Result<()> {
             // Arrange
             let calldata = "0x015d8eb900000000000000000000000000000000000000000000000000000000008768240000000000000000000000000000000000000000000000000000000064443450000000000000000000000000000000000000000000000000000000000000000e0444c991c5fe1d7291ff34b3f5c3b44ee861f021396d33ba3255b83df30e357d00000000000000000000000000000000000000000000000000000000000000050000000000000000000000007431310e026b69bfc676c0013e12a1a11411eec9000000000000000000000000000000000000000000000000000000000000083400000000000000000000000000000000000000000000000000000000000f4240";
 
@@ -236,7 +237,7 @@ mod tests {
         }
 
         #[test]
-        fn decode_from_bytes_ecotone() -> eyre::Result<()> {
+        fn decode_from_bytes_ecotone() -> Result<()> {
             // Arrange
             // https://goerli-optimism.etherscan.io/tx/0xc2288c5d1f6123406bfe8662bdbc1a3c999394da2e6f444f5aa8df78136f36ba
             let calldata = "0x440a5e2000001db0000d273000000000000000050000000065c8ad6c0000000000a085a20000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000041dfd80f2c8af7d7ba1c1a3962026e5c96b9105d528f8fed65c56cfa731a8751c7f712eb70000000000000000000000007431310e026b69bfc676c0013e12a1a11411eec9";

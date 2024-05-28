@@ -3,7 +3,7 @@
 use std::sync::mpsc;
 
 use alloy_primitives::Bytes;
-use eyre::Result;
+use anyhow::Result;
 use std::collections::VecDeque;
 
 use crate::derive::PurgeableIterator;
@@ -82,7 +82,7 @@ impl BatcherTransaction {
     /// Creates a new [BatcherTransaction]
     pub fn new(data: &[u8], l1_origin: u64) -> Result<Self> {
         let version = data[0];
-        let frame_data = data.get(1..).ok_or(eyre::eyre!("No frame data"))?;
+        let frame_data = data.get(1..).ok_or(anyhow::anyhow!("No frame data"))?;
 
         let mut offset = 0;
         let mut frames = Vec::new();
@@ -119,7 +119,7 @@ impl Frame {
         let data = &data[offset..];
 
         if data.len() < 23 {
-            eyre::bail!("invalid frame size");
+            anyhow::bail!("invalid frame size");
         }
 
         let channel_id = u128::from_be_bytes(data[0..16].try_into()?);
@@ -128,13 +128,13 @@ impl Frame {
 
         let frame_data_end = 22 + frame_data_len as usize;
         if data.len() < frame_data_end {
-            eyre::bail!("invalid frame size");
+            anyhow::bail!("invalid frame size");
         }
 
         let frame_data = data[22..frame_data_end].to_vec();
 
         let is_last = if data[frame_data_end] > 1 {
-            eyre::bail!("invalid is_last flag");
+            anyhow::bail!("invalid is_last flag");
         } else {
             data[frame_data_end] != 0
         };

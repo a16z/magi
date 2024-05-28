@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, RwLock};
 
-use eyre::Result;
+use anyhow::Result;
 
 use crate::{
     common::{Epoch, RawTransaction},
@@ -32,10 +32,10 @@ pub struct BlockInput<E: EpochType> {
 impl BlockInput<u64> {
     /// Returns the [BlockInput] with full [Epoch] details.
     pub fn with_full_epoch(self, state: &Arc<RwLock<State>>) -> Result<BlockInput<Epoch>> {
-        let state = state.read().map_err(|_| eyre::eyre!("lock poisoned"))?;
+        let state = state.read().map_err(|_| anyhow::anyhow!("lock poisoned"))?;
         let epoch = state
             .epoch_by_number(self.epoch)
-            .ok_or(eyre::eyre!("epoch not found"))?;
+            .ok_or(anyhow::anyhow!("epoch not found"))?;
 
         Ok(BlockInput {
             timestamp: self.timestamp,

@@ -5,7 +5,7 @@ use crate::driver::types::HeadInfo;
 
 use alloy_provider::Provider;
 use alloy_rpc_types::{Block, BlockId, BlockNumberOrTag};
-use eyre::Result;
+use anyhow::Result;
 
 /// An asynchronous trait for fetching blocks along with their transactions.
 #[async_trait::async_trait]

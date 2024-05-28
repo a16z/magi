@@ -2,7 +2,7 @@
 
 use alloy_primitives::{Address, U256, U64};
 use alloy_rpc_types::Log;
-use eyre::Result;
+use anyhow::Result;
 
 /// Represents a system config update event
 #[derive(Debug)]
@@ -18,25 +18,25 @@ pub enum SystemConfigUpdate {
 }
 
 impl TryFrom<Log> for SystemConfigUpdate {
-    type Error = eyre::Report;
+    type Error = anyhow::Error;
 
     fn try_from(log: Log) -> Result<Self> {
         let version = U64::from_be_bytes(
             **log
                 .topics()
                 .get(1)
-                .ok_or(eyre::eyre!("invalid system config update"))?,
+                .ok_or(anyhow::anyhow!("invalid system config update"))?,
         );
 
         if !version.is_zero() {
-            return Err(eyre::eyre!("invalid system config update"));
+            return Err(anyhow::anyhow!("invalid system config update"));
         }
 
         let update_type = U64::from_be_bytes(
             **log
                 .topics()
                 .get(2)
-                .ok_or(eyre::eyre!("invalid system config update"))?,
+                .ok_or(anyhow::anyhow!("invalid system config update"))?,
         );
 
         let update_type: u64 = update_type.try_into()?;
@@ -46,7 +46,7 @@ impl TryFrom<Log> for SystemConfigUpdate {
                     .data()
                     .data
                     .get(76..96)
-                    .ok_or(eyre::eyre!("invalid system config update"))?;
+                    .ok_or(anyhow::anyhow!("invalid system config update"))?;
 
                 let addr = Address::from_slice(addr_bytes);
                 Ok(Self::BatchSender(addr))
@@ -56,13 +56,13 @@ impl TryFrom<Log> for SystemConfigUpdate {
                     .data()
                     .data
                     .get(64..96)
-                    .ok_or(eyre::eyre!("invalid system config update"))?;
+                    .ok_or(anyhow::anyhow!("invalid system config update"))?;
 
                 let fee_scalar = log
                     .data()
                     .data
                     .get(96..128)
-                    .ok_or(eyre::eyre!("invalid system config update"))?;
+                    .ok_or(anyhow::anyhow!("invalid system config update"))?;
 
                 let fee_overhead: [u8; 32] = fee_overhead.try_into()?;
                 let fee_scalar: [u8; 32] = fee_scalar.try_into()?;
@@ -76,7 +76,7 @@ impl TryFrom<Log> for SystemConfigUpdate {
                     .data()
                     .data
                     .get(64..96)
-                    .ok_or(eyre::eyre!("invalid system config update"))?;
+                    .ok_or(anyhow::anyhow!("invalid system config update"))?;
 
                 let gas_bytes: [u8; 32] = gas_bytes.try_into()?;
                 let gas = U256::from_be_bytes(gas_bytes);
@@ -87,12 +87,12 @@ impl TryFrom<Log> for SystemConfigUpdate {
                     .data()
                     .data
                     .get(76..96)
-                    .ok_or(eyre::eyre!("invalid system config update"))?;
+                    .ok_or(anyhow::anyhow!("invalid system config update"))?;
 
                 let addr = Address::from_slice(addr_bytes);
                 Ok(Self::UnsafeBlockSigner(addr))
             }
-            _ => Err(eyre::eyre!("invalid system config update")),
+            _ => Err(anyhow::anyhow!("invalid system config update")),
         }
     }
 }

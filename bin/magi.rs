@@ -3,7 +3,7 @@ use std::{env::current_dir, process};
 
 use clap::Parser;
 use dirs::home_dir;
-use eyre::Result;
+use anyhow::Result;
 
 use magi::{
     config::{ChainConfig, CliConfig, Config, SyncMode},
