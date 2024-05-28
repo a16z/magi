@@ -18,9 +18,9 @@ Next copy `.env.default` to `.env`
 cp .env.default .env
 ```
 
-In the `.env` file, modify the `L1_RPC_URL` field to contain a valid Ethereum RPC. For the Optimism and Base testnets, this must be a Goerli RPC URL. This RPC can either be from a local node, or a provider such as Alchemy or Infura. 
+In the `.env` file, modify the `L1_RPC_URL` field to contain a valid Ethereum RPC. For the Optimism and Base testnets, this must be a Sepolia RPC URL. This RPC can either be from a local node, or a provider such as Alchemy or Infura. 
 
-By default, the `NETWORK` field in `.env` is `optimism-goerli`, however `base-goerli` is also supported.
+By default, the `NETWORK` field in `.env` is `optimism-sepolia`, however `base-sepolia` is also supported.
 
 Start the docker containers
 ```sh

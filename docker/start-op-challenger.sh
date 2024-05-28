@@ -1,16 +1,16 @@
 #!/bin/sh
 set -e
 
-if [ $NETWORK = "optimism-goerli" ]
+if [ $NETWORK = "optimism-sepolia" ]
 then
     DISPUTE_GAME_FACTORY=0x000000000000000000000000000000000000dEaD # TODO: Update after deployment
     L2_OUTPUT_ORACLE=0xE6Dfba0953616Bacab0c9A8ecb3a9BBa77FC15c0
-elif [ $NETWORK = "base-goerli" ]
+elif [ $NETWORK = "base-sepolia" ]
 then 
     DISPUTE_GAME_FACTORY=0x000000000000000000000000000000000000dEaD # TODO: Update after deployment
     L2_OUTPUT_ORACLE=0x2A35891ff30313CcFa6CE88dcf3858bb075A2298
 else
-    echo "Network not recognized. Available options are optimism-goerli and base-goerli"
+    echo "Network not recognized. Available options are optimism-sepolia and base-sepolia"
     exit 1
 fi
 

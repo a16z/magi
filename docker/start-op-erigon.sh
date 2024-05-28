@@ -31,4 +31,4 @@ exec erigon \
     --authrpc.port=8551 \
     --authrpc.vhosts="*" \
     --authrpc.jwtsecret=/jwtsecret.txt \
-    --rollup.sequencerhttp="https://goerli.optimism.io" \
+    --rollup.sequencerhttp="https://sepolia.optimism.io" \

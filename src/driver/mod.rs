@@ -400,7 +400,7 @@ mod tests {
                 rpc_addr: None,
                 devnet: false,
             };
-            let config = Config::new(&config_path, cli_config, ChainConfig::optimism_goerli());
+            let config = Config::new(&config_path, cli_config, ChainConfig::optimism_sepolia());
             let (_shutdown_sender, shutdown_recv) = channel(false);
 
             let block_id = BlockId::Number(BlockNumber::Finalized);

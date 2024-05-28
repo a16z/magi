@@ -24,29 +24,12 @@ then
         wget "https://raw.githubusercontent.com/base-org/node/main/mainnet/genesis-l2.json" -O ./genesis-l2.json
         geth init --datadir=$DATADIR ./genesis-l2.json
     fi
-elif [ $NETWORK = "optimism-goerli" ]
-then
-    CHAIN_ID=420
-    if [ ! -d $DATADIR ]
-    then
-        mkdir $DATADIR
-        wget "https://datadirs.optimism.io/goerli-bedrock.tar.zst" -P $DATADIR
-        zstd -cd $DATADIR/goerli-bedrock.tar.zst | tar xvf - -C $DATADIR
-    fi
 elif [ "$NETWORK" = "optimism-sepolia" ]
 then
     CHAIN_ID=11155420
     if [ ! -d "$DATADIR" ]
     then
         wget "https://storage.googleapis.com/oplabs-network-data/Sepolia/genesis.json" -O ./genesis-l2.json
-        geth init --datadir=$DATADIR ./genesis-l2.json
-    fi
-elif [ $NETWORK = "base-goerli" ]
-then
-    CHAIN_ID=84531
-    if [ ! -d $DATADIR ]
-    then
-        wget "https://raw.githubusercontent.com/base-org/node/main/goerli/genesis-l2.json" -O ./genesis-l2.json
         geth init --datadir=$DATADIR ./genesis-l2.json
     fi
 elif [ $NETWORK = "base-sepolia" ]
@@ -67,7 +50,7 @@ then
         geth init --datadir=$DATADIR ./genesis-l2-attached.json
     fi
 else
-    echo "Network not recognized. Available options are optimism-goerli and base-goerli"
+    echo "Network not recognized. Available options are optimsim, optimism-sepolia, base, base-sepolia, custom"
     exit 1
 fi
 
