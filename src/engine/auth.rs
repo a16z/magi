@@ -30,8 +30,17 @@ impl JwtSecret {
     /// The provided `secret` must be a valid hexadecimal string of length 64.
     pub fn from_hex<S: AsRef<str>>(hex: S) -> Result<Self> {
         let hex: &str = hex.as_ref().trim();
+        // Remove the "0x" or "0X" prefix if it exists
+        let hex = hex
+            .strip_prefix("0x")
+            .or_else(|| hex.strip_prefix("0X"))
+            .unwrap_or(hex);
         if hex.len() != JWT_SECRET_LEN {
-            Err(eyre::eyre!("Invalid JWT secret key length."))
+            Err(eyre::eyre!(
+                "Invalid JWT secret key length. Expected {} characters, got {}.",
+                JWT_SECRET_LEN,
+                hex.len()
+            ))
         } else {
             let hex_bytes = hex::decode(hex)?;
             let bytes = hex_bytes.try_into().expect("is expected len");
