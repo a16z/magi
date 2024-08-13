@@ -105,7 +105,7 @@ impl From<&AttributesDepositedCall> for Epoch {
         Self {
             number: call.number,
             timestamp: call.timestamp,
-            hash: call.hash,
+            hash: ethers::types::H256::from_slice(call.hash.as_slice()),
         }
     }
 }
