@@ -67,7 +67,9 @@ impl RpcServer for RpcServerImpl {
         let state_proof = convert_err(
             l2_provider
                 .get_proof(
-                    self.config.chain.l2_to_l1_message_passer,
+                    ethers::types::Address::from_slice(
+                        self.config.chain.l2_to_l1_message_passer.as_slice(),
+                    ),
                     locations,
                     block_id,
                 )
@@ -179,7 +181,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_run_server() -> Result<()> {
-        std::env::set_var("RUST_LOG", "trace");
+        // std::env::set_var("RUST_LOG", "trace");
         let cli_config = CliConfig {
             l1_rpc_url: Some("".to_string()),
             l1_beacon_url: Some("".to_string()),

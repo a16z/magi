@@ -93,7 +93,7 @@ struct OpStackEnrData {
 impl TryFrom<&[u8]> for OpStackEnrData {
     type Error = eyre::Report;
 
-    /// Converts a slice of RLP encoded bytes to [OpStackEnrData]
+    /// Converts a slice of RLP encoded bytes to Op Stack Enr Data.
     fn try_from(value: &[u8]) -> Result<Self> {
         let bytes: Vec<u8> = rlp::decode(value)?;
         let (chain_id, rest) = decode::u64(&bytes)?;
@@ -104,7 +104,7 @@ impl TryFrom<&[u8]> for OpStackEnrData {
 }
 
 impl From<OpStackEnrData> for Vec<u8> {
-    /// Converts [OpStackEnrData] to a vector of bytes.
+    /// Converts Op Stack Enr data to a vector of bytes.
     fn from(value: OpStackEnrData) -> Vec<u8> {
         let mut chain_id_buf = encode::u128_buffer();
         let chain_id_slice = encode::u128(value.chain_id as u128, &mut chain_id_buf);

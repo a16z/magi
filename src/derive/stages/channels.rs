@@ -80,7 +80,7 @@ where
         }
     }
 
-    /// Pull the next batcher transaction from the [BatcherTransactions] stage
+    /// Pull the next batcher transaction from the BatcherTransactions stage
     fn fill_bank(&mut self) {
         let next_batcher_tx = self.batcher_tx_iter.next();
 

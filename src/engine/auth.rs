@@ -26,7 +26,7 @@ const JWT_SIGNATURE_ALGO: Algorithm = Algorithm::HS256;
 pub struct JwtSecret([u8; 32]);
 
 impl JwtSecret {
-    /// Creates an instance of [`JwtSecret`][crate::engine::JwtSecret].
+    /// Creates an instance of JwtSecret.
     /// The provided `secret` must be a valid hexadecimal string of length 64.
     pub fn from_hex<S: AsRef<str>>(hex: S) -> Result<Self> {
         let hex: &str = hex.as_ref().trim();
@@ -60,7 +60,7 @@ impl JwtSecret {
         hex::encode(self.0) == token
     }
 
-    /// Generate claims constructs a [`Claims`][crate::engine::Claims] instance.
+    /// Generate claims constructs a [`Claims`] instance.
     ///
     /// ## Panics
     ///
@@ -74,7 +74,7 @@ impl JwtSecret {
         }
     }
 
-    /// Encodes the [`Claims`][crate::engine::Claims] in a [jsonwebtoken::Header] String format.
+    /// Encodes the [`Claims`] in a [jsonwebtoken::Header] String format.
     pub(crate) fn encode(&self, claims: &Claims) -> Result<String, Box<dyn std::error::Error>> {
         let bytes = &self.0;
         let key = jsonwebtoken::EncodingKey::from_secret(bytes);

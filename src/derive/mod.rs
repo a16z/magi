@@ -53,7 +53,7 @@ impl Iterator for Pipeline {
 }
 
 impl Pipeline {
-    /// Creates a new [Pipeline] and initializes [BatcherTransactions], [Channels], [Batches], and [Attributes]
+    /// Creates a new [Pipeline] and initializes Batcher Transactions, [Channels], [Batches], and [Attributes]
     pub fn new(state: Arc<RwLock<State>>, config: Arc<Config>, seq: u64) -> Result<Self> {
         let (tx, rx) = mpsc::channel();
         let batcher_transactions = BatcherTransactions::new(rx);
@@ -68,7 +68,7 @@ impl Pipeline {
         })
     }
 
-    /// Sends [BatcherTransactions] & the L1 block they were received in to the [BatcherTransactions] receiver.
+    /// Sends Batcher Transactions & the L1 block they were received in to the Batcher Transactions receiver.
     pub fn push_batcher_transactions(&self, txs: Vec<Bytes>, l1_origin: u64) -> Result<()> {
         self.batcher_transaction_sender
             .send(BatcherTransactionMessage { txs, l1_origin })?;

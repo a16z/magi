@@ -140,7 +140,7 @@ where
     ) {
         // Print the timestamp
         let utc: String = chrono::Utc::now().to_rfc2822();
-        let strip_len = utc.find(|c| c == '+').unwrap_or(utc.len());
+        let strip_len = utc.find('+').unwrap_or(utc.len());
         let formatted_utc = utc[..strip_len].trim_end();
         print!("[{}] ", Cyan.paint(formatted_utc));
 

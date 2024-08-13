@@ -32,7 +32,7 @@ pub struct SpanBatch {
 }
 
 impl SpanBatch {
-    /// Decodes a sequence of bytes into a [SpanBatch]
+    /// Decodes a sequence of bytes into a Span Batch
     pub fn decode(data: &[u8], l1_inclusion_block: u64, chain_id: u64) -> Result<Self> {
         let (rel_timestamp, data) = unsigned_varint::decode::u64(data)?;
         let (l1_origin_num, data) = unsigned_varint::decode::u64(data)?;
@@ -58,7 +58,7 @@ impl SpanBatch {
         })
     }
 
-    /// Returns a [BlockInput] vector for this batch. Contains all L2 block in the batch.
+    /// Returns a BlockInput vector for this batch. Contains all L2 block in the batch.
     pub fn block_inputs(&self, config: &Config) -> Vec<BlockInput<u64>> {
         let init_epoch_num = self.l1_origin_num
             - self

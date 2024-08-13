@@ -29,7 +29,7 @@ pub struct EngineApi {
     pub port: u16,
     /// HTTP Client
     pub client: Option<Client>,
-    /// A [crate::engine::JwtSecret] used to authenticate with the engine api
+    /// A JWT secret used to authenticate with the engine api
     secret: JwtSecret,
 }
 

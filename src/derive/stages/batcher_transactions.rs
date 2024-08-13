@@ -15,7 +15,7 @@ pub struct BatcherTransactionMessage {
 
 /// Receives [BatcherTransactionMessage] messages from a channel and stores these in a [VecDeque].
 pub struct BatcherTransactions {
-    /// [VecDeque] containing [BatcherTransaction]
+    /// [VecDeque] containing Batcher Transaction
     txs: VecDeque<BatcherTransaction>,
     /// [BatcherTransactionMessage] channel [receiver](mpsc::Receiver)
     transaction_rx: mpsc::Receiver<BatcherTransactionMessage>,
@@ -41,7 +41,7 @@ impl PurgeableIterator for BatcherTransactions {
 }
 
 impl BatcherTransactions {
-    /// Creates a new [BatcherTransactions]
+    /// Creates a new Batcher Transactions.
     pub fn new(transaction_rx: mpsc::Receiver<BatcherTransactionMessage>) -> Self {
         Self {
             transaction_rx,

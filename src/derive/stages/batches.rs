@@ -37,7 +37,7 @@ where
 {
     type Item = BlockInput<u64>;
 
-    /// Attempts to decode batches in the next channel and returns a [BlockInput](struct@BlockInput)
+    /// Attempts to decode batches in the next channel and returns a Block Input.
     fn next(&mut self) -> Option<Self::Item> {
         self.try_next().unwrap_or_else(|_| {
             tracing::debug!("Failed to decode batch");
@@ -81,9 +81,9 @@ where
     ///
     /// Checks validity of batches in batches mapping, removing any that are invalid.
     ///
-    /// Attempts to derive the first valid batch and returns the first [BlockInput] in the batch. Remaining [BlockInput]s are inserted into `pending_inputs`,
+    /// Attempts to derive the first valid batch and returns the first Block Input in the batch. Remaining Block Inputs are inserted into `pending_inputs`,
     ///
-    /// If there are already pending inputs, it will skip the above and simply return the first pending [BlockInput]
+    /// If there are already pending inputs, it will skip the above and simply return the first pending Block Input.
     fn try_next(&mut self) -> Result<Option<BlockInput<u64>>> {
         if !self.pending_inputs.is_empty() {
             return Ok(Some(self.pending_inputs.remove(0)));
@@ -169,7 +169,7 @@ where
         })
     }
 
-    /// Returns [BlockInput] elements that are newer than the current `safe_head`.
+    /// Returns Block Input elements that are newer than the current `safe_head`.
     fn filter_inputs(&self, inputs: Vec<BlockInput<u64>>) -> Vec<BlockInput<u64>> {
         inputs
             .into_iter()
@@ -185,7 +185,7 @@ where
         }
     }
 
-    /// Returns the validity of a [SingleBatch]
+    /// Returns the validity of a Single Batch.
     fn single_batch_status(&self, batch: &SingleBatch) -> BatchStatus {
         let state = self.state.read().unwrap();
         let epoch = state.safe_epoch;
@@ -268,7 +268,7 @@ where
         BatchStatus::Accept
     }
 
-    /// Returns the validity of a [SpanBatch]
+    /// Returns the validity of a Span Batch.
     fn span_batch_status(&self, batch: &SpanBatch) -> BatchStatus {
         let state = self.state.read().unwrap();
         let epoch = state.safe_epoch;
@@ -450,12 +450,12 @@ fn decode_batches(channel: &Channel, chain_id: u64) -> Result<Vec<Batch>> {
     Ok(batches)
 }
 
-/// The type of batch - either a [SingleBatch] or [SpanBatch]
+/// The type of batch - either a Single Batch or Span Batch.
 #[derive(Debug, Clone)]
 pub enum Batch {
-    /// A [SingleBatch]
+    /// A Single Batch.
     Single(SingleBatch),
-    /// A [SpanBatch]
+    /// A Span Batch.
     Span(SpanBatch),
 }
 
@@ -468,7 +468,7 @@ impl Batch {
         }
     }
 
-    /// Returns a [BlockInput] vector of the blocks in a batch.
+    /// Returns a Block Input vector of the blocks in a batch.
     pub fn as_inputs(&self, config: &Config) -> Vec<BlockInput<u64>> {
         match self {
             Batch::Single(batch) => vec![batch.block_input()],

@@ -17,7 +17,7 @@ use super::block_input::BlockInput;
 
 /// Represents the `Payload Attributes Derivation` stage.
 pub struct Attributes {
-    /// An iterator over [BlockInput]: used to derive [PayloadAttributes]
+    /// An iterator over BlockInput: used to derive [PayloadAttributes]
     block_input_iter: Box<dyn PurgeableIterator<Item = BlockInput<u64>>>,
     /// The current derivation [State]. Contains cached L1 & L2 blocks and details of the current safe head & safe epoch.
     state: Arc<RwLock<State>>,
@@ -32,7 +32,7 @@ pub struct Attributes {
 impl Iterator for Attributes {
     type Item = PayloadAttributes;
 
-    /// Iterates over the next [BlockInput] and returns the [PayLoadAttributes](struct@PayloadAttributes) from this block.
+    /// Iterates over the next BlockInput and returns the [PayLoadAttributes](struct@PayloadAttributes) from this block.
     fn next(&mut self) -> Option<Self::Item> {
         self.block_input_iter
             .next()
@@ -42,7 +42,7 @@ impl Iterator for Attributes {
 }
 
 impl PurgeableIterator for Attributes {
-    /// Purges the [BlockInput] iterator, and sets the [epoch_hash](Attributes::epoch_hash) to the [safe_epoch](State::safe_epoch) hash.
+    /// Purges the Block Input iterator, and sets the epoch_hash to the [safe_epoch](State::safe_epoch) hash.
     fn purge(&mut self) {
         self.block_input_iter.purge();
         self.sequence_number = 0;
@@ -69,7 +69,7 @@ impl Attributes {
         }
     }
 
-    /// Processes a given [BlockInput] and returns [PayloadAttributes] for the block.
+    /// Processes a given Block Input and returns [PayloadAttributes] for the block.
     ///
     /// Calls `derive_transactions` to generate the raw transactions
     fn derive_attributes(&mut self, input: BlockInput<Epoch>) -> PayloadAttributes {
@@ -98,10 +98,12 @@ impl Attributes {
         PayloadAttributes {
             timestamp,
             prev_randao,
-            suggested_fee_recipient,
+            suggested_fee_recipient: ethers::types::Address::from_slice(
+                suggested_fee_recipient.as_slice(),
+            ),
             transactions,
             no_tx_pool: true,
-            gas_limit: U64([l1_info.system_config.gas_limit.as_u64()]),
+            gas_limit: U64::from(l1_info.system_config.gas_limit.to_be_bytes()),
             withdrawals,
             epoch,
             l1_inclusion_block,
@@ -233,8 +235,8 @@ impl From<AttributesDeposited> for DepositedTransaction {
 
         Self {
             source_hash,
-            from,
-            to,
+            from: Address::from_slice(from.as_slice()),
+            to: to.map(|s| Address::from_slice(s.as_slice())),
             mint: U256::zero(),
             value: U256::zero(),
             gas: attributes_deposited.gas,
@@ -334,9 +336,9 @@ impl AttributesDeposited {
             base_fee: l1_info.block_info.base_fee,
             hash: l1_info.block_info.hash,
             sequence_number: seq,
-            batcher_hash: l1_info.system_config.batcher_hash(),
-            fee_overhead: l1_info.system_config.l1_fee_overhead,
-            fee_scalar: l1_info.system_config.l1_fee_scalar,
+            batcher_hash: H256::from_slice(l1_info.system_config.batcher_hash().as_slice()),
+            fee_overhead: U256::from(l1_info.system_config.l1_fee_overhead.to_be_bytes()),
+            fee_scalar: U256::from(l1_info.system_config.l1_fee_scalar.to_be_bytes()),
             gas,
             is_system_tx,
         }

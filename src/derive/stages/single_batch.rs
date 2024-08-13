@@ -50,7 +50,7 @@ impl SingleBatch {
             .any(|tx| tx.0.is_empty() || tx.0[0] == 0x7E)
     }
 
-    /// Returns a [BlockInput] instance for this batch. Represents a single L2 block.
+    /// Returns a Block Input instance for this batch. Represents a single L2 block.
     pub fn block_input(&self) -> BlockInput<u64> {
         BlockInput {
             timestamp: self.timestamp,
