@@ -79,7 +79,11 @@ impl Attributes {
         self.update_sequence_number(input.epoch.hash);
 
         let state = self.state.read().unwrap();
-        let l1_info = state.l1_info_by_hash(input.epoch.hash).unwrap();
+        let l1_info = state
+            .l1_info_by_hash(alloy_primitives::B256::from_slice(
+                input.epoch.hash.as_bytes(),
+            ))
+            .unwrap();
 
         let withdrawals = if input.timestamp >= self.config.chain.canyon_time {
             Some(Vec::new())
@@ -168,7 +172,9 @@ impl Attributes {
     fn derive_user_deposited(&self) -> Vec<RawTransaction> {
         let state = self.state.read().unwrap();
         state
-            .l1_info_by_hash(self.epoch_hash)
+            .l1_info_by_hash(alloy_primitives::B256::from_slice(
+                self.epoch_hash.as_bytes(),
+            ))
             .map(|info| &info.user_deposits)
             .map(|deposits| {
                 deposits

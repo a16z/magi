@@ -1,9 +1,8 @@
 use std::{collections::BTreeMap, sync::Arc};
 
-use ethers::{
-    providers::{Http, Middleware, Provider},
-    types::H256,
-};
+use ethers::providers::{Http, Middleware, Provider};
+
+use alloy_primitives::B256;
 
 use crate::{
     common::{BlockInfo, Epoch},
@@ -15,9 +14,9 @@ use crate::{
 /// Represents the current derivation state. Consists of cached L1 & L2 blocks, and details of the current safe head & safe epoch.
 pub struct State {
     /// Map of L1 blocks from the current L1 safe epoch - ``seq_window_size``
-    l1_info: BTreeMap<H256, L1Info>,
+    l1_info: BTreeMap<B256, L1Info>,
     /// Map of L1 block hashes from the current L1 safe epoch - ``seq_window_size``
-    l1_hashes: BTreeMap<u64, H256>,
+    l1_hashes: BTreeMap<u64, B256>,
     /// Map of L2 blocks from the current L2 safe head - (``max_seq_drift`` / ``blocktime``)
     l2_refs: BTreeMap<u64, (BlockInfo, Epoch)>,
     /// The current safe head
@@ -52,7 +51,7 @@ impl State {
     }
 
     /// Returns a cached L1 block by block hash
-    pub fn l1_info_by_hash(&self, hash: H256) -> Option<&L1Info> {
+    pub fn l1_info_by_hash(&self, hash: B256) -> Option<&L1Info> {
         self.l1_info.get(&hash)
     }
 
@@ -73,7 +72,7 @@ impl State {
     }
 
     /// Returns an epoch from an L1 block hash
-    pub fn epoch_by_hash(&self, hash: H256) -> Option<Epoch> {
+    pub fn epoch_by_hash(&self, hash: B256) -> Option<Epoch> {
         self.l1_info_by_hash(hash).map(|info| Epoch {
             number: info.block_info.number,
             hash: info.block_info.hash,
@@ -96,9 +95,14 @@ impl State {
     pub fn update_l1_info(&mut self, l1_info: L1Info) {
         self.current_epoch_num = l1_info.block_info.number;
 
-        self.l1_hashes
-            .insert(l1_info.block_info.number, l1_info.block_info.hash);
-        self.l1_info.insert(l1_info.block_info.hash, l1_info);
+        self.l1_hashes.insert(
+            l1_info.block_info.number,
+            B256::from_slice(l1_info.block_info.hash.as_bytes()),
+        );
+        self.l1_info.insert(
+            B256::from_slice(l1_info.block_info.hash.as_bytes()),
+            l1_info,
+        );
 
         self.prune();
     }
