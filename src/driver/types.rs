@@ -43,6 +43,7 @@ impl HeadInfo {
         };
 
         let tx_calldata = first_tx.input.clone();
+        let tx_calldata: alloy_primitives::Bytes = tx_calldata.to_vec().into();
         let call = AttributesDepositedCall::try_from_bedrock(tx_calldata)?;
 
         Ok(Self {
@@ -62,6 +63,7 @@ impl HeadInfo {
         };
 
         let tx_calldata = first_tx.input.clone();
+        let tx_calldata: alloy_primitives::Bytes = tx_calldata.to_vec().into();
         let call = AttributesDepositedCall::try_from_ecotone(tx_calldata)?;
 
         Ok(Self {

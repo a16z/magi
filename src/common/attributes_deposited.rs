@@ -1,7 +1,6 @@
-use ethers::{
-    types::{Bytes, H256, U256},
-    utils::keccak256,
-};
+//! Module containing the attributes deposited transcation call.
+
+use alloy_primitives::{keccak256, Bytes, B256, U256};
 use eyre::Result;
 use lazy_static::lazy_static;
 
@@ -15,11 +14,11 @@ pub struct AttributesDepositedCall {
     /// base fee
     pub basefee: U256,
     /// block hash
-    pub hash: H256,
+    pub hash: B256,
     /// sequence number of the L2 block
     pub sequence_number: u64,
     /// batcher hash (should contain an address)
-    pub batcher_hash: H256,
+    pub batcher_hash: B256,
     /// L1 fee overhead
     pub fee_overhead: U256,
     /// L1 fee scalar
@@ -78,31 +77,31 @@ impl AttributesDepositedCall {
         }
         cursor += 4;
 
-        let number = U256::from_big_endian(calldata[cursor..cursor + 32].try_into()?);
-        let number = number.as_u64(); // down-casting to u64 is safe for the block number
+        let number = U256::from_be_slice(calldata[cursor..cursor + 32].try_into()?);
+        let number: u64 = number.try_into()?; // down-casting to u64 is safe for the block number
         cursor += 32;
 
-        let timestamp = U256::from_big_endian(calldata[cursor..cursor + 32].try_into()?);
-        let timestamp = timestamp.as_u64(); // down-casting to u64 is safe for UNIX timestamp
+        let timestamp = U256::from_be_slice(calldata[cursor..cursor + 32].try_into()?);
+        let timestamp: u64 = timestamp.try_into()?; // down-casting to u64 is safe for UNIX timestamp
         cursor += 32;
 
-        let basefee = U256::from_big_endian(&calldata[cursor..cursor + 32]);
+        let basefee = U256::from_be_slice(&calldata[cursor..cursor + 32]);
         cursor += 32;
 
-        let hash = H256::from_slice(&calldata[cursor..cursor + 32]);
+        let hash = B256::from_slice(&calldata[cursor..cursor + 32]);
         cursor += 32;
 
-        let sequence_number = U256::from_big_endian(calldata[cursor..cursor + 32].try_into()?);
-        let sequence_number = sequence_number.as_u64(); // down-casting to u64 is safe for the sequence number
+        let sequence_number = U256::from_be_slice(calldata[cursor..cursor + 32].try_into()?);
+        let sequence_number: u64 = sequence_number.try_into()?; // down-casting to u64 is safe for the sequence number
         cursor += 32;
 
-        let batcher_hash = H256::from_slice(&calldata[cursor..cursor + 32]);
+        let batcher_hash = B256::from_slice(&calldata[cursor..cursor + 32]);
         cursor += 32;
 
-        let fee_overhead = U256::from_big_endian(&calldata[cursor..cursor + 32]);
+        let fee_overhead = U256::from_be_slice(&calldata[cursor..cursor + 32]);
         cursor += 32;
 
-        let fee_scalar = U256::from_big_endian(&calldata[cursor..cursor + 32]);
+        let fee_scalar = U256::from_be_slice(&calldata[cursor..cursor + 32]);
 
         Ok(Self {
             number,
@@ -167,16 +166,16 @@ impl AttributesDepositedCall {
         let number = u64::from_be_bytes(calldata[cursor..cursor + 8].try_into()?);
         cursor += 8;
 
-        let basefee = U256::from_big_endian(&calldata[cursor..cursor + 32]);
+        let basefee = U256::from_be_slice(&calldata[cursor..cursor + 32]);
         cursor += 32;
 
-        let blob_base_fee = Some(U256::from_big_endian(&calldata[cursor..cursor + 32]));
+        let blob_base_fee = Some(U256::from_be_slice(&calldata[cursor..cursor + 32]));
         cursor += 32;
 
-        let hash = H256::from_slice(&calldata[cursor..cursor + 32]);
+        let hash = B256::from_slice(&calldata[cursor..cursor + 32]);
         cursor += 32;
 
-        let batcher_hash = H256::from_slice(&calldata[cursor..cursor + 32]);
+        let batcher_hash = B256::from_slice(&calldata[cursor..cursor + 32]);
 
         Ok(Self {
             number,
@@ -190,7 +189,7 @@ impl AttributesDepositedCall {
             blob_base_fee_scalar,
 
             // The pre-Ecotone L1 fee overhead value is dropped in Ecotone
-            fee_overhead: U256::zero(),
+            fee_overhead: U256::ZERO,
         })
     }
 }
@@ -200,7 +199,7 @@ mod tests {
     mod attributed_deposited_call {
         use std::str::FromStr;
 
-        use ethers::types::{Bytes, H256, U256};
+        use alloy_primitives::{b256, Bytes, U256};
 
         use crate::common::AttributesDepositedCall;
 
@@ -210,7 +209,7 @@ mod tests {
             let calldata = "0x015d8eb900000000000000000000000000000000000000000000000000000000008768240000000000000000000000000000000000000000000000000000000064443450000000000000000000000000000000000000000000000000000000000000000e0444c991c5fe1d7291ff34b3f5c3b44ee861f021396d33ba3255b83df30e357d00000000000000000000000000000000000000000000000000000000000000050000000000000000000000007431310e026b69bfc676c0013e12a1a11411eec9000000000000000000000000000000000000000000000000000000000000083400000000000000000000000000000000000000000000000000000000000f4240";
 
             let expected_hash =
-                H256::from_str("0444c991c5fe1d7291ff34b3f5c3b44ee861f021396d33ba3255b83df30e357d")?;
+                b256!("0444c991c5fe1d7291ff34b3f5c3b44ee861f021396d33ba3255b83df30e357d");
             let expected_block_number = 8874020;
             let expected_timestamp = 1682191440;
 
@@ -234,9 +233,8 @@ mod tests {
             // https://goerli-optimism.etherscan.io/tx/0xc2288c5d1f6123406bfe8662bdbc1a3c999394da2e6f444f5aa8df78136f36ba
             let calldata = "0x440a5e2000001db0000d273000000000000000050000000065c8ad6c0000000000a085a20000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000041dfd80f2c8af7d7ba1c1a3962026e5c96b9105d528f8fed65c56cfa731a8751c7f712eb70000000000000000000000007431310e026b69bfc676c0013e12a1a11411eec9";
 
-            let expected_hash = H256::from_str(
-                "0xc8af7d7ba1c1a3962026e5c96b9105d528f8fed65c56cfa731a8751c7f712eb7",
-            );
+            let expected_hash =
+                b256!("c8af7d7ba1c1a3962026e5c96b9105d528f8fed65c56cfa731a8751c7f712eb7");
             let expected_block_number = 10519970;
             let expected_timestamp = 1707650412;
             let expected_blob_base_fee_scalar = Some(862000);
@@ -249,7 +247,7 @@ mod tests {
             assert!(call.is_ok());
             let call = call.unwrap();
 
-            assert_eq!(call.hash, expected_hash?);
+            assert_eq!(call.hash, expected_hash);
             assert_eq!(call.number, expected_block_number);
             assert_eq!(call.timestamp, expected_timestamp);
             assert_eq!(call.blob_base_fee_scalar, expected_blob_base_fee_scalar);
