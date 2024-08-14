@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use ethers::types::Address;
+use alloy_primitives::Address;
 use eyre::Result;
 
 use magi::{

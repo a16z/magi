@@ -1,8 +1,7 @@
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::time::SystemTime;
 
-use ethers::types::{Address, Bytes, Signature, H256};
-use ethers::utils::keccak256;
+use alloy_primitives::{Address, Bytes, Signature, B256, keccak256};
 use eyre::Result;
 use libp2p::gossipsub::{IdentTopic, Message, MessageAcceptance, TopicHash};
 use ssz_rs::{prelude::*, List, Vector, U256};
@@ -32,7 +31,7 @@ struct ExecutionPayloadEnvelope {
     signature: Signature,
     hash: PayloadHash,
     #[allow(unused)]
-    parent_beacon_block_root: Option<H256>,
+    parent_beacon_block_root: Option<B256>,
 }
 
 impl Handler for BlockHandler {
@@ -153,7 +152,7 @@ fn decode_post_ecotone_block_msg(data: Vec<u8>) -> Result<ExecutionPayloadEnvelo
 
     let signature = Signature::try_from(sig_data)?;
 
-    let parent_beacon_block_root = Some(H256::from_slice(parent_beacon_block_root));
+    let parent_beacon_block_root = Some(B256::from_slice(parent_beacon_block_root));
 
     let payload: ExecutionPayloadV3SSZ = deserialize(block_data)?;
     let payload = ExecutionPayload::from(payload);
@@ -169,7 +168,7 @@ fn decode_post_ecotone_block_msg(data: Vec<u8>) -> Result<ExecutionPayloadEnvelo
 }
 
 /// Represents the Keccak256 hash of the block
-struct PayloadHash(H256);
+struct PayloadHash(B256);
 
 impl From<&[u8]> for PayloadHash {
     /// Returns the Keccak256 hash of a sequence of bytes
@@ -180,15 +179,15 @@ impl From<&[u8]> for PayloadHash {
 
 impl PayloadHash {
     /// The expected message that should be signed by the unsafe block signer.
-    fn signature_message(&self, chain_id: u64) -> H256 {
-        let domain = H256::zero();
-        let chain_id = H256::from_low_u64_be(chain_id);
+    fn signature_message(&self, chain_id: u64) -> B256 {
+        let domain = B256::ZERO;
+        let chain_id = B256::from(alloy_primitives::U256::from(chain_id));
         let payload_hash = self.0;
 
         let data: Vec<u8> = [
-            domain.as_bytes(),
-            chain_id.as_bytes(),
-            payload_hash.as_bytes(),
+            domain.as_slice(),
+            chain_id.as_slice(),
+            payload_hash.as_slice(),
         ]
         .concat();
 
@@ -380,8 +379,8 @@ impl From<ExecutionPayloadV3SSZ> for ExecutionPayload {
 }
 
 /// Converts [Bytes32] into [H256]
-fn convert_hash(bytes: Bytes32) -> H256 {
-    H256::from_slice(bytes.as_slice())
+fn convert_hash(bytes: Bytes32) -> B256 {
+    B256::from_slice(bytes.as_slice())
 }
 
 /// Converts [VecAddress] into [Address]
