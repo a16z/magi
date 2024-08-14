@@ -310,7 +310,7 @@ struct Withdrawal {
 }
 
 impl From<ExecutionPayloadV2SSZ> for ExecutionPayload {
-    /// Converts an [ExecutionPayloadV2SSZ] received via p2p gossip into an [ExecutionPayload] used by the engine.
+    /// Converts an ExecutionPayloadV2SSZ received via p2p gossip into an [ExecutionPayload] used by the engine.
     fn from(value: ExecutionPayloadV2SSZ) -> Self {
         Self {
             parent_hash: convert_hash(value.parent_hash),

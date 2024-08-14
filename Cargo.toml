@@ -27,6 +27,9 @@ futures = "0.3.28"
 futures-timer = "0.3.0"
 again = "0.1"
 
+# Alloy Types
+alloy-primitives = { version = "0.7.7", features = [ "std", "k256", "serde" ] }
+
 # Logging and Metrics
 chrono = "0.4.22"
 tracing = "0.1.36"

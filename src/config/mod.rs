@@ -1,6 +1,6 @@
 use std::{fmt, iter, path::PathBuf, process::exit, str::FromStr};
 
-use ethers::types::{Address, H256, U256};
+use alloy_primitives::{Address, B256, U256};
 use figment::{
     providers::{Format, Serialized, Toml},
     Figment,
@@ -209,12 +209,12 @@ pub struct SystemConfig {
 }
 
 impl SystemConfig {
-    /// Encodes batch sender as a H256
-    pub fn batcher_hash(&self) -> H256 {
-        let mut batch_sender_bytes = self.batch_sender.as_bytes().to_vec();
+    /// Encodes batch sender as a [B256].
+    pub fn batcher_hash(&self) -> B256 {
+        let mut batch_sender_bytes = self.batch_sender.as_slice().to_vec();
         let mut batcher_hash = iter::repeat(0).take(12).collect::<Vec<_>>();
         batcher_hash.append(&mut batch_sender_bytes);
-        H256::from_slice(&batcher_hash)
+        B256::from_slice(&batcher_hash)
     }
 }
 
@@ -310,15 +310,22 @@ impl ChainConfig {
             l1_chain_id: 1,
             l2_chain_id: 10,
             l1_start_epoch: Epoch {
-                hash: hash("0x438335a20d98863a4c0c97999eb2481921ccd28553eac6f913af7c12aec04108"),
+                hash: ethers::types::H256::from_slice(
+                    hash("0x438335a20d98863a4c0c97999eb2481921ccd28553eac6f913af7c12aec04108")
+                        .as_slice(),
+                ),
                 number: 17422590,
                 timestamp: 1686068903,
             },
             l2_genesis: BlockInfo {
-                hash: hash("0xdbf6a80fef073de06add9b0d14026d6e5a86c85f6d102c36d3d8e9cf89c2afd3"),
+                hash: ethers::types::H256::from_slice(
+                    hash("0xdbf6a80fef073de06add9b0d14026d6e5a86c85f6d102c36d3d8e9cf89c2afd3")
+                        .as_slice(),
+                ),
                 number: 105235063,
-                parent_hash: hash(
-                    "0x21a168dfa5e727926063a28ba16fd5ee84c814e847c81a699c7a0ea551e4ca50",
+                parent_hash: ethers::types::H256::from_slice(
+                    hash("0x21a168dfa5e727926063a28ba16fd5ee84c814e847c81a699c7a0ea551e4ca50")
+                        .as_slice(),
                 ),
                 timestamp: 1686068903,
             },
@@ -352,15 +359,22 @@ impl ChainConfig {
             l1_chain_id: 11155111,
             l2_chain_id: 11155420,
             l1_start_epoch: Epoch {
-                hash: hash("0x48f520cf4ddaf34c8336e6e490632ea3cf1e5e93b0b2bc6e917557e31845371b"),
+                hash: ethers::types::H256::from_slice(
+                    hash("0x48f520cf4ddaf34c8336e6e490632ea3cf1e5e93b0b2bc6e917557e31845371b")
+                        .as_slice(),
+                ),
                 number: 4071408,
                 timestamp: 1691802540,
             },
             l2_genesis: BlockInfo {
-                hash: hash("0x102de6ffb001480cc9b8b548fd05c34cd4f46ae4aa91759393db90ea0409887d"),
+                hash: ethers::types::H256::from_slice(
+                    hash("0x102de6ffb001480cc9b8b548fd05c34cd4f46ae4aa91759393db90ea0409887d")
+                        .as_slice(),
+                ),
                 number: 0,
-                parent_hash: hash(
-                    "0x0000000000000000000000000000000000000000000000000000000000000000",
+                parent_hash: ethers::types::H256::from_slice(
+                    hash("0x0000000000000000000000000000000000000000000000000000000000000000")
+                        .as_slice(),
                 ),
                 timestamp: 1691802540,
             },
@@ -395,13 +409,19 @@ impl ChainConfig {
             l2_chain_id: 8453,
             l1_start_epoch: Epoch {
                 number: 17481768,
-                hash: hash("0x5c13d307623a926cd31415036c8b7fa14572f9dac64528e857a470511fc30771"),
+                hash: ethers::types::H256::from_slice(
+                    hash("0x5c13d307623a926cd31415036c8b7fa14572f9dac64528e857a470511fc30771")
+                        .as_slice(),
+                ),
                 timestamp: 1686789347,
             },
             l2_genesis: BlockInfo {
-                hash: hash("0xf712aa9241cc24369b143cf6dce85f0902a9731e70d66818a3a5845b296c73dd"),
+                hash: ethers::types::H256::from_slice(
+                    hash("0xf712aa9241cc24369b143cf6dce85f0902a9731e70d66818a3a5845b296c73dd")
+                        .as_slice(),
+                ),
                 number: 0,
-                parent_hash: H256::zero(),
+                parent_hash: ethers::types::H256::zero(),
                 timestamp: 1686789347,
             },
             system_config: SystemConfig {
@@ -435,13 +455,19 @@ impl ChainConfig {
             l2_chain_id: 84532,
             l1_start_epoch: Epoch {
                 number: 4370868,
-                hash: hash("0xcac9a83291d4dec146d6f7f69ab2304f23f5be87b1789119a0c5b1e4482444ed"),
+                hash: ethers::types::H256::from_slice(
+                    hash("0xcac9a83291d4dec146d6f7f69ab2304f23f5be87b1789119a0c5b1e4482444ed")
+                        .as_slice(),
+                ),
                 timestamp: 1695768288,
             },
             l2_genesis: BlockInfo {
-                hash: hash("0x0dcc9e089e30b90ddfc55be9a37dd15bc551aeee999d2e2b51414c54eaf934e4"),
+                hash: ethers::types::H256::from_slice(
+                    hash("0x0dcc9e089e30b90ddfc55be9a37dd15bc551aeee999d2e2b51414c54eaf934e4")
+                        .as_slice(),
+                ),
                 number: 0,
-                parent_hash: H256::zero(),
+                parent_hash: ethers::types::H256::zero(),
                 timestamp: 1695768288,
             },
             system_config: SystemConfig {
@@ -484,9 +510,9 @@ fn addr(s: &str) -> Address {
     Address::from_str(s).unwrap()
 }
 
-/// Converts a [str] to a [H256].
-fn hash(s: &str) -> H256 {
-    H256::from_str(s).unwrap()
+/// Converts a [str] to a [B256].
+fn hash(s: &str) -> B256 {
+    B256::from_str(s).unwrap()
 }
 
 /// Returns default blocktime of 2 (seconds).
@@ -551,9 +577,9 @@ struct SystemConfigInfo {
     #[serde(rename = "batcherAddr")]
     batcher_addr: Address,
     /// The current L1 fee overhead to apply to L2 transactions cost computation. Unused after Ecotone hard fork.
-    overhead: H256,
+    overhead: B256,
     /// The current L1 fee scalar to apply to L2 transactions cost computation. Unused after Ecotone hard fork.
-    scalar: H256,
+    scalar: B256,
     /// The gas limit for L2 blocks
     #[serde(rename = "gasLimit")]
     gas_limit: u64,
@@ -563,7 +589,7 @@ struct SystemConfigInfo {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ChainGenesisInfo {
     /// Genesis block number
-    hash: H256,
+    hash: B256,
     /// Genesis block hash
     number: u64,
 }
@@ -576,22 +602,22 @@ impl From<ExternalChainConfig> for ChainConfig {
             l1_chain_id: external.l1_chain_id,
             l2_chain_id: external.l2_chain_id,
             l1_start_epoch: Epoch {
-                hash: external.genesis.l1.hash,
+                hash: ethers::types::H256::from_slice(external.genesis.l1.hash.as_slice()),
                 number: external.genesis.l1.number,
                 timestamp: 0,
             },
             l2_genesis: BlockInfo {
-                hash: external.genesis.l2.hash,
+                hash: ethers::types::H256::from_slice(external.genesis.l2.hash.as_slice()),
                 number: external.genesis.l2.number,
-                parent_hash: H256::zero(),
+                parent_hash: ethers::types::H256::zero(),
                 timestamp: external.genesis.l2_time,
             },
             system_config: SystemConfig {
                 batch_sender: external.genesis.system_config.batcher_addr,
                 gas_limit: U256::from(external.genesis.system_config.gas_limit),
-                l1_fee_overhead: external.genesis.system_config.overhead.0.into(),
-                l1_fee_scalar: external.genesis.system_config.scalar.0.into(),
-                unsafe_block_signer: Address::zero(),
+                l1_fee_overhead: U256::from_be_bytes(external.genesis.system_config.overhead.0),
+                l1_fee_scalar: U256::from_be_bytes(external.genesis.system_config.scalar.0),
+                unsafe_block_signer: Address::ZERO,
             },
             batch_inbox: external.batch_inbox_address,
             deposit_contract: external.deposit_contract_address,
@@ -614,34 +640,26 @@ impl From<ChainConfig> for ExternalChainConfig {
     /// Converts [ChainConfig] into [ExternalChainConfig]
     /// which is the format used in ``rollup.json`` by `op-node`
     fn from(chain_config: ChainConfig) -> Self {
-        let mut overhead = [0; 32];
-        let mut scalar = [0; 32];
-
-        chain_config
-            .system_config
-            .l1_fee_overhead
-            .to_big_endian(&mut overhead);
-        chain_config
-            .system_config
-            .l1_fee_scalar
-            .to_big_endian(&mut scalar);
+        let overhead: [u8; 32] = chain_config.system_config.l1_fee_overhead.to_be_bytes();
+        let scalar: [u8; 32] = chain_config.system_config.l1_fee_scalar.to_be_bytes();
+        let gas_limit: u64 = chain_config.system_config.gas_limit.try_into().unwrap();
 
         Self {
             genesis: ExternalGenesisInfo {
                 l1: ChainGenesisInfo {
-                    hash: chain_config.l1_start_epoch.hash,
+                    hash: B256::from_slice(chain_config.l1_start_epoch.hash.as_bytes()),
                     number: chain_config.l1_start_epoch.number,
                 },
                 l2: ChainGenesisInfo {
-                    hash: chain_config.l2_genesis.hash,
+                    hash: B256::from_slice(chain_config.l2_genesis.hash.as_bytes()),
                     number: chain_config.l2_genesis.number,
                 },
                 l2_time: chain_config.l2_genesis.timestamp,
                 system_config: SystemConfigInfo {
                     batcher_addr: chain_config.system_config.batch_sender,
-                    overhead: H256::from_slice(&overhead),
-                    scalar: H256::from_slice(&scalar),
-                    gas_limit: chain_config.system_config.gas_limit.as_u64(),
+                    overhead: B256::from_slice(&overhead),
+                    scalar: B256::from_slice(&scalar),
+                    gas_limit,
                 },
             },
             block_time: chain_config.blocktime,
@@ -701,7 +719,7 @@ mod test {
 
         assert_eq!(
             external_config.genesis.l1.hash,
-            chain_config.l1_start_epoch.hash
+            B256::from_slice(chain_config.l1_start_epoch.hash.as_bytes())
         );
         assert_eq!(
             external_config.genesis.l1.number,
@@ -709,7 +727,7 @@ mod test {
         );
         assert_eq!(
             external_config.genesis.l2.hash,
-            chain_config.l2_genesis.hash
+            B256::from_slice(chain_config.l2_genesis.hash.as_bytes())
         );
         assert_eq!(
             external_config.genesis.l2.number,
@@ -725,30 +743,16 @@ mod test {
             chain_config.system_config.batch_sender
         );
 
-        let mut overhead = [0; 32];
-        let mut scalar = [0; 32];
-
-        chain_config
-            .system_config
-            .l1_fee_overhead
-            .to_big_endian(&mut overhead);
-        chain_config
-            .system_config
-            .l1_fee_scalar
-            .to_big_endian(&mut scalar);
+        let overhead: [u8; 32] = chain_config.system_config.l1_fee_overhead.to_be_bytes();
+        let scalar: [u8; 32] = chain_config.system_config.l1_fee_scalar.to_be_bytes();
 
         assert_eq!(
             external_config.genesis.system_config.overhead,
-            H256::from_slice(&overhead),
+            B256::from_slice(&overhead),
         );
         assert_eq!(
             external_config.genesis.system_config.scalar,
-            H256::from_slice(&scalar),
-        );
-
-        assert_eq!(
-            external_config.genesis.system_config.gas_limit,
-            chain_config.system_config.gas_limit.as_u64()
+            B256::from_slice(&scalar),
         );
     }
 
@@ -797,12 +801,12 @@ mod test {
         assert_eq!(chain.l2_chain_id, 901);
         assert_eq!(chain.l1_start_epoch.number, 0);
         assert_eq!(
-            chain.l1_start_epoch.hash,
+            B256::from_slice(chain.l1_start_epoch.hash.as_bytes()),
             hash("0xdb52a58e7341447d1a9525d248ea07dbca7dfa0e105721dee1aa5a86163c088d")
         );
         assert_eq!(chain.l2_genesis.number, 0);
         assert_eq!(
-            chain.l2_genesis.hash,
+            B256::from_slice(chain.l2_genesis.hash.as_bytes()),
             hash("0xf85bca315a08237644b06a8350cda3bc0de1593745a91be93daeadb28fb3a32e")
         );
         assert_eq!(chain.system_config.gas_limit, U256::from(30_000_000));
