@@ -1,4 +1,4 @@
-use ethers::types::H256;
+use alloy_primitives::B256;
 use serde::{Deserialize, Serialize};
 
 use super::{PayloadId, PayloadStatus};
@@ -22,18 +22,18 @@ pub struct ForkChoiceUpdate {
 #[serde(rename_all = "camelCase")]
 pub struct ForkchoiceState {
     /// 32 byte block hash of the head of the canonical chain
-    pub head_block_hash: H256,
+    pub head_block_hash: B256,
     /// 32 byte "safe" block hash of the canonical chain under certain synchrony and honesty assumptions
     /// This value MUST be either equal to or an ancestor of headBlockHash
-    pub safe_block_hash: H256,
+    pub safe_block_hash: B256,
     /// 32 byte block hash of the most recent finalized block
-    pub finalized_block_hash: H256,
+    pub finalized_block_hash: B256,
 }
 
 impl ForkchoiceState {
     /// Creates a new fork choice state with the given head block hash.
     /// The safe and finalized block hashes are set to the head block hash.
-    pub fn from_single_head(head_block_hash: H256) -> Self {
+    pub fn from_single_head(head_block_hash: B256) -> Self {
         Self {
             head_block_hash,
             safe_block_hash: head_block_hash,

@@ -185,7 +185,7 @@ impl Runner {
         }
 
         // make the execution client start syncing up to the checkpoint
-        let forkchoice_state = ForkchoiceState::from_single_head(checkpoint_hash);
+        let forkchoice_state = ForkchoiceState::from_single_head(alloy_primitives::B256::from_slice(checkpoint_hash.as_bytes()));
         let forkchoice_res = engine_api
             .forkchoice_updated(forkchoice_state, None)
             .await?;
@@ -196,7 +196,7 @@ impl Runner {
 
         tracing::info!("syncing execution client to the checkpoint block...",);
 
-        while l2_provider.get_block_number().await? < checkpoint_payload.block_number {
+        while l2_provider.get_block_number().await? < u64::try_from(checkpoint_payload.block_number)?.into() {
             self.check_shutdown()?;
             sleep(Duration::from_secs(3)).await;
         }

@@ -28,7 +28,12 @@ futures-timer = "0.3.0"
 again = "0.1"
 
 # Alloy Types
+alloy-eips = { version = "0.2.1", feature = [ "std", "k256" ] }
+alloy-consensus = { version = "0.2.1", feature = [ "std", "k256" ] }
+alloy-rpc-types = { version = "0.2.1", feature = [ "eth", "k256" ] }
 alloy-primitives = { version = "0.7.7", features = [ "std", "k256", "serde" ] }
+alloy-network-primitives = "0.2.1"
+alloy-provider = { version = "0.2.1", feature = [ "reqwest" ] } 
 
 # Logging and Metrics
 chrono = "0.4.22"

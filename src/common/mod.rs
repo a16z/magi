@@ -91,10 +91,10 @@ impl From<&ExecutionPayload> for BlockInfo {
     /// Converts an [ExecutionPayload] to [BlockInfo]
     fn from(value: &ExecutionPayload) -> Self {
         Self {
-            number: value.block_number.as_u64(),
-            hash: value.block_hash,
-            parent_hash: value.parent_hash,
-            timestamp: value.timestamp.as_u64(),
+            number: value.block_number.try_into().unwrap_or_default(),
+            hash: H256::from_slice(value.block_hash.as_slice()),
+            parent_hash: H256::from_slice(value.parent_hash.as_slice()),
+            timestamp: value.timestamp.try_into().unwrap_or_default(),
         }
     }
 }

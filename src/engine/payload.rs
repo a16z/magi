@@ -1,6 +1,9 @@
-use ethers::types::{Block, Bytes, Transaction, H160, H256, U64};
 use eyre::Result;
 use serde::{Deserialize, Serialize};
+use alloy_consensus::TxEnvelope;
+use alloy_eips::eip2718::Encodable2718;
+use alloy_rpc_types::{Block, BlockTransactions, Transaction};
+use alloy_primitives::{Bytes, Address, B256, U64};
 
 use crate::{
     common::{Epoch, RawTransaction},
@@ -12,17 +15,17 @@ use crate::{
 #[serde(rename_all = "camelCase")]
 pub struct ExecutionPayload {
     /// A 32 byte hash of the parent payload
-    pub parent_hash: H256,
+    pub parent_hash: B256,
     /// A 20 byte hash (aka Address) for the feeRecipient field of the new payload
-    pub fee_recipient: H160,
+    pub fee_recipient: Address,
     /// A 32 byte state root hash
-    pub state_root: H256,
+    pub state_root: B256,
     /// A 32 byte receipt root hash
-    pub receipts_root: H256,
+    pub receipts_root: B256,
     /// A 32 byte logs bloom filter
     pub logs_bloom: Bytes,
     /// A 32 byte beacon chain randomness value
-    pub prev_randao: H256,
+    pub prev_randao: B256,
     /// A 64 bit number for the current block index
     pub block_number: U64,
     /// A 64 bit value for the gas limit
@@ -36,7 +39,7 @@ pub struct ExecutionPayload {
     /// 256 bits for the base fee per gas
     pub base_fee_per_gas: U64,
     /// The 32 byte block hash
-    pub block_hash: H256,
+    pub block_hash: B256,
     /// An array of transaction objects where each object is a byte list
     pub transactions: Vec<RawTransaction>,
     /// An array of beaconchain withdrawals. Always empty as this exists only for L1 compatibility
@@ -55,6 +58,51 @@ impl TryFrom<Block<Transaction>> for ExecutionPayload {
 
     /// Converts a [Block] to an [ExecutionPayload]
     fn try_from(value: Block<Transaction>) -> Result<Self> {
+        let txs = match value.transactions {
+            BlockTransactions::Full(txs) => txs,
+            _ => return Err(eyre::eyre!("Invalid block transactions")),
+        };
+        let mut encoded = Vec::with_capacity(txs.len());
+        for tx in txs {
+            let envelope = TxEnvelope::try_from(tx)?;
+            let mut by = vec![];
+            envelope.encode_2718(&mut by);
+            encoded.push(RawTransaction(by));
+        }
+
+        Ok(ExecutionPayload {
+            parent_hash: value.header.parent_hash,
+            fee_recipient: Address::from_slice(
+                SystemAccounts::default().fee_vault.as_slice(),
+            ),
+            state_root: value.header.state_root,
+            receipts_root: value.header.receipts_root,
+            logs_bloom: value.header.logs_bloom.as_slice().to_vec().into(),
+            prev_randao: value.header.mix_hash.unwrap(),
+            block_number: value.header.number.unwrap_or_default().try_into()?,
+            gas_limit: value.header.gas_limit.try_into()?,
+            gas_used: value.header.gas_used.try_into()?,
+            timestamp: value.header.timestamp.try_into()?,
+            extra_data: value.header.extra_data.clone(),
+            base_fee_per_gas: value
+                .header
+                .base_fee_per_gas
+                .unwrap_or_default()
+                .try_into()?,
+            block_hash: value.header.hash.unwrap(),
+            transactions: encoded,
+            withdrawals: Some(Vec::new()),
+            blob_gas_used: value.header.blob_gas_used.map(|v| v.try_into()).transpose()?,
+            excess_blob_gas: value.header.excess_blob_gas.map(|v| v.try_into()).transpose()?,
+        })
+    }
+}
+
+impl TryFrom<ethers::types::Block<ethers::types::Transaction>> for ExecutionPayload {
+    type Error = eyre::Report;
+
+    /// Converts a [Block] to an [ExecutionPayload]
+    fn try_from(value: ethers::types::Block<ethers::types::Transaction>) -> Result<Self> {
         let encoded_txs = (*value
             .transactions
             .into_iter()
@@ -100,9 +148,9 @@ pub struct PayloadAttributes {
     /// 64 bit value for the timestamp field of the new payload.
     pub timestamp: U64,
     /// 32 byte value for the prevRandao field of the new payload.
-    pub prev_randao: H256,
+    pub prev_randao: B256,
     ///  20 bytes suggested value for the feeRecipient field of the new payload.
-    pub suggested_fee_recipient: H160,
+    pub suggested_fee_recipient: Address,
     /// Array of transactions to be included in the new payload.
     pub transactions: Option<Vec<RawTransaction>>,
     /// Boolean value indicating whether or not the payload should be built without including transactions from the txpool.
@@ -142,7 +190,7 @@ pub struct PayloadStatus {
     /// The status of the payload.
     pub status: Status,
     /// 32 Bytes - the hash of the most recent valid block in the branch defined by payload and its ancestors
-    pub latest_valid_hash: Option<H256>,
+    pub latest_valid_hash: Option<B256>,
     /// A message providing additional details on the validation error if the payload is classified as INVALID or INVALID_BLOCK_HASH.
     #[serde(default)]
     pub validation_error: Option<String>,
@@ -169,24 +217,25 @@ pub enum Status {
 #[cfg(test)]
 mod tests {
 
-    use ethers::{
-        providers::{Http, Middleware, Provider},
-        types::H256,
-    };
     use eyre::Result;
+    use reqwest::Url;
+    use alloy_primitives::{uint, b256};
+    use alloy_network_primitives::BlockTransactionsKind;
+    use alloy_provider::{network::Ethereum, Provider, ReqwestProvider};
 
     use crate::engine::ExecutionPayload;
 
     #[tokio::test]
     async fn test_from_block_hash_to_execution_paylaod() -> Result<()> {
         if std::env::var("L2_TEST_RPC_URL").is_ok() {
-            let checkpoint_hash: H256 =
-                "0xc2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973".parse()?;
+            let checkpoint_hash =
+                b256!("c2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973");
 
             let l2_rpc = std::env::var("L2_TEST_RPC_URL")?;
-            let checkpoint_sync_url = Provider::<Http>::try_from(l2_rpc)?;
+            let l2_rpc_url = Url::parse(&l2_rpc)?;
+            let checkpoint_sync_url = ReqwestProvider::<Ethereum>::new_http(l2_rpc_url);
             let checkpoint_block = checkpoint_sync_url
-                .get_block_with_txs(checkpoint_hash)
+                .get_block(checkpoint_hash.into(), BlockTransactionsKind::Full)
                 .await?
                 .unwrap();
 
@@ -194,10 +243,10 @@ mod tests {
 
             assert_eq!(
                 payload.block_hash,
-                "0xc2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973".parse()?
+                b256!("c2794a16acacd9f7670379ffd12b6968ff98e2a602f57d7d1f880220aa5a4973")
             );
-            assert_eq!(payload.block_number, 8453214u64.into());
-            assert_eq!(payload.base_fee_per_gas, 50u64.into());
+            assert_eq!(payload.block_number, uint!(8453214_U64));
+            assert_eq!(payload.base_fee_per_gas, uint!(50_U64));
         }
 
         Ok(())
