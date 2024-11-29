@@ -67,7 +67,7 @@ pub struct Config {
     pub checkpoint_sync_url: Option<String>,
     /// The port of the `Magi` RPC server
     pub rpc_port: u16,
-    /// The socket address of RPC server
+    /// The socket address of the RPC server
     pub rpc_addr: String,
     /// The devnet mode.
     /// If devnet is enabled.
