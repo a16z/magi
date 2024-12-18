@@ -38,7 +38,7 @@ const BLOB_CARRYING_TRANSACTION_TYPE: u64 = 3;
 pub type BatcherTransactionData = Bytes;
 
 /// Handles watching the L1 chain and monitoring for new blocks, deposits,
-/// and batcher transactions. The monitoring loop is spawned in a seperate
+/// and batcher transactions. The monitoring loop is spawned in a separate
 /// task and communication happens via the internal channels. When ChainWatcher
 /// is dropped, the monitoring task is automatically aborted.
 pub struct ChainWatcher {
