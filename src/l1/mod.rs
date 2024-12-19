@@ -1,4 +1,4 @@
-/// Module reposnsible for listening to the L1 chain and monitoring for new
+/// Module responsible for listening to the L1 chain and monitoring for new
 /// blocks and events.
 pub mod chain_watcher;
 pub use chain_watcher::{BlockUpdate, ChainWatcher};
