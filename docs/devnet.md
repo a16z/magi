@@ -11,7 +11,7 @@ The devnet environment for Magi connects to the initiated OP L1 devnet node and 
 Begin by cloning the Optimism repository:
 
     git clone git@github.com:ethereum-optimism/optimism.git
-
+cd
 The `develop` branch is typically suitable. However, if issues arise, consider using the specific revision `18bcfb0dcc16de4287cb614f0a0b7bb3c276cbd3`.
 
 To launch the OP devnet, ensure you have [Docker](https://www.docker.com/):
