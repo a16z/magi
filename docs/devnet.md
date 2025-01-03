@@ -5,7 +5,7 @@ The devnet environment is built on the foundation of the locally available Optim
 The devnet environment for Magi connects to the initiated OP L1 devnet node and launches its own corresponding `op-geth` node from the Magi docker. Magi employs this as its L2 node and execution engine.
 
 ## Let's start
-м
+мvfvf
 ### Configuring the OP Stack
 
 Begin by cloning the Optimism repository:
