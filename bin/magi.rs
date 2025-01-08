@@ -96,16 +96,30 @@ impl Cli {
         let jwt_file = self.jwt_file.as_ref()?;
         match std::fs::read_to_string(jwt_file) {
             Ok(content) => Some(content),
-            Err(_) => Cli::default_jwt_secret(),
+            Err(e) => {
+                tracing::error!(
+                    target: "magi",
+                    "Failed to read JWT secret from specified file {}: {}",
+                    jwt_file.display(),
+                    e
+                );
+                Cli::default_jwt_secret()
+            }
         }
     }
 
     pub fn default_jwt_secret() -> Option<String> {
         let cur_dir = current_dir().ok()?;
-        match std::fs::read_to_string(cur_dir.join("jwt.hex")) {
+        let jwt_path = cur_dir.join("jwt.hex");
+        match std::fs::read_to_string(&jwt_path) {
             Ok(content) => Some(content),
-            Err(_) => {
-                tracing::error!(target: "magi", "Failed to read JWT secret from file: {:?}", cur_dir);
+            Err(e) => {
+                tracing::error!(
+                    target: "magi",
+                    "Failed to read JWT secret from default location {}: {}",
+                    jwt_path.display(),
+                    e
+                );
                 None
             }
         }
