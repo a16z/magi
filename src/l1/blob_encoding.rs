@@ -101,7 +101,7 @@ fn reassemble_bytes(output_pos: &mut usize, encoded_byte: [u8; 4], output: &mut 
     *output_pos -= 1;
 
     let x = (encoded_byte[0] & 0b0011_1111) | ((encoded_byte[1] & 0b0011_0000) << 2);
-    let y = (encoded_byte[1] & 0b0000_1111) | ((encoded_byte[3] & 0b0000_1111) << 4);
+    let y = (encoded_byte[1] & 0b0000_1111) | ((encoded_byte[2] & 0b0000_1111) << 4);
     let z = (encoded_byte[2] & 0b0011_1111) | ((encoded_byte[3] & 0b0011_0000) << 2);
 
     output[*output_pos - 32] = z;
