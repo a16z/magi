@@ -5,7 +5,7 @@ use ethers::{
 use eyre::Result;
 use lazy_static::lazy_static;
 
-/// Represents the attributes deposited transcation call
+/// Represents the attributes deposited transaction call
 #[derive(Debug)]
 pub struct AttributesDepositedCall {
     /// block number
