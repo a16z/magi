@@ -126,7 +126,7 @@ To simultaneously deposit ETH and initiate a withdrawal:
 
 Note: This command will withdraw some ETH from pre-deposited accounts on L2. However, it will not withdraw from the provided address as the private key is required for that operation.
 
-To test withdrawal from your account refer to this [tutorial](https://stack.optimism.io/docs/security/forced-withdrawal/). 
+To test withdrawal from your account refer to this [tutorial](https://docs.optimism.io/stack/security/forced-transfers). 
 
 ## Trouble shooting
 
